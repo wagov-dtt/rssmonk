@@ -1,0 +1,10 @@
+# kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - storageclass.yaml
+  - ../../base
+  - ../../everest
+
+commonAnnotations:
+  targetCluster: minikube

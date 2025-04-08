@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: listmonk-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: listmonk-app
+  template:
+    metadata:
+      labels:
+        app: listmonk-app
+    spec:
+      containers:
+      - name: listmonk-app
+        image: listmonk/listmonk:latest
+        env:
+        - name: LISTMONK_app__address
+          value: "0.0.0.0:9000"
+        - name: LISTMONK_db__host
+          valueFrom:
+            secretKeyRef:
+              name: everest-secrets-postgres01
+              key: pgbouncer-host
+        - name: LISTMONK_db__port
+          valueFrom:
+            secretKeyRef:
+              name: everest-secrets-postgres01
+              key: pgbouncer-port
+        - name: LISTMONK_db__user
+          valueFrom:
+            secretKeyRef:
+              name: everest-secrets-postgres01
+              key: user
+        - name: LISTMONK_db__database
+          valueFrom:
+            secretKeyRef:
+              name: everest-secrets-postgres01
+              key: user
+        - name: LISTMONK_db__password
+          valueFrom:
+            secretKeyRef:
+              name: everest-secrets-postgres01
+              key: password
+        ports:
+        - containerPort: 9000
+        command:
+        - sh
+        - -c
+        - "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: listmonk-service
+spec:
+  selector:
+    app: listmonk-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 9000
