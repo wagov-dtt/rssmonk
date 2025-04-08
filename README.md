@@ -12,6 +12,11 @@ Backlog:
 
 This repository should be discoverable and usable through it's [justfile](justfile).
 
+```bash
+just deploy-local # fire up minikube, deploy local setup
+k9s # port forward rssmonk/listmonk-service, access local ui via locahost:9000
+```
+
 ## Diagram
 
 ![overview](image.png)
