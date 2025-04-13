@@ -6,6 +6,10 @@ app_ns := "rssmonk"
 default:
   just --choose
 
+# Install cli dev tools
+clidev:
+  brew install helix byobu
+
 # Install project tools
 prereqs:
   brew bundle install
@@ -23,7 +27,6 @@ setup-minikube: prereqs
   minikube addons disable default-storageclass
 
 minikube:
-  sudo chown $(whoami) /var/run/docker.sock
   minikube status || just setup-minikube
 
 HELM_UPGRADE := "0"
