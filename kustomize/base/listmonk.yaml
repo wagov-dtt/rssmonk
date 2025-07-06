@@ -19,30 +19,15 @@ spec:
         - name: LISTMONK_app__address
           value: "0.0.0.0:9000"
         - name: LISTMONK_db__host
-          valueFrom:
-            secretKeyRef:
-              name: everest-secrets-postgres01
-              key: pgbouncer-host
+          value: "postgres"
         - name: LISTMONK_db__port
-          valueFrom:
-            secretKeyRef:
-              name: everest-secrets-postgres01
-              key: pgbouncer-port
+          value: "5432"
         - name: LISTMONK_db__user
-          valueFrom:
-            secretKeyRef:
-              name: everest-secrets-postgres01
-              key: user
+          value: "listmonk"
         - name: LISTMONK_db__database
-          valueFrom:
-            secretKeyRef:
-              name: everest-secrets-postgres01
-              key: user
+          value: "listmonk"
         - name: LISTMONK_db__password
-          valueFrom:
-            secretKeyRef:
-              name: everest-secrets-postgres01
-              key: password
+          value: "listmonk"
         ports:
         - containerPort: 9000
         command:
@@ -61,3 +46,20 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 9000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: listmonk
+spec:
+  rules:
+  - host: listmonk.localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: listmonk-service
+            port:
+              number: 80
