@@ -1,97 +1,79 @@
 # RSS Monk
 
-RSS-to-email service using [Listmonk](https://github.com/knadh/listmonk) with intelligent feed polling and HTTP caching.
-
-_Parts of this project were coauthored with [Amp](https://ampcode.com)._
-
-## Features
-
-- **Smart Feed Management**: RSS feeds stored as Listmonk lists with frequency tags
-- **HTTP Caching**: Efficient polling with ETag/Last-Modified headers
-- **Frequency Control**: `freq:5min`, `freq:daily`, `freq:weekly` tag-based scheduling
-- **Local Testing**: Complete k3d stack with Mailpit for email debugging
+RSS Monk turns RSS feeds into email newsletters.
 
 ## Quick Start
 
 ```bash
-just deploy-local  # Deploy complete stack to k3d
-just simulate-cron 5min  # Test feed fetcher locally
+just prereqs  # Install k3d, kubectl, scc, uv
+just start    # Deploy RSS Monk on k3d cluster
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
 ```
 
-Access services:
-- **Listmonk**: `kubectl port-forward -n rssmonk svc/listmonk-service 9000:80`
-- **Mailpit**: `kubectl port-forward -n rssmonk svc/mailpit 8025:8025`
+New content arrives automatically as emails.
 
-## Architecture
+## Common Tasks
 
-**Stack**: k3d + PostgreSQL + Listmonk + Mailpit  
-**Feeds**: Stored as Listmonk lists with frequency tags  
-**Caching**: Hishel + feedparser for efficient HTTP requests  
+### Managing Your Feeds
+```bash
+# See all your feeds
+just feeds list-feeds
 
-## Commands
+# Add a new feed (daily emails)
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
 
-- `just deploy-local` - Deploy complete stack
-- `just simulate-cron [5min|daily|weekly]` - Test feed fetcher  
-- `just feed-manager <command>` - Manage RSS feeds and subscribers
-- `just analyze` - Analyze codebase complexity
-- `just setup-k3d` - Create k3d cluster
+# Add a feed with frequent updates
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml 5min
 
-## Feed Management
+# Add a weekly digest
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml weekly
+```
+
+### Checking Status
+```bash
+# Is everything running?
+just status
+
+# What's happening behind the scenes?
+just logs
+
+# Test a specific feed
+just test-fetch daily
+```
+
+### Maintenance
+```bash
+# Stop everything (removes k3d cluster)
+just clean
+
+# Start fresh
+just clean && just start
+```
+
+## Examples
 
 ```bash
-# Quick setup: add feed + subscribe emails
-just feed-manager quick-setup "https://hnrss.org/frontpage" daily user@example.com
+# ABC News (daily)
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
 
-# Individual commands
-just feed-manager add-feed "https://feeds.feedburner.com/TechCrunch" 5min
-just feed-manager add-subscriber user@example.com  
-just feed-manager subscribe user@example.com 123
-just feed-manager list-feeds
+# ABC News (weekly digest)
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml weekly
+
+# ABC News (frequent updates)
+just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml 5min
 ```
 
-See [Feed Management Guide](docs/FEED_MANAGEMENT.md) for detailed REST API usage.
+## Web Interface
 
-## Architecture Diagram
+- **Newsletter Management**: http://localhost:9000 (admin/admin123)
+- **Email Testing**: http://localhost:8025
 
-```mermaid
-graph TB
-    subgraph "k3d Cluster"
-        subgraph "rssmonk namespace"
-            L[Listmonk]
-            P[PostgreSQL]
-            M[Mailpit]
-        end
-    end
-    
-    subgraph "External"
-        RSS1[RSS Feed 1]
-        RSS2[RSS Feed 2]
-        RSS3[RSS Feed N]
-    end
-    
-    subgraph "Scripts"
-        FF[feed-fetcher.py]
-        CC[cleanup-campaigns.py]
-    end
-    
-    RSS1 --> |HTTP with caching| FF
-    RSS2 --> |HTTP with caching| FF
-    RSS3 --> |HTTP with caching| FF
-    
-    FF --> |Creates campaigns| L
-    FF --> |freq:5min/daily/weekly tags| L
-    CC --> |Cleanup old campaigns| L
-    
-    L --> |Stores data| P
-    L --> |Sends emails| M
-    
-    style FF fill:#e1f5fe
-    style CC fill:#e1f5fe
-    style L fill:#fff3e0
-    style P fill:#f3e5f5
-    style M fill:#e8f5e8
+## Installation Requirements
+
+- **k3d, kubectl, scc, uv** (installed via `just prereqs`)
+
+## Development
+
+```bash
+just test && just lint
 ```
-
-![overview](image.png)
-
-Diagram source: [image.excalidraw](image.excalidraw)

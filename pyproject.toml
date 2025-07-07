@@ -1,0 +1,27 @@
+[project]
+name = "rssmonk"
+version = "0.1.0"
+description = "RSS Monk - RSS feed aggregator and email dispatcher"
+dependencies = [
+    "httpx",
+    "feedparser", 
+    "click",
+    "tenacity",
+]
+
+requires-python = ">=3.13"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+    "ruff",
+]
+
+[project.scripts]
+rssmonk-cli = "rssmonk.cli:main"
+rssmonk-fetch = "rssmonk.feed_fetcher:main"
+rssmonk-health = "rssmonk.health:main"
+
+[tool.uv]
+package = true
