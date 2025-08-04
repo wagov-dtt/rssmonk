@@ -1,76 +1,110 @@
 # RSS Monk
 
-RSS Monk turns RSS feeds into email newsletters.
+RSS Monk turns RSS feeds into email newsletters using Listmonk.
 
 ## Quick Start
 
 ```bash
-just prereqs  # Install k3d, kubectl, scc, uv
-just start    # Deploy RSS Monk on k3d cluster
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
+# Install dependencies
+just prereqs
+
+# Start services (k3d cluster with Listmonk)
+just start
+
+# Add your first feed
+rssmonk add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
+
+# Quick setup with subscribers
+rssmonk quick-setup https://www.abc.net.au/news/feed/10719986/rss.xml daily user@example.com
 ```
 
-New content arrives automatically as emails.
+## Core Commands
 
-## Common Tasks
-
-### Managing Your Feeds
+### Feed Management
 ```bash
-# See all your feeds
-just feeds list-feeds
+# Add feed
+rssmonk add-feed <url> <frequency> [--name "Feed Name"]
 
-# Add a new feed (daily emails)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
+# List feeds
+rssmonk list-feeds
 
-# Add a feed with frequent updates
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml 5min
+# Delete feed
+rssmonk delete-feed <url>
 
-# Add a weekly digest
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml weekly
+# Process feed manually
+rssmonk process-feed <url> [--send]
 ```
 
-### Checking Status
+### Subscriber Management
 ```bash
-# Is everything running?
-just status
+# Add subscriber
+rssmonk add-subscriber <email> [--name "Name"]
 
-# What's happening behind the scenes?
-just logs
+# Subscribe email to feed
+rssmonk subscribe <email> <feed-url>
 
-# Test a specific feed
-just test-fetch daily
+# Quick setup (feed + subscribers)
+rssmonk quick-setup <url> <frequency> <email1> <email2> ...
 ```
 
-### Maintenance
+### Operations
 ```bash
-# Stop everything (removes k3d cluster)
-just clean
+# Poll feeds by frequency
+rssmonk poll <frequency>
 
-# Start fresh
-just clean && just start
+# Health check
+rssmonk health
 ```
 
-## Examples
+## API Server
 
 ```bash
-# ABC News (daily)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
+# Start API server
+uvicorn rssmonk.api:app --host 0.0.0.0 --port 8000
 
-# ABC News (weekly digest)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml weekly
-
-# ABC News (frequent updates)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml 5min
+# Or using the script
+rssmonk-api
 ```
 
-## Web Interface
+API endpoints:
+- `POST /feeds` - Create feed
+- `GET /feeds` - List feeds  
+- `POST /subscribers` - Create subscriber
+- `POST /subscribe` - Subscribe email to feed
+- `POST /feeds/process` - Process feed
+- `GET /health` - Health check
 
-- **Newsletter Management**: http://localhost:9000 (admin/admin123)
-- **Email Testing**: http://localhost:8025
+## Cron Jobs
 
-## Installation Requirements
+```bash
+# Run polling for specific frequency
+rssmonk-cron 5min
+rssmonk-cron daily
+rssmonk-cron weekly
+```
 
-- **k3d, kubectl, scc, uv** (installed via `just prereqs`)
+## Configuration
+
+Set environment variables:
+```bash
+LISTMONK_URL=http://localhost:9000
+LISTMONK_APIUSER=api
+LISTMONK_APITOKEN=your-token
+RSS_AUTO_SEND=true
+RSS_TIMEOUT=30.0
+```
+
+## Frequencies
+
+- `5min` - Every 5 minutes
+- `daily` - Daily at 5pm  
+- `weekly` - Weekly on Friday at 5pm
+
+## Web Interfaces
+
+- **Listmonk**: http://localhost:9000 (admin/admin123)
+- **Mailpit**: http://localhost:8025 (email testing)
+- **RSS Monk API**: http://localhost:8000/docs
 
 ## Development
 

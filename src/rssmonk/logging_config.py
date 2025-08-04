@@ -4,7 +4,9 @@ import logging
 import logging.config
 import sys
 
-from .config import LOG_FORMAT, LOG_LEVEL
+# Logging configuration
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_LEVEL = 'INFO'
 
 def setup_logging(level: str = None) -> None:
     """Setup structured logging configuration."""

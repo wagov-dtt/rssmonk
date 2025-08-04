@@ -54,6 +54,9 @@ just deploy-k3d # Deploy to k3d cluster
 - YAML uses 2-space indentation
 - Environment variables with `LISTMONK_APIUSER` and `LISTMONK_APITOKEN` prefix
 - Container images use latest tags for development
+- **ASCII only**: Avoid Unicode/emoji characters in code files (difficult for some tools to parse)
+  - Use simple text: "OK", "ERROR", "SUCCESS" instead of ✅❌🎉
+  - Use ASCII symbols: "-", "*", "+" for bullets and decoration
 
 ## Technical Implementation Notes
 

@@ -4,7 +4,10 @@ import httpx
 import feedparser
 from tenacity import retry, wait_random_exponential
 
-from .config import config, DEFAULT_TIMEOUT, USER_AGENT
+# Application constants
+USER_AGENT = "RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rssmonk)"
+DEFAULT_TIMEOUT = 30.0
+
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -13,10 +16,10 @@ logger = get_logger(__name__)
 class ListmonkClient:
     """Listmonk API client."""
     
-    def __init__(self, base_url=None, username=None, password=None):
-        self.base_url = base_url or config.listmonk_url
-        self.username = username or config.listmonk_username
-        self.password = password or config.listmonk_password
+    def __init__(self, base_url, username, password):
+        self.base_url = base_url
+        self.username = username
+        self.password = password
         
         if not self.password:
             raise ValueError("Listmonk password is required")

@@ -5,8 +5,13 @@ description = "RSS Monk - RSS feed aggregator and email dispatcher"
 dependencies = [
     "httpx",
     "feedparser", 
-    "click",
+    "typer",
+    "rich",
     "tenacity",
+    "pydantic",
+    "pydantic-settings",
+    "fastapi",
+    "uvicorn",
 ]
 
 requires-python = ">=3.13"
@@ -19,9 +24,9 @@ dev = [
 ]
 
 [project.scripts]
-rssmonk-cli = "rssmonk.cli:main"
-rssmonk-fetch = "rssmonk.feed_fetcher:main"
-rssmonk-health = "rssmonk.health:main"
+rssmonk = "rssmonk.cli:app"
+rssmonk-api = "rssmonk.api:app"
+rssmonk-cron = "rssmonk.cron:main"
 
 [tool.uv]
 package = true
