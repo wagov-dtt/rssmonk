@@ -3,65 +3,52 @@
 import logging
 import logging.config
 import sys
+from typing import Optional
 
-# Logging configuration
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-LOG_LEVEL = 'INFO'
 
-def setup_logging(level: str = None) -> None:
+def setup_logging(level: str = "INFO", format_str: str = None) -> None:
     """Setup structured logging configuration."""
-    log_level = level or LOG_LEVEL
-    
+    if format_str is None:
+        format_str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
     config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'standard': {
-                'format': LOG_FORMAT
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {"format": format_str},
+            "detailed": {
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
             },
-            'detailed': {
-                'format': '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s'
-            }
         },
-        'handlers': {
-            'console': {
-                'class': 'logging.StreamHandler',
-                'level': log_level,
-                'formatter': 'standard',
-                'stream': sys.stdout
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": level,
+                "formatter": "standard",
+                "stream": sys.stdout,
             },
-            'error_console': {
-                'class': 'logging.StreamHandler',
-                'level': 'ERROR',
-                'formatter': 'detailed',
-                'stream': sys.stderr
-            }
+            "error_console": {
+                "class": "logging.StreamHandler",
+                "level": "ERROR",
+                "formatter": "detailed",
+                "stream": sys.stderr,
+            },
         },
-        'loggers': {
-            'rssmonk': {
-                'handlers': ['console', 'error_console'],
-                'level': log_level,
-                'propagate': False
+        "loggers": {
+            "rssmonk": {
+                "handlers": ["console", "error_console"],
+                "level": level,
+                "propagate": False,
             },
-            'httpx': {
-                'handlers': ['console'],
-                'level': 'WARNING',
-                'propagate': False
-            },
-            'feedparser': {
-                'handlers': ['console'],
-                'level': 'WARNING',
-                'propagate': False
-            }
+            "httpx": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+            "feedparser": {"handlers": ["console"], "level": "WARNING", "propagate": False},
         },
-        'root': {
-            'handlers': ['console'],
-            'level': log_level
-        }
+        "root": {"handlers": ["console"], "level": level},
     }
-    
+
     logging.config.dictConfig(config)
+
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger with the specified name."""
-    return logging.getLogger(f'rssmonk.{name}')
+    return logging.getLogger(f"rssmonk.{name}")

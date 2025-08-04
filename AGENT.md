@@ -11,10 +11,15 @@ just start    # Deploy RSS Monk on k3d cluster
 - `just status` - Show service status
 - `just logs` - Show service logs
 - `just clean` - Remove k3d cluster
-- `just feeds <command>` - Manage RSS feeds and subscribers
-- `just test-fetch [5min|daily|weekly]` - Test feed fetcher locally
-- `just lint` - Run ruff to check and fix Python code
-- `just test` - Run tests
+- `just feeds <command>` - Manage RSS feeds and subscribers (CLI interface)
+- `just test-fetch [5min|daily|weekly]` - Test feed fetching locally
+- `just api` - Start API server in development mode
+- `just setup` - Complete setup for new contributors
+- `just check` - Run all quality checks (lint + type-check + test)
+- `just lint` - Check code style with ruff
+- `just format` - Format code with ruff
+- `just type-check` - Run mypy type checking
+- `just test` - Run pytest tests
 - `just health` - Check system health
 
 ## Local Testing

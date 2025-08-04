@@ -59,7 +59,7 @@ async def create_feed(request: AddFeedRequest):
                 name=feed.name,
                 url=feed.url,
                 base_url=feed.base_url,
-                frequency=feed.frequency.value
+                frequency=feed.frequency.value,
             )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -77,7 +77,7 @@ async def list_feeds():
                     name=feed.name,
                     url=feed.url,
                     base_url=feed.base_url,
-                    frequency=feed.frequency.value
+                    frequency=feed.frequency.value,
                 )
                 for feed in feeds
             ]
@@ -93,13 +93,13 @@ async def get_feed_by_url(url: str):
             feed = rss.get_feed_by_url(url)
             if not feed:
                 raise HTTPException(status_code=404, detail="Feed not found")
-            
+
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
                 url=feed.url,
                 base_url=feed.base_url,
-                frequency=feed.frequency.value
+                frequency=feed.frequency.value,
             )
     except HTTPException:
         raise
@@ -130,9 +130,7 @@ async def create_subscriber(request: AddSubscriberRequest):
         with RSSMonk() as rss:
             subscriber = rss.add_subscriber(request.email, request.name)
             return SubscriberResponse(
-                id=subscriber.id,
-                email=subscriber.email,
-                name=subscriber.name
+                id=subscriber.id, email=subscriber.email, name=subscriber.name
             )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -145,12 +143,7 @@ async def list_subscribers():
         with RSSMonk() as rss:
             subscribers = rss.list_subscribers()
             return [
-                SubscriberResponse(
-                    id=sub.id,
-                    email=sub.email,
-                    name=sub.name
-                )
-                for sub in subscribers
+                SubscriberResponse(id=sub.id, email=sub.email, name=sub.name) for sub in subscribers
             ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -176,12 +169,9 @@ async def process_feed(feed_url: str, auto_send: bool = False):
             feed = rss.get_feed_by_url(feed_url)
             if not feed:
                 raise HTTPException(status_code=404, detail="Feed not found")
-            
+
             campaigns = rss.process_feed(feed, auto_send)
-            return {
-                "feed_name": feed.name,
-                "campaigns_created": campaigns
-            }
+            return {"feed_name": feed.name, "campaigns_created": campaigns}
     except HTTPException:
         raise
     except Exception as e:
@@ -195,12 +185,12 @@ async def poll_feeds_by_frequency(frequency: Frequency):
         with RSSMonk() as rss:
             results = rss.process_feeds_by_frequency(frequency)
             total_campaigns = sum(results.values())
-            
+
             return {
                 "frequency": frequency.value,
                 "feeds_processed": len(results),
                 "campaigns_created": total_campaigns,
-                "results": results
+                "results": results,
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -213,33 +203,27 @@ async def health_check():
     try:
         settings = Settings()
         settings.validate_required()
-        
+
         with RSSMonk(settings) as rss:
             feeds = rss.list_feeds()
             subscribers = rss.list_subscribers()
-            
+
             return {
                 "status": "healthy",
                 "feeds_count": len(feeds),
-                "subscribers_count": len(subscribers)
+                "subscribers_count": len(subscribers),
             }
     except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        return {"status": "unhealthy", "error": str(e)}
 
 
 @app.get("/")
 async def root():
     """Root endpoint."""
-    return {
-        "name": "RSS Monk API",
-        "version": "2.0.0",
-        "docs": "/docs"
-    }
+    return {"name": "RSS Monk API", "version": "2.0.0", "docs": "/docs"}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

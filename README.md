@@ -23,47 +23,47 @@ rssmonk quick-setup https://www.abc.net.au/news/feed/10719986/rss.xml daily user
 ### Feed Management
 ```bash
 # Add feed
-rssmonk add-feed <url> <frequency> [--name "Feed Name"]
+just feeds add-feed <url> <frequency> [--name "Feed Name"]
 
 # List feeds
-rssmonk list-feeds
+just feeds list-feeds
 
 # Delete feed
-rssmonk delete-feed <url>
+just feeds delete-feed <url>
 
 # Process feed manually
-rssmonk process-feed <url> [--send]
+just feeds process-feed <url> [--send]
 ```
 
 ### Subscriber Management
 ```bash
 # Add subscriber
-rssmonk add-subscriber <email> [--name "Name"]
+just feeds add-subscriber <email> [--name "Name"]
 
 # Subscribe email to feed
-rssmonk subscribe <email> <feed-url>
+just feeds subscribe <email> <feed-url>
 
 # Quick setup (feed + subscribers)
-rssmonk quick-setup <url> <frequency> <email1> <email2> ...
+just feeds quick-setup <url> <frequency> <email1> <email2> ...
 ```
 
 ### Operations
 ```bash
 # Poll feeds by frequency
-rssmonk poll <frequency>
+just feeds poll <frequency>
 
 # Health check
-rssmonk health
+just health
 ```
 
 ## API Server
 
 ```bash
-# Start API server
-uvicorn rssmonk.api:app --host 0.0.0.0 --port 8000
+# Start API server in development mode
+just api
 
-# Or using the script
-rssmonk-api
+# Or manually
+uvicorn rssmonk.api:app --host 0.0.0.0 --port 8000
 ```
 
 API endpoints:
@@ -78,9 +78,9 @@ API endpoints:
 
 ```bash
 # Run polling for specific frequency
-rssmonk-cron 5min
-rssmonk-cron daily
-rssmonk-cron weekly
+just test-fetch 5min
+just test-fetch daily
+just test-fetch weekly
 ```
 
 ## Configuration
@@ -109,5 +109,15 @@ RSS_TIMEOUT=30.0
 ## Development
 
 ```bash
-just test && just lint
+# Setup for new contributors
+just setup
+
+# Run all checks
+just check
+
+# Individual commands
+just test      # Run tests
+just lint      # Check code style
+just format    # Format code
+just type-check # Type checking
 ```
