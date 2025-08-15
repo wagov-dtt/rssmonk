@@ -129,9 +129,7 @@ class ListmonkClient:
         self.put("/api/subscribers/lists", payload)
         return True
 
-    def create_campaign(
-        self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None
-    ):
+    def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):
         """Create a new campaign."""
         payload = {
             "name": name,

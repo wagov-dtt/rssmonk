@@ -3,14 +3,17 @@
 import hashlib
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
+from .http_clients import ListmonkClient, fetch_feed
+from .logging_config import get_logger
+
 # Feed frequency configurations
-FREQUENCIES = {
+FREQUENCIES: Dict[str, Dict[str, Any]] = {
     "freq:5min": {
         "interval_minutes": 5,
         "check_time": None,
@@ -31,9 +34,6 @@ FREQUENCIES = {
     },
 }
 
-from .http_clients import ListmonkClient, fetch_feed
-from .logging_config import get_logger
-
 logger = get_logger(__name__)
 
 
@@ -50,12 +50,8 @@ class Settings(BaseSettings):
 
     # Listmonk configuration
     listmonk_url: str = Field(default="http://localhost:9000", description="Listmonk API URL")
-    listmonk_username: str = Field(
-        default="api", alias="LISTMONK_APIUSER", description="Listmonk API username"
-    )
-    listmonk_password: str = Field(
-        alias="LISTMONK_APITOKEN", description="Listmonk API token/password"
-    )
+    listmonk_username: str = Field(default="api", alias="LISTMONK_APIUSER", description="Listmonk API username")
+    listmonk_password: str = Field(alias="LISTMONK_APITOKEN", description="Listmonk API token/password")
 
     # RSS processing configuration
     rss_auto_send: bool = Field(
@@ -63,9 +59,7 @@ class Settings(BaseSettings):
         alias="RSS_AUTO_SEND",
         description="Automatically send campaigns when created",
     )
-    rss_timeout: float = Field(
-        default=30.0, alias="RSS_TIMEOUT", description="HTTP timeout for RSS feed requests"
-    )
+    rss_timeout: float = Field(default=30.0, alias="RSS_TIMEOUT", description="HTTP timeout for RSS feed requests")
     rss_user_agent: str = Field(
         default="RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rssmonk)",
         alias="RSS_USER_AGENT",
@@ -169,9 +163,7 @@ class RSSMonk:
             raise ValueError(f"Feed already exists: {url}")
 
         # Create in Listmonk
-        result = self._client.create_list(
-            name=feed.name, description=feed.description, tags=feed.tags
-        )
+        result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags)
         feed.id = result["id"]
         return feed
 
@@ -296,7 +288,7 @@ class RSSMonk:
 
             feed = feedparser.parse(url)
             return feed.feed.get("title", url)
-        except:
+        except Exception:
             return url
 
     def _parse_feed_from_list(self, lst: dict) -> Feed:
@@ -362,7 +354,7 @@ class RSSMonk:
             if tag.startswith(f"last-poll:{feed.frequency.value}:"):
                 try:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
-                except:
+                except (ValueError, IndexError):
                     continue
 
         now = datetime.now()
@@ -394,9 +386,7 @@ class RSSMonk:
                     if last_poll > now - timedelta(days=1):
                         return False
 
-            target_time = now.replace(
-                hour=target_hour, minute=target_minute, second=0, microsecond=0
-            )
+            target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
             return now >= target_time
 
         return False

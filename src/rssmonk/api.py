@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from .core import RSSMonk, Settings, Frequency, Feed, Subscriber
+from .core import RSSMonk, Settings, Frequency
 
 app = FastAPI(title="RSS Monk API", version="2.0.0")
 
@@ -129,9 +129,7 @@ async def create_subscriber(request: AddSubscriberRequest):
     try:
         with RSSMonk() as rss:
             subscriber = rss.add_subscriber(request.email, request.name)
-            return SubscriberResponse(
-                id=subscriber.id, email=subscriber.email, name=subscriber.name
-            )
+            return SubscriberResponse(id=subscriber.id, email=subscriber.email, name=subscriber.name)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -142,9 +140,7 @@ async def list_subscribers():
     try:
         with RSSMonk() as rss:
             subscribers = rss.list_subscribers()
-            return [
-                SubscriberResponse(id=sub.id, email=sub.email, name=sub.name) for sub in subscribers
-            ]
+            return [SubscriberResponse(id=sub.id, email=sub.email, name=sub.name) for sub in subscribers]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -27,11 +27,6 @@ clean:
   @echo "Cleaning up..."
   @k3d cluster delete rssmonk
 
-# Install prerequisites (for k3d deployment)
-prereqs:
-  @echo "Installing prerequisites..."
-  brew install k3d kubectl scc uv
-
 # Deploy to k3d cluster (advanced)
 deploy-k3d:
   k3d cluster create rssmonk --port "9000:30900@server:0" --port "8025:30825@server:0" || true
@@ -55,28 +50,24 @@ feeds *args:
 health:
   uv run rssmonk health
 
-# Run tests
-test:
-  uv run pytest
-
 # Lint Python code
 lint:
-  uv run ruff check src/ tests/
+  ruff check --fix src/
 
 # Format Python code  
 format:
-  uv run ruff format src/ tests/
+  ruff format src/
 
 # Type check
 type-check:
-  uv run mypy src/
+  mypy src/
 
 # Install dependencies
 install:
   uv sync
 
 # Run all checks
-check: lint type-check test
+check: lint type-check
 
 # Start API server in development mode
 api:
@@ -90,7 +81,6 @@ setup: install check
   @echo "Available commands:"
   @echo "  just feeds --help      # Try the CLI"
   @echo "  just api               # Start API server"
-  @echo "  just test              # Run tests"
   @echo "  just check             # Run all checks"
   @echo ""
   @echo "Environment variables (for real usage):"

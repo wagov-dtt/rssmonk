@@ -1,13 +1,13 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
-	"name": "Debian 12 (bookworm)",
-	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
+	"name": "rssmonk debian:trixie devcontainer",
+	"image": "ghcr.io/wagov-dtt/devcontainer-base",
+	"privileged": true,
+	"mounts": [
+		"source=dind-var-lib-docker,target=/var/lib/docker,type=volume"
+	],
+	"remoteUser": "vscode",
 	"hostRequirements": {
 		"memory": "32gb"
-	},
-	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
-		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {}
-	},
-	"onCreateCommand": ".devcontainer/onCreateCommand.sh"
+	}
 }

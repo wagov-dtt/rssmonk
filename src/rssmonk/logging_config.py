@@ -6,7 +6,7 @@ import sys
 from typing import Optional
 
 
-def setup_logging(level: str = "INFO", format_str: str = None) -> None:
+def setup_logging(level: str = "INFO", format_str: Optional[str] = None) -> None:
     """Setup structured logging configuration."""
     if format_str is None:
         format_str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -16,9 +16,7 @@ def setup_logging(level: str = "INFO", format_str: str = None) -> None:
         "disable_existing_loggers": False,
         "formatters": {
             "standard": {"format": format_str},
-            "detailed": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
-            },
+            "detailed": {"format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"},
         },
         "handlers": {
             "console": {

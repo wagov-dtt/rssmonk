@@ -27,9 +27,7 @@ def setup_app_logging():
 def add_feed(
     url: str = typer.Argument(help="RSS feed URL"),
     frequency: Frequency = typer.Argument(help="Polling frequency"),
-    name: Optional[str] = typer.Option(
-        None, "--name", "-n", help="Feed name (auto-detected if not provided)"
-    ),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Feed name (auto-detected if not provided)"),
 ):
     """Add a new RSS feed."""
     try:
@@ -161,9 +159,7 @@ def process_feed(
             action = "sent" if auto_send else "created"
 
             if campaigns > 0:
-                console.print(
-                    f"[SUCCESS] {campaigns} campaigns {action} for {feed.name}", style="green"
-                )
+                console.print(f"[SUCCESS] {campaigns} campaigns {action} for {feed.name}", style="green")
             else:
                 console.print(f"[INFO] No new articles for {feed.name}", style="yellow")
     except Exception as e:
@@ -224,7 +220,7 @@ def health():
             feeds = rss.list_feeds()
             subscribers = rss.list_subscribers()
 
-            console.print(f"[SUCCESS] Listmonk connection: OK", style="green")
+            console.print("[SUCCESS] Listmonk connection: OK", style="green")
             console.print(f"Feeds: {len(feeds)}")
             console.print(f"Subscribers: {len(subscribers)}")
             console.print("[SUCCESS] All systems operational", style="green bold")
