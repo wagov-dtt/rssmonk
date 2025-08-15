@@ -11,8 +11,6 @@ just start    # Deploy RSS Monk on k3d cluster
 - `just status` - Show service status
 - `just logs` - Show service logs
 - `just clean` - Remove k3d cluster
-- `just feeds <command>` - Manage RSS feeds and subscribers (CLI interface)
-- `just test-fetch [5min|daily|weekly]` - Test feed fetching locally
 - `just api` - Start API server in development mode
 - `just setup` - Complete setup for new contributors
 - `just check` - Run all quality checks (lint + type-check + test)
@@ -32,11 +30,8 @@ just start    # Deploy RSS Monk on k3d cluster
 just start
 ```
 
-## Advanced: K3d Deployment
-```bash
-just prereqs    # Install k3d, kubectl, scc, uv via Homebrew
-just deploy-k3d # Deploy to k3d cluster
-```
+## CLI Tool
+A CLI tool built with typer that closely mimics the HTTP API will be made available for test simplification. In production, use the HTTP endpoints directly.
 
 ## Development Philosophy
 - **Simplicity first** - Prefer simple solutions over complex ones
@@ -64,6 +59,26 @@ just deploy-k3d # Deploy to k3d cluster
   - Use ASCII symbols: "-", "*", "+" for bullets and decoration
 
 ## Technical Implementation Notes
+
+### API Architecture
+- **Passthrough Proxy**: RSS Monk API acts as authenticated proxy to [Listmonk](https://listmonk.app/)
+- **Three RSS Monk Endpoints**:
+  - `/api/feeds` - Feed management with RSS Monk logic
+  - `/api/feeds/process` - Feed processing (individual or bulk for cron)
+  - `/api/public/subscribe` - Public subscription without authentication
+- **Listmonk Passthrough**: All other `/api/*` requests pass through to Listmonk with auth validation
+- **Public Passthrough**: All other `/api/public/*` requests pass through to Listmonk without auth
+- **OpenAPI Documentation**: Default OpenAPI spec includes Listmonk passthrough documentation
+- **Dynamic Content**: Pydantic models load content from Listmonk at runtime
+
+### Authentication Strategy
+- **Listmonk Validation**: All auth validated directly against Listmonk API
+- **Dependency Injection**: FastAPI dependency validates credentials per request for `/api/*` routes
+- **Passthrough Headers**: Auth headers preserved and forwarded to Listmonk
+- **No Local Auth**: No separate authentication system - relies on Listmonk entirely
+
+### Listmonk Integration
+[Listmonk](https://listmonk.app/) is a high-performance bulk messaging system with subscriber management, list expansion, and email campaign capabilities. It uses PostgreSQL as its primary datastore. RSS Monk acts as a proxy layer that adds RSS feed processing capabilities to Listmonk's messaging infrastructure.
 
 ### API Client Architecture
 - **ListmonkClient**: HTTP wrapper with automatic JSON handling and error logging
