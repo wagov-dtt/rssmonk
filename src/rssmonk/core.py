@@ -1,6 +1,7 @@
 """Simplified core models and service for RSS Monk."""
 
 import hashlib
+import os
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -9,7 +10,8 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from .http_clients import ListmonkClient, fetch_feed
+from .cache import feed_cache
+from .http_clients import ListmonkClient
 from .logging_config import get_logger
 
 # Feed frequency configurations
@@ -86,6 +88,52 @@ class Settings(BaseSettings):
         if not self.listmonk_password:
             raise ValueError("LISTMONK_APITOKEN environment variable is required")
 
+    @classmethod
+    def ensure_env_file(cls) -> bool:
+        """Create .env file with defaults if it doesn't exist. Returns True if created."""
+        env_path = ".env"
+        if os.path.exists(env_path):
+            return False
+            
+        # Generate .env content from field definitions
+        env_content = "# RSS Monk Configuration\n"
+        env_content += "# Auto-generated - modify as needed\n\n"
+        
+        # Required fields
+        env_content += "# Required - get from your Listmonk instance\n"
+        env_content += "LISTMONK_APITOKEN=your-token-here\n\n"
+        
+        # Optional fields with defaults
+        env_content += "# Optional - uncomment and modify as needed\n"
+        
+        # Get field info from model
+        for field_name, field_info in cls.model_fields.items():
+            if field_name == "listmonk_password":  # Skip - handled above
+                continue
+                
+            alias = getattr(field_info, "alias", None) or field_name.upper()
+            default = field_info.default
+            description = getattr(field_info, "description", "")
+            
+            if default is not None:
+                # Format the default value appropriately
+                if isinstance(default, str):
+                    default_str = f'"{default}"' if " " in default else default
+                else:
+                    default_str = str(default).lower() if isinstance(default, bool) else str(default)
+                
+                env_content += f"# {alias}={default_str}"
+                if description:
+                    env_content += f"  # {description}"
+                env_content += "\n"
+        
+        try:
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write(env_content)
+            return True
+        except OSError:
+            return False
+
 
 class Feed(BaseModel):
     """RSS feed model."""
@@ -152,19 +200,41 @@ class RSSMonk:
     # Feed operations
 
     def add_feed(self, url: str, frequency: Frequency, name: Optional[str] = None) -> Feed:
-        """Add RSS feed."""
+        """Add RSS feed, handling existing URLs with different configurations."""
         if not name:
             name = self._get_feed_name(url)
 
         feed = Feed(name=name, url=url, frequency=frequency)
 
-        # Check if exists
-        if self._client.find_list_by_tag(f"url:{feed.url_hash}"):
-            raise ValueError(f"Feed already exists: {url}")
+        # Check for existing feed with same URL but different frequency
+        existing_lists = []
+        for freq in Frequency:
+            lists = self._client.get_lists(tag=f"freq:{freq.value}")
+            for lst in lists:
+                try:
+                    existing_feed = self._parse_feed_from_list(lst)
+                    if existing_feed.url == url:
+                        existing_lists.append((existing_feed, lst))
+                except Exception:
+                    continue
+
+        # If exact match exists (same URL + frequency), return error
+        for existing_feed, _ in existing_lists:
+            if existing_feed.frequency == frequency:
+                raise ValueError(f"Feed with same URL and frequency already exists: {url}")
+
+        # If URL exists with different frequencies, we allow it
+        # Each frequency gets its own list for independent processing
+        unique_name = f"{name} ({frequency.value})"
+        feed.name = unique_name
 
         # Create in Listmonk
         result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags)
         feed.id = result["id"]
+        
+        # Invalidate cache for this URL to ensure fresh fetch
+        feed_cache.invalidate_url(url)
+        
         return feed
 
     def list_feeds(self) -> List[Feed]:
@@ -229,20 +299,24 @@ class RSSMonk:
 
     # Feed processing
 
-    def process_feed(self, feed: Feed, auto_send: Optional[bool] = None) -> int:
-        """Process single feed - fetch articles and create campaigns."""
+    async def process_feed(self, feed: Feed, auto_send: Optional[bool] = None) -> int:
+        """Process single feed - fetch articles and create campaigns using cache."""
         if auto_send is None:
             auto_send = self.settings.rss_auto_send
 
         try:
-            # Fetch articles
-            articles, _ = fetch_feed(
-                feed_url=feed.url,
-                timeout=self.settings.rss_timeout,
+            # Fetch articles using cache
+            articles, feed_title = await feed_cache.get_feed(
+                url=feed.url,
                 user_agent=self.settings.rss_user_agent,
+                timeout=self.settings.rss_timeout
             )
 
-            # Get new articles (simple approach - check against last poll tag)
+            # Update feed name if we got a better title from RSS
+            if feed_title and feed_title != feed.url and not feed.name.endswith(f"({feed.frequency.value})"):
+                feed.name = f"{feed_title} ({feed.frequency.value})"
+
+            # Get new articles (check against last poll tag)
             new_articles = self._find_new_articles(feed, articles)
 
             if not new_articles:

@@ -1,7 +1,7 @@
 """Simple cron job script using Pydantic models."""
 
 import sys
-from .core import RSSMonk, Frequency
+from .core import RSSMonk, Frequency, Settings
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -19,6 +19,11 @@ def main():
     except ValueError:
         print(f"Invalid frequency: {sys.argv[1]}")
         print("Valid frequencies: 5min, daily, weekly")
+        sys.exit(1)
+
+    # Create .env if missing
+    if Settings.ensure_env_file():
+        print("Created .env file with default settings. Please edit LISTMONK_APITOKEN.")
         sys.exit(1)
 
     logger.info(f"Starting RSS Monk cron job for {frequency.value} feeds")

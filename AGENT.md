@@ -2,36 +2,19 @@
 
 ## Quick Start
 ```bash
-just prereqs  # Install k3d, kubectl, scc, uv via Homebrew
+just prereqs  # Install development tools via mise
 just start    # Deploy RSS Monk on k3d cluster
 ```
 
-## Core Commands
-- `just start` - Deploy RSS Monk on k3d cluster
-- `just status` - Show service status
-- `just logs` - Show service logs
-- `just clean` - Remove k3d cluster
-- `just api` - Start API server in development mode
-- `just setup` - Complete setup for new contributors
-- `just check` - Run all quality checks (lint + type-check + test)
-- `just lint` - Check code style with ruff
-- `just format` - Format code with ruff
-- `just type-check` - Run mypy type checking
-- `just test` - Run pytest tests
-- `just health` - Check system health
+## Commands
+**Setup:** `prereqs` `install` `setup`  
+**Development:** `api` `check` `lint` `format` `type-check` `test` `validate`  
+**Deployment:** `start` `status` `logs` `clean` `health`  
+**Testing:** `test-integration` - Run against k3d cluster with Mailpit verification  
 
-## Local Testing
-```bash
-# Access services locally
-# Listmonk: http://localhost:9000 (admin/admin123)
-# Mailpit: http://localhost:8025
-
-# Start and access services
-just start
-```
-
-## CLI Tool
-A CLI tool built with typer that closely mimics the HTTP API will be made available for test simplification. In production, use the HTTP endpoints directly.
+## Local Access
+- **Listmonk:** http://localhost:9000 (admin/admin123)
+- **Mailpit:** http://localhost:8025
 
 ## Development Philosophy
 - **Simplicity first** - Prefer simple solutions over complex ones
@@ -58,18 +41,27 @@ A CLI tool built with typer that closely mimics the HTTP API will be made availa
   - Use simple text: "OK", "ERROR", "SUCCESS" instead of ✅❌🎉
   - Use ASCII symbols: "-", "*", "+" for bullets and decoration
 
+## Development Tools
+- **uv**: Python package management and script execution
+- **mise**: Version management for development tools (ruff, mypy, etc.)
+- **ruff**: Python linting and formatting
+- **mypy**: Type checking (run via uv for proper environment)
+- **pytest**: Testing framework (run via uv with test extras)
+
 ## Technical Implementation Notes
 
 ### API Architecture
 - **Passthrough Proxy**: RSS Monk API acts as authenticated proxy to [Listmonk](https://listmonk.app/)
-- **Three RSS Monk Endpoints**:
+- **RSS Monk Core Endpoints**:
   - `/api/feeds` - Feed management with RSS Monk logic
   - `/api/feeds/process` - Feed processing (individual or bulk for cron)
+  - `/api/feeds/configurations/{url}` - URL configuration management
   - `/api/public/subscribe` - Public subscription without authentication
+  - `/api/cache/stats` - RSS feed cache statistics
 - **Listmonk Passthrough**: All other `/api/*` requests pass through to Listmonk with auth validation
 - **Public Passthrough**: All other `/api/public/*` requests pass through to Listmonk without auth
-- **OpenAPI Documentation**: Default OpenAPI spec includes Listmonk passthrough documentation
-- **Dynamic Content**: Pydantic models load content from Listmonk at runtime
+- **OpenAPI Documentation**: Comprehensive OpenAPI spec with all endpoints documented
+- **Dynamic Content**: Pydantic models provide validation and documentation
 
 ### Authentication Strategy
 - **Listmonk Validation**: All auth validated directly against Listmonk API
@@ -79,11 +71,6 @@ A CLI tool built with typer that closely mimics the HTTP API will be made availa
 
 ### Listmonk Integration
 [Listmonk](https://listmonk.app/) is a high-performance bulk messaging system with subscriber management, list expansion, and email campaign capabilities. It uses PostgreSQL as its primary datastore. RSS Monk acts as a proxy layer that adds RSS feed processing capabilities to Listmonk's messaging infrastructure.
-
-### API Client Architecture
-- **ListmonkClient**: HTTP wrapper with automatic JSON handling and error logging
-- **Response normalization**: Handles both paginated (`{data: {results: []}}`) and direct list responses
-- **Authentication**: HTTP Basic Auth with username/password from environment
 
 ### State Management Strategy
 - **No persistent state files**: All state stored in Listmonk list tags

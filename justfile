@@ -1,12 +1,12 @@
 set dotenv-load
 set positional-arguments
 
-# Choose a task to run
+# List available tasks
 default:
-  just --choose
+  just --list
 
 # Deploy to k3d cluster (primary method)
-start:
+start: prereqs
   @echo "Starting RSS Monk on k3d..."
   just deploy-k3d
 
@@ -60,21 +60,43 @@ format:
 
 # Type check
 type-check:
-  mypy src/
+  uv run mypy src/
 
 # Install dependencies
 install:
   uv sync
+  uv pip install -e .
 
-# Run all checks
-check: lint type-check
+# Install prerequisites (tools needed for development)
+prereqs:
+  @echo "Installing prerequisites via mise..."
+  mise install
+
+# Run all checks (lint + type-check + test)
+check: lint type-check test
+
+# Run tests
+test:
+  uv run --extra test pytest
+
+# Run integration tests (requires k3d cluster)
+test-integration:
+  @echo "Running integration tests..."
+  @echo "Ensure k3d cluster is running: just start"
+  uv run --extra test python tests/test_integration.py
+
+# Run end-to-end validation workflow
+validate:
+  @echo "Running end-to-end validation workflow..."
+  @echo "This will test: feed creation, subscriptions, email delivery, and cleanup"
+  @just test-integration
 
 # Start API server in development mode
-api:
-  uv run uvicorn rssmonk.api:app --reload --host 0.0.0.0 --port 8000
+api: start install
+  uv run fastapi dev src/rssmonk/api.py --port 8000 --host 0.0.0.0
 
 # Setup for new contributors
-setup: install check
+setup: prereqs install check
   @echo ""
   @echo "[SUCCESS] RSS Monk development environment ready!"
   @echo ""

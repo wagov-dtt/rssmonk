@@ -5,15 +5,11 @@ RSS Monk turns RSS feeds into email newsletters using Listmonk.
 ## Quick Start
 
 ```bash
-# Install dependencies
-just prereqs
-
-# Start services (k3d cluster with Listmonk)
-just start
-
-# Start API server
+# Start everything (installs prerequisites, starts k3d cluster, and API server)
 just api
 ```
+
+Then visit http://localhost:8000/docs for the interactive API documentation.
 
 RSS Monk converts RSS feeds into email newsletters using [Listmonk](https://listmonk.app/), a high-performance bulk messaging system. Listmonk provides subscribers, lists, campaigns, and stores feed information as tags on lists and subscriber preferences as tags on subscribers.
 
@@ -50,23 +46,22 @@ A CLI tool built with typer that closely mimics the HTTP API will be made availa
 
 ## Configuration
 
-Environment variables (managed via pydantic-settings):
+Create a `.env` file in the project root to configure RSS Monk:
+
 ```bash
-# Listmonk Connection (required)
-LISTMONK_APITOKEN=your-token           # Listmonk API password/token
-LISTMONK_APIUSER=api                   # Listmonk API username (default: api)
-LISTMONK_URL=http://localhost:9000     # Listmonk API URL (default: http://localhost:9000)
+# Required
+LISTMONK_APITOKEN=your-token
 
-# RSS Processing
-RSS_AUTO_SEND=true                     # Automatically send campaigns (default: false)
-RSS_TIMEOUT=30.0                       # HTTP timeout for RSS requests (default: 30.0)
-RSS_USER_AGENT="RSS Monk/2.0"          # User agent for RSS requests
-
-# Logging
-LOG_LEVEL=INFO                         # Logging level (default: INFO)
+# Optional - defaults shown
+LISTMONK_APIUSER=api
+LISTMONK_URL=http://localhost:9000
+RSS_AUTO_SEND=false
+RSS_TIMEOUT=30.0
+RSS_USER_AGENT="RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rssmonk)"
+LOG_LEVEL=INFO
 ```
 
-Only `LISTMONK_APITOKEN` is required - all others have sensible defaults.
+RSS Monk uses pydantic-settings which automatically loads `.env` files. Only `LISTMONK_APITOKEN` is required.
 
 ### API Authentication
 
