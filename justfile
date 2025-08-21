@@ -1,36 +1,31 @@
 set dotenv-load
 set positional-arguments
 
-# Choose a task to run
+# List available tasks
 default:
-  just --choose
+  just --list
 
-# 🚀 Deploy to k3d cluster (primary method)
-start:
-  @echo "🚀 Starting RSS Monk on k3d..."
+# Deploy to k3d cluster (primary method)
+start: prereqs
+  @echo "Starting RSS Monk on k3d..."
   just deploy-k3d
 
 
 
-# 📊 Show service status  
+# Show service status  
 status:
   @kubectl get pods -n rssmonk
 
-# 📝 Show service logs
+# Show service logs
 logs:
   @kubectl logs -l app=listmonk-app -n rssmonk -f
 
 
 
-# 🧹 Clean up (remove k3d cluster)
+# Clean up (remove k3d cluster)
 clean:
-  @echo "🧹 Cleaning up..."
+  @echo "Cleaning up..."
   @k3d cluster delete rssmonk
-
-# Install prerequisites (for k3d deployment)
-prereqs:
-  @echo "Installing prerequisites..."
-  brew install k3d kubectl scc uv
 
 # Deploy to k3d cluster (advanced)
 deploy-k3d:
@@ -40,29 +35,80 @@ deploy-k3d:
   @echo "Waiting for pods..."
   kubectl wait --for=condition=ready pod -l app=listmonk-app -n rssmonk --timeout=120s
   kubectl wait --for=condition=ready pod -l app=mailpit -n rssmonk --timeout=120s
-  @echo "✅ K3d deployment complete"
+  @echo "[SUCCESS] K3d deployment complete"
 
-# 🔄 Test feed fetching (5min|daily|weekly)
+# Test feed fetching (5min|daily|weekly)
 test-fetch freq:
-  @case "{{freq}}" in 5min|daily|weekly) echo "Running rssmonk-fetch for frequency: {{freq}} (force + auto-send)" ;; *) echo "Usage: just test-fetch [5min|daily|weekly]" && exit 1 ;; esac
-  uv run rssmonk-fetch --frequency {{freq}} --force --auto-send
+  @case "{{freq}}" in 5min|daily|weekly) echo "Running rssmonk-cron for frequency: {{freq}}" ;; *) echo "Usage: just test-fetch [5min|daily|weekly]" && exit 1 ;; esac
+  uv run rssmonk-cron {{freq}}
 
-# 🛠️ Manage RSS feeds
+# Manage RSS feeds
 feeds *args:
-  uv run rssmonk-cli "$@"
+  uv run rssmonk "$@"
 
-# 🩺 Health check
+# Health check
 health:
-  uv run python -m rssmonk.health
+  uv run rssmonk health
 
-# 🧪 Run tests
-test:
-  uv run --with pytest pytest tests/
-
-# 🧹 Lint Python code
+# Lint Python code
 lint:
-  uv run --with ruff ruff check --fix src/ tests/
+  ruff check --fix src/
 
-# 📊 Analyze code complexity
+# Format Python code  
+format:
+  ruff format src/
+
+# Type check
+type-check:
+  uv run mypy src/
+
+# Install dependencies
+install:
+  uv sync
+  uv pip install -e .
+
+# Install prerequisites (tools needed for development)
+prereqs:
+  @echo "Installing prerequisites via mise..."
+  mise install
+
+# Run all checks (lint + type-check + test)
+check: lint type-check test
+
+# Run tests
+test:
+  uv run --extra test pytest
+
+# Run integration tests (requires k3d cluster)
+test-integration:
+  @echo "Running integration tests..."
+  @echo "Ensure k3d cluster is running: just start"
+  uv run --extra test python tests/test_integration.py
+
+# Run end-to-end validation workflow
+validate:
+  @echo "Running end-to-end validation workflow..."
+  @echo "This will test: feed creation, subscriptions, email delivery, and cleanup"
+  @just test-integration
+
+# Start API server in development mode
+api: start install
+  uv run fastapi dev src/rssmonk/api.py --port 8000 --host 0.0.0.0
+
+# Setup for new contributors
+setup: prereqs install check
+  @echo ""
+  @echo "[SUCCESS] RSS Monk development environment ready!"
+  @echo ""
+  @echo "Available commands:"
+  @echo "  just feeds --help      # Try the CLI"
+  @echo "  just api               # Start API server"
+  @echo "  just check             # Run all checks"
+  @echo ""
+  @echo "Environment variables (for real usage):"
+  @echo "  LISTMONK_APITOKEN=your-token"
+  @echo "  LISTMONK_URL=http://localhost:9000"
+
+# Analyze code complexity
 analyze:
   scc --exclude-dir .git --by-file .

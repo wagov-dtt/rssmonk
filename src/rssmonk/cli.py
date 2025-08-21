@@ -1,189 +1,237 @@
-"""CLI for RSS Monk feed management."""
+"""Simple Typer CLI for RSS Monk."""
 
-import click
-import feedparser
-import httpx
-from .http_clients import create_client
-from .utils import create_url_tag, find_feed_by_url, create_or_get_subscriber
-from .logging_config import get_logger
+from typing import List, Optional
+import typer
+from rich.console import Console
+from rich.table import Table
 
-logger = get_logger(__name__)
+from .core import RSSMonk, Settings, Frequency
+from .logging_config import setup_logging
 
-
-@click.group()
-def main():
-    """RSS Monk Feed Management CLI"""
-    pass
+console = Console()
+app = typer.Typer(help="RSS Monk - RSS feeds to email newsletters")
 
 
-def get_feed_name(url: str, provided_name: str = None) -> str:
-    """Get feed name from URL or provided name."""
-    if provided_name:
-        return provided_name
-    
+@app.callback()
+def setup_app_logging():
+    """Setup logging for the CLI."""
     try:
-        feed = feedparser.parse(url)
-        return feed.feed.get('title', url)
-    except Exception:
-        return url
-
-
-@main.command('add-feed')
-@click.argument('url')
-@click.argument('frequency', type=click.Choice(['5min', 'daily', 'weekly']))
-@click.option('--name', help='Feed name (auto-detected if not provided)')
-def add_feed(url: str, frequency: str, name: str = None):
-    """Add a new RSS feed."""
-    name = get_feed_name(url, name)
-    
-    with create_client() as client:
-        # Check if feed already exists
-        existing_feed = find_feed_by_url(client, url)
-        if existing_feed:
-            click.echo(f"❌ Feed URL already exists: {existing_feed['name']}")
-            return
+        # Create .env if missing
+        if Settings.ensure_env_file():
+            print("Created .env file with default settings. Please edit LISTMONK_APITOKEN.")
         
-        # Create list
-        url_tag = create_url_tag(url)
-        feed_list = client.create_list(
-            name=name,
-            description=f"RSS Feed: {url}",
-            tags=[f"freq:{frequency}", url_tag]
-        )
-        click.echo(f"✅ Created feed: {name} (ID: {feed_list['id']})")
+        settings = Settings()
+        setup_logging(level=settings.log_level, format_str=settings.log_format)
+    except Exception:
+        # Fallback to default logging if settings fail
+        setup_logging()
 
 
-@main.command('list-feeds')
+@app.command()
+def add_feed(
+    url: str = typer.Argument(help="RSS feed URL"),
+    frequency: Frequency = typer.Argument(help="Polling frequency"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Feed name (auto-detected if not provided)"),
+):
+    """Add a new RSS feed."""
+    try:
+        with RSSMonk() as rss:
+            feed = rss.add_feed(url, frequency, name)
+            console.print(f"[SUCCESS] Created feed: {feed.name} (ID: {feed.id})", style="green")
+            console.print(f"   URL: {feed.url}")
+            console.print(f"   Frequency: {feed.frequency.value}")
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
+
+
+@app.command()
 def list_feeds():
     """List all RSS feeds."""
-    with create_client() as client:
-        # Query by frequency tags to get only RSS feeds
-        all_feeds = []
-        for freq in ['5min', 'daily', 'weekly']:
-            feeds = client.get_lists(tag=f"freq:{freq}")
-            all_feeds.extend(feeds)
-        
-        # Remove duplicates by ID
-        feed_lists = {f['id']: f for f in all_feeds}.values()
-        
-        if not feed_lists:
-            click.echo("No RSS feeds found")
-            return
-        
-        for feed_list in feed_lists:
-            freq_tags = [tag for tag in feed_list.get('tags', []) if tag.startswith('freq:')]
-            frequency = freq_tags[0].replace('freq:', '') if freq_tags else 'unknown'
-            
-            click.echo(f"  {feed_list['name']} (ID: {feed_list['id']})")
-            click.echo(f"    Frequency: {frequency}")
-            click.echo(f"    Subscribers: {feed_list.get('subscriber_count', 0)}")
-            click.echo(f"    Description: {feed_list.get('description', '')}")
-            click.echo()
+    try:
+        with RSSMonk() as rss:
+            feeds = rss.list_feeds()
 
-
-@main.command('add-subscriber')
-@click.argument('email')
-@click.option('--name', help='Subscriber name (defaults to email)')
-def add_subscriber(email: str, name: str = None):
-    """Add a new subscriber."""
-    with create_client() as client:
-        # Check if subscriber already exists
-        try:
-            subscribers = client.get_subscribers(query=email)
-            if subscribers:
-                click.echo(f"❌ Subscriber already exists: {email}")
+            if not feeds:
+                console.print("No RSS feeds found")
                 return
-        except Exception:
-            pass  # Subscriber doesn't exist, continue
-        
-        # Create subscriber
-        subscriber = client.create_subscriber(email=email, name=name or email)
-        click.echo(f"✅ Created subscriber: {email} (ID: {subscriber['id']})")
+
+            table = Table(title="RSS Feeds")
+            table.add_column("Name", style="cyan")
+            table.add_column("URL", style="blue")
+            table.add_column("Frequency", style="magenta")
+            table.add_column("ID", style="dim")
+
+            for feed in feeds:
+                table.add_row(
+                    feed.name,
+                    feed.url[:50] + "..." if len(feed.url) > 50 else feed.url,
+                    feed.frequency.value,
+                    str(feed.id),
+                )
+
+            console.print(table)
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
 
 
-@main.command('list-subscribers')
-def list_subscribers():
-    """List all subscribers."""
-    with create_client() as client:
-        subscribers = client.get_subscribers()
-        
-        if not subscribers:
-            click.echo("No subscribers found")
-            return
-        
-        for subscriber in subscribers:
-            click.echo(f"  {subscriber['email']} (ID: {subscriber['id']})")
-            click.echo(f"    Name: {subscriber.get('name', 'N/A')}")
-            click.echo(f"    Status: {subscriber.get('status', 'N/A')}")
-            click.echo()
-
-
-@main.command()
-@click.argument('email')
-@click.argument('list_id', type=int)
-def subscribe(email: str, list_id: int):
-    """Subscribe an email to a feed list."""
-    with create_client() as client:
-        # Find subscriber by email
-        data = client.get("/api/subscribers", params={"query": email})
-        if isinstance(data, dict) and 'results' in data:
-            subscribers = data['results']
-        else:
-            subscribers = data if isinstance(data, list) else []
-        
-        if not subscribers:
-            click.echo(f"❌ Subscriber not found: {email}")
-            return
-        
-        subscriber = subscribers[0]
-        client.subscribe_to_lists([subscriber['id']], [list_id])
-        click.echo(f"✅ Subscribed {email} to list {list_id}")
-
-
-@main.command('quick-setup')
-@click.argument('url')
-@click.argument('frequency', type=click.Choice(['5min', 'daily', 'weekly']))
-@click.argument('emails', nargs=-1, required=True)
-@click.option('--name', help='Feed name (auto-detected if not provided)')
-def quick_setup(url: str, frequency: str, emails: tuple, name: str = None):
-    """Add feed and subscribe multiple emails in one command."""
-    name = get_feed_name(url, name)
-    
-    with create_client() as client:
-        # Check if feed already exists
-        feed_list = find_feed_by_url(client, url)
-        if feed_list:
-            click.echo(f"📋 Using existing feed: {feed_list['name']} (ID: {feed_list['id']})")
-        else:
-            # Create feed
-            url_tag = create_url_tag(url)
-            feed_list = client.create_list(
-                name=name,
-                description=f"RSS Feed: {url}",
-                tags=[f"freq:{frequency}", url_tag]
+@app.command()
+def add_subscriber(
+    email: str = typer.Argument(help="Subscriber email"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Subscriber name"),
+):
+    """Add a new subscriber."""
+    try:
+        with RSSMonk() as rss:
+            subscriber = rss.add_subscriber(email, name)
+            console.print(
+                f"[SUCCESS] Created subscriber: {subscriber.email} (ID: {subscriber.id})",
+                style="green",
             )
-            click.echo(f"✅ Created feed: {name} (ID: {feed_list['id']})")
-        
-        list_id = feed_list['id']
-        
-        # Add and subscribe each email
-        for email in emails:
-            try:
-                subscriber = create_or_get_subscriber(client, email)
-                client.subscribe_to_lists([subscriber['id']], [list_id])
-                click.echo(f"✅ Subscribed {email} to {name}")
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 400:
-                    click.echo(f"❌ Invalid email address: {email}")
-                else:
-                    click.echo(f"❌ Failed to process {email}: HTTP {e.response.status_code}")
-                continue
-            except Exception as e:
-                click.echo(f"❌ Failed to process {email}: {e}")
-                continue
-        
-        click.echo(f"\n🎉 Quick setup complete! Feed: {name}, Subscribers: {len(emails)}")
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
 
 
-if __name__ == '__main__':
-    main()
+@app.command()
+def subscribe(
+    email: str = typer.Argument(help="Subscriber email"),
+    feed_url: str = typer.Argument(help="RSS feed URL"),
+):
+    """Subscribe an email to a feed."""
+    try:
+        with RSSMonk() as rss:
+            rss.subscribe(email, feed_url)
+            console.print(f"[SUCCESS] Subscribed {email} to feed", style="green")
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
+
+
+@app.command()
+def quick_setup(
+    url: str = typer.Argument(help="RSS feed URL"),
+    frequency: Frequency = typer.Argument(help="Polling frequency"),
+    emails: List[str] = typer.Argument(help="Subscriber emails"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Feed name"),
+):
+    """Add feed and subscribe multiple emails in one command."""
+    try:
+        with RSSMonk() as rss:
+            # Create or get feed
+            feed = rss.get_feed_by_url(url)
+            if feed:
+                console.print(f"[INFO] Using existing feed: {feed.name}")
+            else:
+                feed = rss.add_feed(url, frequency, name)
+                console.print(f"[SUCCESS] Created feed: {feed.name}")
+
+            # Subscribe emails
+            success = 0
+            for email in emails:
+                try:
+                    rss.subscribe(email, url)
+                    console.print(f"[SUCCESS] Subscribed {email}")
+                    success += 1
+                except Exception as e:
+                    console.print(f"[ERROR] Failed to subscribe {email}: {e}", style="red")
+
+            console.print(
+                f"[COMPLETE] Setup complete! {success}/{len(emails)} subscriptions successful",
+                style="green bold",
+            )
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
+
+
+@app.command()
+def process_feed(
+    feed_url: str = typer.Argument(help="RSS feed URL"),
+    auto_send: bool = typer.Option(False, "--send", help="Automatically send campaigns"),
+):
+    """Manually process a single feed."""
+    try:
+        with RSSMonk() as rss:
+            feed = rss.get_feed_by_url(feed_url)
+            if not feed:
+                console.print(f"[ERROR] Feed not found: {feed_url}", style="red")
+                raise typer.Exit(1)
+
+            campaigns = rss.process_feed(feed, auto_send)
+            action = "sent" if auto_send else "created"
+
+            if campaigns > 0:
+                console.print(f"[SUCCESS] {campaigns} campaigns {action} for {feed.name}", style="green")
+            else:
+                console.print(f"[INFO] No new articles for {feed.name}", style="yellow")
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
+
+
+@app.command()
+def poll(frequency: Frequency = typer.Argument(help="Frequency to poll")):
+    """Poll all feeds of a specific frequency that are due."""
+    try:
+        with RSSMonk() as rss:
+            results = rss.process_feeds_by_frequency(frequency)
+
+            if not results:
+                console.print(f"No {frequency.value} feeds due for polling")
+                return
+
+            table = Table(title=f"Polling Results - {frequency.value}")
+            table.add_column("Feed", style="cyan")
+            table.add_column("Campaigns", style="green")
+
+            total = 0
+            for feed_name, campaigns in results.items():
+                table.add_row(feed_name, str(campaigns))
+                total += campaigns
+
+            console.print(table)
+            console.print(f"[SUMMARY] Total campaigns: {total}", style="green bold")
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
+
+
+@app.command()
+def delete_feed(url: str = typer.Argument(help="RSS feed URL to delete")):
+    """Delete a feed by URL."""
+    try:
+        with RSSMonk() as rss:
+            if rss.delete_feed(url):
+                console.print(f"[SUCCESS] Deleted feed: {url}", style="green")
+            else:
+                console.print(f"[ERROR] Feed not found: {url}", style="red")
+    except Exception as e:
+        console.print(f"[ERROR] {e}", style="red")
+        raise typer.Exit(1)
+
+
+@app.command()
+def health():
+    """Check RSS Monk health."""
+    try:
+        settings = Settings()
+        settings.validate_required()
+        console.print("[SUCCESS] Configuration: Valid", style="green")
+
+        with RSSMonk(settings) as rss:
+            feeds = rss.list_feeds()
+            subscribers = rss.list_subscribers()
+
+            console.print("[SUCCESS] Listmonk connection: OK", style="green")
+            console.print(f"Feeds: {len(feeds)}")
+            console.print(f"Subscribers: {len(subscribers)}")
+            console.print("[SUCCESS] All systems operational", style="green bold")
+    except Exception as e:
+        console.print(f"[ERROR] Health check failed: {e}", style="red")
+        raise typer.Exit(1)
+
+
+if __name__ == "__main__":
+    app()

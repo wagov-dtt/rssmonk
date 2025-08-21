@@ -1,79 +1,97 @@
 # RSS Monk
 
-RSS Monk turns RSS feeds into email newsletters.
+RSS Monk turns RSS feeds into email newsletters using Listmonk.
 
 ## Quick Start
 
 ```bash
-just prereqs  # Install k3d, kubectl, scc, uv
-just start    # Deploy RSS Monk on k3d cluster
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
+# Start everything (installs prerequisites, starts k3d cluster, and API server)
+just api
 ```
 
-New content arrives automatically as emails.
+Then visit http://localhost:8000/docs for the interactive API documentation.
 
-## Common Tasks
+RSS Monk converts RSS feeds into email newsletters using [Listmonk](https://listmonk.app/), a high-performance bulk messaging system. Listmonk provides subscribers, lists, campaigns, and stores feed information as tags on lists and subscriber preferences as tags on subscribers.
 
-### Managing Your Feeds
-```bash
-# See all your feeds
-just feeds list-feeds
-
-# Add a new feed (daily emails)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
-
-# Add a feed with frequent updates
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml 5min
-
-# Add a weekly digest
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml weekly
-```
-
-### Checking Status
-```bash
-# Is everything running?
-just status
-
-# What's happening behind the scenes?
-just logs
-
-# Test a specific feed
-just test-fetch daily
-```
-
-### Maintenance
-```bash
-# Stop everything (removes k3d cluster)
-just clean
-
-# Start fresh
-just clean && just start
-```
-
-## Examples
+## API Server
 
 ```bash
-# ABC News (daily)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily
+# Start API server in development mode
+just api
 
-# ABC News (weekly digest)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml weekly
-
-# ABC News (frequent updates)
-just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml 5min
+# Or manually
+uvicorn rssmonk.api:app --host 0.0.0.0 --port 8000
 ```
 
-## Web Interface
+### API Architecture
 
-- **Newsletter Management**: http://localhost:9000 (admin/admin123)
-- **Email Testing**: http://localhost:8025
+RSS Monk acts as a proxy to Listmonk with three endpoints:
 
-## Installation Requirements
+**RSS Monk Endpoints:**
+- `POST /api/feeds` - Feed management with RSS Monk logic
+- `POST /api/feeds/process` - Feed processing (individual or bulk for cron)
+- `POST /api/public/subscribe` - Public subscription (no auth required)
 
-- **k3d, kubectl, scc, uv** (installed via `just prereqs`)
+**Listmonk Passthrough:**
+- `GET|POST|PUT|DELETE /api/*` - All other requests pass through to Listmonk with authentication
+- `GET|POST|PUT|DELETE /api/public/*` - Public Listmonk endpoints (no auth required)
+
+**Utility Endpoints:**
+- `GET /health` - Combined RSS Monk + Listmonk health check
+- `GET /docs` - Interactive API documentation with passthrough info
+- `GET /openapi.json` - OpenAPI spec including Listmonk integration
+
+## CLI Tool
+A CLI tool built with typer that closely mimics the HTTP API will be made available for test simplification. In production, use the HTTP endpoints directly.
+
+## Configuration
+
+Create a `.env` file in the project root to configure RSS Monk:
+
+```bash
+# Required
+LISTMONK_APITOKEN=your-token
+
+# Optional - defaults shown
+LISTMONK_APIUSER=api
+LISTMONK_URL=http://localhost:9000
+RSS_AUTO_SEND=false
+RSS_TIMEOUT=30.0
+RSS_USER_AGENT="RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rssmonk)"
+LOG_LEVEL=INFO
+```
+
+RSS Monk uses pydantic-settings which automatically loads `.env` files. Only `LISTMONK_APITOKEN` is required.
+
+### API Authentication
+
+The RSS Monk API validates all credentials against Listmonk directly:
+- **Authenticated routes** (`/api/*`): Require HTTP Basic Auth validated against Listmonk
+- **Public routes** (`/api/public/*`): No authentication required
+- **RSS Monk routes**: Use same Listmonk credentials for backend operations
+
+## Frequencies
+
+- `5min` - Every 5 minutes
+- `daily` - Daily at 5pm Perth time (Australia/Perth)
+- `weekly` - Weekly on Friday at 5pm Perth time (Australia/Perth)
+
+## Web Interfaces
+
+- **Listmonk**: http://localhost:9000 (admin/admin123)
+- **Mailpit**: http://localhost:8025 (email testing)
+- **RSS Monk API**: http://localhost:8000/docs
+- **OpenAPI Spec**: http://localhost:8000/openapi.json
 
 ## Development
 
 ```bash
-just test && just lint
+# Setup for new contributors
+just setup
+
+# See all available commands
+just --list
+
+# Run all quality checks
+just check
 ```
