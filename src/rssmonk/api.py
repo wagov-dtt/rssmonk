@@ -1,7 +1,6 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
 
 
-import os
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -50,7 +49,7 @@ swagger_ui_params = {
 app = FastAPI(
     title="RSS Monk API",
     version="2.0.0",
-    description=f"""
+    description="""
 RSS Monk - RSS feed aggregator that turns RSS feeds into email newsletters using Listmonk.
 
 This API provides three main functions:

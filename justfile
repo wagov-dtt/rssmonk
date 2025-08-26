@@ -112,3 +112,8 @@ setup: prereqs install check
 # Analyze code complexity
 analyze:
   scc --exclude-dir .git --by-file .
+
+# Docker build to test
+docker-run:
+  docker build -t  wagov-dtt/rssmonk:dev .
+  docker images
