@@ -39,6 +39,7 @@ def main():
             total_campaigns = sum(results.values())
             logger.info(f"Processed {len(results)} feeds, created {total_campaigns} campaigns")
 
+            # This is not required for the cron job.
             for feed_name, campaigns in results.items():
                 if campaigns > 0:
                     logger.info(f"  {feed_name}: {campaigns} campaigns")
@@ -49,6 +50,10 @@ def main():
         logger.error(f"Cron job failed: {e}")
         sys.exit(1)
 
+
+def send_email():
+    # Send tx:send with admin key
+    pass
 
 if __name__ == "__main__":
     main()
