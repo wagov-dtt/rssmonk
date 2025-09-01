@@ -7,6 +7,9 @@ default:
 
 # Deploy to k3d cluster (primary method)
 start: prereqs
+  @echo "Creating temp python"
+  docker build -t local/listmonk-proxy .
+  docker run -p 5000:5000 local/listmonk-proxy
   @echo "Starting RSS Monk on k3d..."
   just deploy-k3d
 
@@ -26,6 +29,7 @@ logs:
 clean:
   @echo "Cleaning up..."
   @k3d cluster delete rssmonk
+  docker local/listmonk-proxy
 
 # Deploy to k3d cluster (advanced)
 deploy-k3d:
