@@ -21,4 +21,5 @@ RUN ["uv", "sync", "--frozen"]
 
 ENV PATH="/app/.venv/bin:$PATH"
 
+EXPOSE 8000
 ENTRYPOINT ["python", "/app/rssmonk/api.py"]

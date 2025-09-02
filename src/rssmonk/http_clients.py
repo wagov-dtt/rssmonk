@@ -4,7 +4,7 @@ import httpx
 import feedparser
 from tenacity import retry, wait_random_exponential
 
-from .logging_config import get_logger
+from logging_config import get_logger
 
 logger = get_logger(__name__)
 

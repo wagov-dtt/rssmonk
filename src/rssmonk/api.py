@@ -6,11 +6,14 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
 
-from .cache import feed_cache
-from .config_manager import FeedConfigManager
-from .core import RSSMonk, Settings
-from .logging_config import get_logger
-from .models import (
+import sys    
+print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
+
+from cache import feed_cache
+from config_manager import FeedConfigManager
+from core import RSSMonk, Settings
+from logging_config import get_logger
+from models import (
     BulkProcessResponse,
     ErrorResponse,
     FeedCreateRequest,
@@ -632,4 +635,4 @@ async def public_listmonk_passthrough(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, port=8000, log_level="info")

@@ -16,7 +16,7 @@ spec:
         - name: listmonk-proxy
           image: local/listmonk-proxy:latest
           ports:
-            - containerPort: 5000
+            - containerPort: 8000
 ---
 apiVersion: v1
 kind: Service
@@ -28,9 +28,9 @@ spec:
     app: listmonk-proxy-app
   ports:
     - protocol: TCP
-      port: 5000
-      targetPort: 5000
-      nodePort: 5000
+      port: 8000
+      targetPort: 8000
+      nodePort: 30901
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -47,4 +47,4 @@ spec:
           service:
             name: listmonk-proxy-service
             port:
-              number: 80
+              number: 8000

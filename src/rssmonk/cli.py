@@ -5,8 +5,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .core import RSSMonk, Settings, Frequency
-from .logging_config import setup_logging
+from core import RSSMonk, Settings, Frequency
+from logging_config import setup_logging
 
 console = Console()
 app = typer.Typer(help="RSS Monk - RSS feeds to email newsletters")
