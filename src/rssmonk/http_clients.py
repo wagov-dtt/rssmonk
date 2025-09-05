@@ -1,10 +1,11 @@
 """HTTP client utilities."""
 
+from fastapi import HTTPException
 import httpx
 import feedparser
 from tenacity import retry, wait_random_exponential
 
-from logging_config import get_logger
+from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -105,6 +106,9 @@ class ListmonkClient:
         """Get subscribers, optionally filtered by query."""
         params = {"query": query} if query else {}
         data = self.get("/api/subscribers", params=params)
+        # TODO - Change to alter attributes
+        print("get_subscribers")
+        raise HTTPException(status_code=418)
         return self._normalize_results(data)
 
     def create_subscriber(self, email, name=None, status="enabled", lists=None):
@@ -112,7 +116,7 @@ class ListmonkClient:
         payload = {
             "email": email,
             "name": name or email,
-            "status": status,
+            "status": status, # TODO - Change to confirmed
             "lists": lists or [],
             "preconfirm_subscriptions": True,
         }
@@ -126,7 +130,7 @@ class ListmonkClient:
             "target_list_ids": list_ids,
             "status": status,
         }
-        self.put("/api/subscribers/lists", payload)
+        self.put("/api/subscribers/lists", payload) # TODO - This does not exist
         return True
 
     def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):
@@ -140,10 +144,14 @@ class ListmonkClient:
             "content_type": content_type,
             "tags": tags or [],
         }
-        return self.post("/api/campaigns", payload)
+        # Design is to remove campaigns as they are not useful to emailing... maybe?
+        # TODO 
+        raise HTTPException(status_code=404, detail="Not found")
+        #return self.post("/api/campaigns", payload)
 
     def start_campaign(self, campaign_id):
         """Start a campaign."""
+        # TODO - Leave, because there's no campaigns to kick off...?
         self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 

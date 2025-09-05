@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from core import Frequency
+from .core import Frequency
 
 
 # Request Models
@@ -145,6 +145,18 @@ class ListmonkCampaign(BaseModel):
     started_at: Optional[str] = None
     to_send: Optional[int] = None
     sent: Optional[int] = None
+
+# Listmonk Response Models
+
+
+class ListmonkListsResponse(BaseModel):
+    """Listmonk lists access response"""
+    data: List[ListmonkList] = Field(..., description="Response data")
+
+
+class ListmonkSubscriberResponse(BaseModel):
+    """Listmonk subscriber access response"""
+    data: List[ListmonkSubscriber] = Field(..., description="Response data")
 
 
 # OpenAPI Response Models for Documentation

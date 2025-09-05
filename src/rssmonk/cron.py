@@ -1,8 +1,8 @@
 """Simple cron job script using Pydantic models."""
 
 import sys
-from core import RSSMonk, Frequency, Settings
-from logging_config import get_logger
+from .core import RSSMonk, Frequency, Settings
+from .logging_config import get_logger
 
 logger = get_logger(__name__)
 

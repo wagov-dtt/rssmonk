@@ -6,6 +6,9 @@
 # ///
 
 # TODO - Move to notifications_ops
+# This script is to initialise a Listmonk client from scratch. It should be idempotent if there are no new rss feeds
+
+
 
 import random
 import string
@@ -16,13 +19,10 @@ _API_ROLE_NAME = "api-role"
 _URL = "http://localhost:9000"
 
 def _authenticate_with_listmonk(session: requests.Session) -> bool :
-    # This should get initial cookies
+    # Setup session tracking cookie - TODO Not sure this is required
     random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=65))
     session.cookies.set('session', random_string, domain='localhost', path='/')
-    response = session.get(f'{_URL}/admin/login', timeout=10)
-    print(response.headers)
     response = session.post(f'{_URL}/admin/login', data={
-        'nonce':response.cookies.get('nonce'),
         'next':'%2Fadmin',
         'username':'admin', # TODO
         'password':'admin123' # TODO
@@ -105,14 +105,23 @@ def _make_list_set(session: requests.Session, list_name: str, user_role_id: int)
     return _make_list_api(session, list_name, user_role_id, list_role_id)
 
 
+def _modify_template(session: requests.Session, list_name: str, user_role_id: int) -> bool:
+    list_id =_make_list(session, list_name); 
+    list_role_id = _make_list_role(session, list_name, list_id)
+    return _make_list_api(session, list_name, user_role_id, list_role_id)
+
+
 if __name__ == "__main__":
     # TODO - Would need list of accounts that need to be made
     s = requests.Session()
     if _authenticate_with_listmonk(s):
         role_id = _make_user_role(s, _API_ROLE_NAME)
         print(_make_list_set(s, "mediastatements", role_id))
-        # TODO -
-        print("done")
+
+        # TODO - Modify default campaign
+        # TODO - Remove all others?
+
+        print("Done")
     else:
         print("failed to auth")
     s.close()    

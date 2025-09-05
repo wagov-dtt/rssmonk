@@ -10,9 +10,9 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from cache import feed_cache
-from http_clients import ListmonkClient
-from logging_config import get_logger
+from .cache import feed_cache
+from .http_clients import ListmonkClient
+from .logging_config import get_logger
 
 # Feed frequency configurations
 FREQUENCIES: Dict[str, Dict[str, Any]] = {

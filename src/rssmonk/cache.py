@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import httpx
 import feedparser
 
-from logging_config import get_logger
+from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
