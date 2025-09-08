@@ -1,19 +1,19 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
 
+
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
 
-import sys
-
+import sys    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
-from .cache import feed_cache
-from .config_manager import FeedConfigManager
-from .core import RSSMonk, Settings
-from .logging_config import get_logger
-from .models import (
+from cache import feed_cache
+from config_manager import FeedConfigManager
+from core import RSSMonk, Settings
+from logging_config import get_logger
+from models import (
     BulkProcessResponse,
     ErrorResponse,
     FeedCreateRequest,
@@ -31,28 +31,22 @@ logger = get_logger(__name__)
 
 # Initialize settings and create .env if missing
 if Settings.ensure_env_file():
-    print(
-        "Created .env file with default settings. Please edit LISTMONK_APITOKEN before starting."
-    )
+    print("Created .env file with default settings. Please edit LISTMONK_APITOKEN before starting.")
 
 settings = Settings()
 
 # Configure Swagger UI with actual credentials from environment
-swagger_ui_params = (
-    {
-        "defaultModelsExpandDepth": -1,
-        "persistAuthorization": True,
-        "preauthorizeBasic": {
-            "username": settings.listmonk_username,
-            "password": settings.listmonk_password,
-        },
+swagger_ui_params = {
+    "defaultModelsExpandDepth": -1,
+    "persistAuthorization": True,
+    "preauthorizeBasic": {
+        "username": settings.listmonk_username,
+        "password": settings.listmonk_password
     }
-    if settings.listmonk_password
-    else {
-        "defaultModelsExpandDepth": -1,
-        "persistAuthorization": True,
-    }
-)
+} if settings.listmonk_password else {
+    "defaultModelsExpandDepth": -1,
+    "persistAuthorization": True,
+}
 
 # FastAPI app with comprehensive OpenAPI configuration
 app = FastAPI(
@@ -129,10 +123,7 @@ RSS Monk uses Listmonk lists as the source of truth:
 # Dependencies
 security = HTTPBasic()
 
-
-async def validate_auth(
-    credentials: HTTPBasicCredentials = Depends(security),
-) -> tuple[str, str]:
+async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -> tuple[str, str]:
     """Validate credentials against Listmonk API."""
     try:
         # Test credentials against Listmonk
@@ -140,7 +131,7 @@ async def validate_auth(
             response = await client.get(
                 f"{settings.listmonk_url}/api/health",
                 auth=(credentials.username, credentials.password),
-                timeout=10.0,
+                timeout=10.0
             )
             if response.status_code != 200:
                 raise HTTPException(
@@ -152,14 +143,17 @@ async def validate_auth(
     except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Listmonk service unavailable",
+            detail="Listmonk service unavailable"
         )
 
 
 def get_rss_monk(auth: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
     username, password = auth
-    custom_settings = Settings(listmonk_username=username, listmonk_password=password)
+    custom_settings = Settings(
+        listmonk_username=username,
+        listmonk_password=password
+    )
     return RSSMonk(custom_settings)
 
 
@@ -169,7 +163,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions with structured error response."""
     return JSONResponse(
         status_code=exc.status_code,
-        content=ErrorResponse(error=exc.detail).model_dump(),
+        content=ErrorResponse(error=exc.detail).model_dump()
     )
 
 
@@ -180,18 +174,18 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="Internal server error", detail=str(exc)
-        ).model_dump(),
+            error="Internal server error",
+            detail=str(exc)
+        ).model_dump()
     )
 
 
 # RSS Monk Core Endpoints
 
-
 @app.get(
     "/",
     summary="API Information",
-    description="Get basic API information and links to documentation",
+    description="Get basic API information and links to documentation"
 )
 async def root():
     """Root endpoint with API information."""
@@ -200,7 +194,7 @@ async def root():
         "version": "2.0.0",
         "description": "RSS feed aggregator using Listmonk",
         "documentation": "/docs",
-        "health_check": "/health",
+        "health_check": "/health"
     }
 
 
@@ -209,7 +203,7 @@ async def root():
     response_model=HealthResponse,
     tags=["health"],
     summary="Health Check",
-    description="Check the health status of RSS Monk and Listmonk services",
+    description="Check the health status of RSS Monk and Listmonk services"
 )
 async def health_check():
     """Health check endpoint."""
@@ -217,28 +211,30 @@ async def health_check():
         # Validate settings without credentials
         test_settings = Settings()
         test_settings.validate_required()
-
-        # Test Listmonk connection - Requires auth
+        
+        # Test Listmonk connection
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{test_settings.listmonk_url}/health", timeout=10.0
-            )
+            response = await client.get(f"{test_settings.listmonk_url}/api/health", timeout=10.0)
             listmonk_status = "healthy" if response.status_code == 200 else "unhealthy"
-
-        # TODO - Check PostgreSQL, since Listmonk doesn't
-
+        
         # Get basic stats (without auth)
-        return HealthResponse(status="healthy", listmonk_status=listmonk_status)
+        return HealthResponse(
+            status="healthy",
+            listmonk_status=listmonk_status
+        )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return HealthResponse(status="unhealthy", error=str(e))
+        return HealthResponse(
+            status="unhealthy",
+            error=str(e)
+        )
 
 
 @app.get(
     "/api/cache/stats",
     tags=["health"],
     summary="Cache Statistics",
-    description="Get RSS feed cache statistics and performance metrics",
+    description="Get RSS feed cache statistics and performance metrics"
 )
 async def get_cache_stats():
     """Get feed cache statistics."""
@@ -247,9 +243,9 @@ async def get_cache_stats():
 
 @app.delete(
     "/api/cache",
-    tags=["health"],
+    tags=["health"], 
     summary="Clear Feed Cache",
-    description="Clear all RSS feed cache entries",
+    description="Clear all RSS feed cache entries"
 )
 async def clear_cache():
     """Clear feed cache."""
@@ -263,10 +259,11 @@ async def clear_cache():
     status_code=201,
     tags=["feeds"],
     summary="Create RSS Feed",
-    description="Add a new RSS feed for processing and newsletter generation",
+    description="Add a new RSS feed for processing and newsletter generation"
 )
 async def create_feed(
-    request: FeedCreateRequest, rss_monk: RSSMonk = Depends(get_rss_monk)
+    request: FeedCreateRequest,
+    rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
     """Create a new RSS feed."""
     try:
@@ -278,7 +275,7 @@ async def create_feed(
                 url=feed.url,
                 base_url=feed.base_url,
                 frequency=feed.frequency,
-                url_hash=feed.url_hash,
+                url_hash=feed.url_hash
             )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -289,9 +286,11 @@ async def create_feed(
     response_model=FeedListResponse,
     tags=["feeds"],
     summary="List RSS Feeds",
-    description="Retrieve all configured RSS feeds with their details",
+    description="Retrieve all configured RSS feeds with their details"
 )
-async def list_feeds(rss_monk: RSSMonk = Depends(get_rss_monk)) -> FeedListResponse:
+async def list_feeds(
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> FeedListResponse:
     """List all RSS feeds."""
     try:
         with rss_monk:
@@ -304,11 +303,11 @@ async def list_feeds(rss_monk: RSSMonk = Depends(get_rss_monk)) -> FeedListRespo
                         url=feed.url,
                         base_url=feed.base_url,
                         frequency=feed.frequency,
-                        url_hash=feed.url_hash,
+                        url_hash=feed.url_hash
                     )
                     for feed in feeds
                 ],
-                total=len(feeds),
+                total=len(feeds)
             )
     except Exception as e:
         logger.error(f"Failed to list feeds: {e}")
@@ -320,10 +319,11 @@ async def list_feeds(rss_monk: RSSMonk = Depends(get_rss_monk)) -> FeedListRespo
     response_model=FeedResponse,
     tags=["feeds"],
     summary="Get Feed by URL",
-    description="Retrieve a specific RSS feed by its URL",
+    description="Retrieve a specific RSS feed by its URL"
 )
 async def get_feed_by_url(
-    url: str, rss_monk: RSSMonk = Depends(get_rss_monk)
+    url: str,
+    rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
     """Get feed by URL."""
     try:
@@ -331,14 +331,14 @@ async def get_feed_by_url(
             feed = rss_monk.get_feed_by_url(url)
             if not feed:
                 raise HTTPException(status_code=404, detail="Feed not found")
-
+            
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
                 url=feed.url,
                 base_url=feed.base_url,
                 frequency=feed.frequency,
-                url_hash=feed.url_hash,
+                url_hash=feed.url_hash
             )
     except HTTPException:
         raise
@@ -351,9 +351,12 @@ async def get_feed_by_url(
     "/api/feeds/by-url",
     tags=["feeds"],
     summary="Delete Feed by URL",
-    description="Remove an RSS feed by its URL",
+    description="Remove an RSS feed by its URL"
 )
-async def delete_feed_by_url(url: str, rss_monk: RSSMonk = Depends(get_rss_monk)):
+async def delete_feed_by_url(
+    url: str,
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+):
     """Delete feed by URL."""
     try:
         with rss_monk:
@@ -374,9 +377,12 @@ async def delete_feed_by_url(url: str, rss_monk: RSSMonk = Depends(get_rss_monk)
     "/api/feeds/configurations/{url:path}",
     tags=["feeds"],
     summary="Get URL Configurations",
-    description="Get all feed configurations for a specific URL",
+    description="Get all feed configurations for a specific URL"
 )
-async def get_url_configurations(url: str, rss_monk: RSSMonk = Depends(get_rss_monk)):
+async def get_url_configurations(
+    url: str,
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+):
     """Get all configurations for a URL."""
     try:
         with rss_monk:
@@ -392,35 +398,37 @@ async def get_url_configurations(url: str, rss_monk: RSSMonk = Depends(get_rss_m
     "/api/feeds/configurations/{url:path}",
     tags=["feeds"],
     summary="Update Feed Configuration",
-    description="Update feed configuration for a URL, with optional subscriber migration",
+    description="Update feed configuration for a URL, with optional subscriber migration"
 )
 async def update_feed_configuration(
     url: str,
     request: FeedCreateRequest,
     migrate_subscribers: bool = True,
     replace_existing: bool = False,
-    rss_monk: RSSMonk = Depends(get_rss_monk),
+    rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
     """Update feed configuration with migration options."""
     try:
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
-
+            
             if replace_existing:
                 result = config_manager.replace_feed_config(
                     url=url,
                     new_frequency=request.frequency,
                     new_name=request.name,
-                    delete_old=True,
+                    delete_old=True
                 )
             else:
                 result = config_manager.update_feed_config(
-                    url=url, new_frequency=request.frequency, new_name=request.name
+                    url=url,
+                    new_frequency=request.frequency,
+                    new_name=request.name
                 )
-
+            
             # Invalidate cache for this URL
             feed_cache.invalidate_url(url)
-
+            
             return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -434,10 +442,11 @@ async def update_feed_configuration(
     response_model=FeedProcessResponse,
     tags=["processing"],
     summary="Process Single Feed",
-    description="Process a specific RSS feed and create email campaigns for new articles",
+    description="Process a specific RSS feed and create email campaigns for new articles"
 )
 async def process_feed(
-    request: FeedProcessRequest, rss_monk: RSSMonk = Depends(get_rss_monk)
+    request: FeedProcessRequest,
+    rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedProcessResponse:
     """Process a single RSS feed."""
     try:
@@ -445,12 +454,12 @@ async def process_feed(
             feed = rss_monk.get_feed_by_url(str(request.url))
             if not feed:
                 raise HTTPException(status_code=404, detail="Feed not found")
-
+            
             campaigns = rss_monk.process_feed(feed, request.auto_send)
             return FeedProcessResponse(
                 feed_name=feed.name,
                 campaigns_created=campaigns,
-                articles_processed=campaigns,  # Assuming 1:1 for now
+                articles_processed=campaigns  # Assuming 1:1 for now
             )
     except HTTPException:
         raise
@@ -464,35 +473,35 @@ async def process_feed(
     response_model=BulkProcessResponse,
     tags=["processing"],
     summary="Process Feeds by Frequency",
-    description="Process all RSS feeds of a specific frequency (used by cron jobs)",
+    description="Process all RSS feeds of a specific frequency (used by cron jobs)"
 )
 async def process_feeds_bulk(
-    frequency: Frequency, rss_monk: RSSMonk = Depends(get_rss_monk)
+    frequency: Frequency,
+    rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> BulkProcessResponse:
     """Process feeds by frequency."""
     try:
         with rss_monk:
             results = rss_monk.process_feeds_by_frequency(frequency)
             total_campaigns = sum(results.values())
-
+            
             return BulkProcessResponse(
                 frequency=frequency,
                 feeds_processed=len(results),
                 total_campaigns=total_campaigns,
-                results=results,
+                results=results
             )
     except Exception as e:
         logger.error(f"Failed to process feeds bulk: {e}")
         raise HTTPException(status_code=500, detail="Bulk processing failed")
 
-# TODO - remove.
-# Thought is that maybe just better to have a separate public area
+
 @app.post(
     "/api/public/subscribe",
     response_model=SubscriptionResponse,
     tags=["public"],
     summary="Public Subscribe to Feed",
-    description="Subscribe an email address to an RSS feed (no authentication required)",
+    description="Subscribe an email address to an RSS feed (no authentication required)"
 )
 async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionResponse:
     """Public subscription endpoint."""
@@ -500,7 +509,9 @@ async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionRespo
         # Use default settings for public endpoint
         with RSSMonk() as rss_monk:
             rss_monk.subscribe(request.email, str(request.feed_url))
-            return SubscriptionResponse(message="Subscription successful")
+            return SubscriptionResponse(
+                message="Subscription successful"
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -516,59 +527,56 @@ async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionRespo
     tags=["listmonk-passthrough"],
     summary="Listmonk API Passthrough",
     description="Pass authenticated requests to Listmonk API",
-    include_in_schema=False,  # Don't include in main schema to avoid clutter
+    include_in_schema=False  # Don't include in main schema to avoid clutter
 )
 async def listmonk_passthrough(
-    request: Request, path: str, auth: tuple[str, str] = Depends(validate_auth)
+    request: Request,
+    path: str,
+    auth: tuple[str, str] = Depends(validate_auth)
 ):
     """Passthrough authenticated requests to Listmonk API."""
     # Skip our own endpoints
-    if path in [
-        "feeds",
-        "feeds/process",
-        "feeds/process/bulk",
-        "public/subscribe",
-    ] or path.startswith("feeds/"):
+    if path in ["feeds", "feeds/process", "feeds/process/bulk", "public/subscribe"] or path.startswith("feeds/"):
         raise HTTPException(status_code=404, detail="Not found")
-
+    
     username, password = auth
-
+    
     try:
         async with httpx.AsyncClient() as client:
-            logger.warning("asdfasdfasdfasfd")
             # Forward the request to Listmonk
             url = f"{settings.listmonk_url}/api/{path}"
-
+            
             # Get request body if present
             body = None
             if request.method in ["POST", "PUT", "PATCH"]:
                 body = await request.body()
-
+            
             response = await client.request(
                 method=request.method,
                 url=url,
                 params=request.query_params,
                 content=body,
                 headers={
-                    "Content-Type": request.headers.get(
-                        "Content-Type", "application/json"
-                    ),
+                    "Content-Type": request.headers.get("Content-Type", "application/json"),
                     "Accept": request.headers.get("Accept", "application/json"),
                 },
                 auth=(username, password),
-                timeout=30.0,
+                timeout=30.0
             )
-
+            
             # Return the Listmonk response
             return JSONResponse(
                 status_code=response.status_code,
                 content=response.json() if response.content else None,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json"}
             )
-
+            
     except httpx.RequestError as e:
         logger.error(f"Listmonk passthrough error: {e}")
-        raise HTTPException(status_code=503, detail="Listmonk service unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Listmonk service unavailable"
+        )
 
 
 @app.api_route(
@@ -577,51 +585,54 @@ async def listmonk_passthrough(
     tags=["public"],
     summary="Public Listmonk API Passthrough",
     description="Pass public requests to Listmonk API without authentication",
-    include_in_schema=False,  # Don't include in main schema
+    include_in_schema=False  # Don't include in main schema
 )
-async def public_listmonk_passthrough(request: Request, path: str):
+async def public_listmonk_passthrough(
+    request: Request,
+    path: str
+):
     """Passthrough public requests to Listmonk API without authentication."""
     # Skip our own endpoint
     if path == "subscribe":
         raise HTTPException(status_code=404, detail="Not found")
-
+    
     try:
         async with httpx.AsyncClient() as client:
             # Forward the request to Listmonk
             url = f"{settings.listmonk_url}/api/public/{path}"
-
+            
             # Get request body if present
             body = None
             if request.method in ["POST", "PUT", "PATCH"]:
                 body = await request.body()
-
+            
             response = await client.request(
                 method=request.method,
                 url=url,
                 params=request.query_params,
                 content=body,
                 headers={
-                    "Content-Type": request.headers.get(
-                        "Content-Type", "application/json"
-                    ),
+                    "Content-Type": request.headers.get("Content-Type", "application/json"),
                     "Accept": request.headers.get("Accept", "application/json"),
                 },
-                timeout=30.0,
+                timeout=30.0
             )
-
+            
             # Return the Listmonk response
             return JSONResponse(
                 status_code=response.status_code,
                 content=response.json() if response.content else None,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json"}
             )
-
+            
     except httpx.RequestError as e:
         logger.error(f"Public Listmonk passthrough error: {e}")
-        raise HTTPException(status_code=503, detail="Listmonk service unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Listmonk service unavailable"
+        )
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, port=8000, log_level="info")

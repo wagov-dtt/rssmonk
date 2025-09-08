@@ -44,7 +44,7 @@ class ListmonkClient:
             response = self._client.request(method, path, **kwargs)
             response.raise_for_status()
             if method == "DELETE":
-                return response.status_code == 200
+                return response.status_code == 200 # TODO - This should not be assumed
             if response.content:
                 data = response.json()
                 return data.get("data", data)
@@ -130,7 +130,7 @@ class ListmonkClient:
             "target_list_ids": list_ids,
             "status": status,
         }
-        self.put("/api/subscribers/lists", payload) # TODO - This does not exist
+        self.put("/api/subscribers/lists", payload)
         return True
 
     def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):
@@ -144,8 +144,7 @@ class ListmonkClient:
             "content_type": content_type,
             "tags": tags or [],
         }
-        # Design is to remove campaigns as they are not useful to emailing... maybe?
-        # TODO 
+        # TODO - Design is to remove campaigns as they are not useful to emailing... maybe?
         raise HTTPException(status_code=404, detail="Not found")
         #return self.post("/api/campaigns", payload)
 
