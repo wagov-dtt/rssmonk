@@ -23,7 +23,6 @@ dependencies = [
     "feedparser>=6.0.0", 
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "tenacity>=8.0.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "fastapi[all]>=0.104.0"

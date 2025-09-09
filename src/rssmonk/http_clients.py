@@ -3,7 +3,6 @@
 from fastapi import HTTPException
 import httpx
 import feedparser
-from tenacity import retry, wait_random_exponential
 
 from .logging_config import get_logger
 
@@ -37,7 +36,6 @@ class ListmonkClient:
         if self._client:
             self._client.close()
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=10))
     def _make_request(self, method, path, **kwargs):
         """Make HTTP request with retry logic and error handling."""
         try:
@@ -84,9 +82,10 @@ class ListmonkClient:
         if tag:
             params["tag"] = tag
         data = self.get("/api/lists", params=params)
+        print(data)
         return self._normalize_results(data)
 
-    def find_list_by_tag(self, tag):
+    def find_list_by_tag(self, tag): # TODO - Change to find list by name because it wouldn't work likethis
         """Find a single list by tag."""
         lists = self.get_lists(tag=tag, per_page="1")
         return lists[0] if lists else None
@@ -108,7 +107,6 @@ class ListmonkClient:
         data = self.get("/api/subscribers", params=params)
         # TODO - Change to alter attributes
         print("get_subscribers")
-        raise HTTPException(status_code=418)
         return self._normalize_results(data)
 
     def create_subscriber(self, email, name=None, status="enabled", lists=None):
@@ -160,7 +158,6 @@ def create_client():
     return ListmonkClient()
 
 
-@retry(wait=wait_random_exponential(multiplier=1, max=10))
 def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk/2.0"):
     """Fetch and parse RSS feed with retry logic."""
     try:

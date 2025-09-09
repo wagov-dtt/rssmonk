@@ -123,6 +123,7 @@ class FeedConfigManager:
     
     def _migrate_subscribers(self, from_feed: Feed, to_feed: Feed) -> int:
         """Migrate subscribers from one feed to another."""
+        # TODO = This one should be renamed copy and no migrate as they're left in the old one
         try:
             # Get subscriber IDs from the source list
             source_list = self.rss_monk._client.get(f"/api/lists/{from_feed.id}")

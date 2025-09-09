@@ -82,7 +82,6 @@ just start    # Deploy RSS Monk on k3d cluster
 - **Fail-fast validation**: Environment variable validation at startup
 - **Graceful degradation**: Individual feed failures don't stop batch processing
 - **Structured logging**: All errors logged with context for debugging
-- **Exponential backoff retries**: Uses tenacity for reliable HTTP requests with jitter
 
 ### Development Workflow
 - **justfile recipes**: All common operations scripted for consistency

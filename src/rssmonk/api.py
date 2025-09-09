@@ -265,6 +265,7 @@ async def create_feed(
     request: FeedCreateRequest,
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
+    print(request.url)
     """Create a new RSS feed."""
     try:
         with rss_monk:
@@ -279,6 +280,9 @@ async def create_feed(
             )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP create_feed: {e}")
+        raise
 
 
 @app.get(
@@ -534,6 +538,7 @@ async def listmonk_passthrough(
     path: str,
     auth: tuple[str, str] = Depends(validate_auth)
 ):
+    print(f"{path} at /api")
     """Passthrough authenticated requests to Listmonk API."""
     # Skip our own endpoints
     if path in ["feeds", "feeds/process", "feeds/process/bulk", "public/subscribe"] or path.startswith("feeds/"):
