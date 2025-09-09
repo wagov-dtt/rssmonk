@@ -179,11 +179,12 @@ class Subscriber(BaseModel):
 
 class RSSMonk:
     """Main RSS Monk service - stateless, uses Listmonk for persistence."""
-
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or Settings()
         self.settings.validate_required()
 
+    # TODO - This currently relies on super admin values, the wrapper API needs to
+    # be more limiting and that there needs the header option to override
     def __enter__(self):
         self._client = ListmonkClient(
             base_url=self.settings.listmonk_url,

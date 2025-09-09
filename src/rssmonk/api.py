@@ -9,11 +9,11 @@ import httpx
 import sys    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
-from cache import feed_cache
-from config_manager import FeedConfigManager
-from core import RSSMonk, Settings
-from logging_config import get_logger
-from models import (
+from .cache import feed_cache
+from .config_manager import FeedConfigManager
+from .core import RSSMonk, Settings
+from .logging_config import get_logger
+from .models import (
     BulkProcessResponse,
     ErrorResponse,
     FeedCreateRequest,

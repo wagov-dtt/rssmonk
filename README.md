@@ -32,6 +32,9 @@ RSS Monk acts as a proxy to Listmonk with three endpoints:
 - `POST /api/feeds/process` - Feed processing (individual or bulk for cron)
 - `POST /api/public/subscribe` - Public subscription (no auth required)
 
+**Listmonk Non Passthrough:** - TODO
+- `GET|PATCH|POST|PUT|DELETE /api/subscriber*` - These requests will handle attributes to ensure only the segment attributes are updated correctly
+
 **Listmonk Passthrough:**
 - `GET|POST|PUT|DELETE /api/*` - All other requests pass through to Listmonk with authentication
 - `GET|POST|PUT|DELETE /api/public/*` - Public Listmonk endpoints (no auth required)
