@@ -1,6 +1,7 @@
 """HTTP client utilities."""
 
 from fastapi import HTTPException
+from http import HTTPMethod, HTTPStatus
 import httpx
 import feedparser
 
@@ -18,15 +19,20 @@ class ListmonkClient:
         self.password = password
         self.timeout = timeout
 
+        if not self.username:
+            raise ValueError("Listmonk username is required")
+
         if not self.password:
             raise ValueError("Listmonk password is required")
 
         self._client = None
 
+
     def __enter__(self):
+        print("enter")
         self._client = httpx.Client(
             base_url=self.base_url,
-            auth=(self.username, self.password),
+            auth=httpx.BasicAuth(username=self.username, password=self.password), # TODO - This should be working
             timeout=self.timeout,
             headers={"Content-Type": "application/json"},
         )
@@ -35,37 +41,41 @@ class ListmonkClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._client:
             self._client.close()
+            print("exit")
 
     def _make_request(self, method, path, **kwargs):
         """Make HTTP request with retry logic and error handling."""
         try:
+            print(f"_make_request: {path}")
             response = self._client.request(method, path, **kwargs)
+            print(response)
             response.raise_for_status()
-            if method == "DELETE":
-                return response.status_code == 200 # TODO - This should not be assumed
+            if method == HTTPMethod.DELETE:
+                return response.status_code == HTTPStatus.OK # TODO - This should not be assumed
             if response.content:
                 data = response.json()
                 return data.get("data", data)
             return True
         except httpx.HTTPError as e:
             logger.error(f"HTTP {method} {path}: {e}")
-            raise
+            raise e
 
     def get(self, path, params=None):
         """GET request."""
-        return self._make_request("GET", path, params=params)
+        return self._make_request(HTTPMethod.GET, path, params=params)
 
     def post(self, path, json_data):
         """POST request."""
-        return self._make_request("POST", path, json=json_data)
+        
+        return self._make_request(HTTPMethod.POST, path, json=json_data)
 
     def put(self, path, json_data):
         """PUT request."""
-        return self._make_request("PUT", path, json=json_data)
+        return self._make_request(HTTPMethod.PUT, path, json=json_data)
 
     def delete(self, path):
         """DELETE request."""
-        return self._make_request("DELETE", path)
+        return self._make_request(HTTPMethod.DELETE, path)
 
     def _normalize_results(self, data):
         """Normalize API response to always return a list."""
@@ -143,7 +153,7 @@ class ListmonkClient:
             "tags": tags or [],
         }
         # TODO - Design is to remove campaigns as they are not useful to emailing... maybe?
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
         #return self.post("/api/campaigns", payload)
 
     def start_campaign(self, campaign_id):

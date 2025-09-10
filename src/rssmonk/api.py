@@ -4,6 +4,7 @@
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from http import HTTPStatus
 import httpx
 
 import sys    
@@ -130,7 +131,7 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{settings.listmonk_url}/api/health",
-                auth=(credentials.username, credentials.password),
+                auth=httpx.BasicAuth(username=credentials.username, password=credentials.password),
                 timeout=10.0
             )
             if response.status_code != 200:
@@ -150,6 +151,8 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
 def get_rss_monk(auth: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
     username, password = auth
+    print(username)
+    print(password) # This might beed to be passed in somewhere
     custom_settings = Settings(
         listmonk_username=username,
         listmonk_password=password
@@ -172,7 +175,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Handle unexpected exceptions."""
     logger.error(f"Unexpected error: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=500,
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         content=ErrorResponse(
             error="Internal server error",
             detail=str(exc)
@@ -279,7 +282,7 @@ async def create_feed(
                 url_hash=feed.url_hash
             )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except httpx.HTTPError as e:
         logger.error(f"HTTP create_feed: {e}")
         raise
@@ -315,7 +318,7 @@ async def list_feeds(
             )
     except Exception as e:
         logger.error(f"Failed to list feeds: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve feeds")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve feeds")
 
 
 @app.get(
@@ -334,7 +337,7 @@ async def get_feed_by_url(
         with rss_monk:
             feed = rss_monk.get_feed_by_url(url)
             if not feed:
-                raise HTTPException(status_code=404, detail="Feed not found")
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
             return FeedResponse(
                 id=feed.id,
@@ -348,7 +351,7 @@ async def get_feed_by_url(
         raise
     except Exception as e:
         logger.error(f"Failed to get feed by URL: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve feed")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve feed")
 
 
 @app.delete(
@@ -369,12 +372,12 @@ async def delete_feed_by_url(
                 feed_cache.invalidate_url(url)
                 return {"message": "Feed deleted successfully"}
             else:
-                raise HTTPException(status_code=404, detail="Feed not found")
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to delete feed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete feed")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to delete feed")
 
 
 @app.get(
@@ -395,7 +398,7 @@ async def get_url_configurations(
             return configurations
     except Exception as e:
         logger.error(f"Failed to get URL configurations: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve configurations")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve configurations")
 
 
 @app.put(
@@ -435,10 +438,10 @@ async def update_feed_configuration(
             
             return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to update feed configuration: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update configuration")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to update configuration")
 
 
 @app.post(
@@ -457,7 +460,7 @@ async def process_feed(
         with rss_monk:
             feed = rss_monk.get_feed_by_url(str(request.url))
             if not feed:
-                raise HTTPException(status_code=404, detail="Feed not found")
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
             campaigns = rss_monk.process_feed(feed, request.auto_send)
             return FeedProcessResponse(
@@ -469,7 +472,7 @@ async def process_feed(
         raise
     except Exception as e:
         logger.error(f"Failed to process feed: {e}")
-        raise HTTPException(status_code=500, detail="Feed processing failed")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Feed processing failed")
 
 
 @app.post(
@@ -497,7 +500,7 @@ async def process_feeds_bulk(
             )
     except Exception as e:
         logger.error(f"Failed to process feeds bulk: {e}")
-        raise HTTPException(status_code=500, detail="Bulk processing failed")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Bulk processing failed")
 
 
 @app.post(
@@ -517,10 +520,10 @@ async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionRespo
                 message="Subscription successful"
             )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to subscribe: {e}")
-        raise HTTPException(status_code=500, detail="Subscription failed")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
 
 
 # Listmonk Passthrough Logic
@@ -542,7 +545,7 @@ async def listmonk_passthrough(
     """Passthrough authenticated requests to Listmonk API."""
     # Skip our own endpoints
     if path in ["feeds", "feeds/process", "feeds/process/bulk", "public/subscribe"] or path.startswith("feeds/"):
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
     
     username, password = auth
     
@@ -565,7 +568,7 @@ async def listmonk_passthrough(
                     "Content-Type": request.headers.get("Content-Type", "application/json"),
                     "Accept": request.headers.get("Accept", "application/json"),
                 },
-                auth=(username, password),
+                auth=httpx.BasicAuth(username=username, password=password),
                 timeout=30.0
             )
             
@@ -599,7 +602,7 @@ async def public_listmonk_passthrough(
     """Passthrough public requests to Listmonk API without authentication."""
     # Skip our own endpoint
     if path == "subscribe":
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
     
     try:
         async with httpx.AsyncClient() as client:
