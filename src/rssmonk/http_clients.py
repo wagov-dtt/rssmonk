@@ -15,7 +15,7 @@ class ListmonkClient:
 
     def __init__(self, base_url: str, username: str, password: str, timeout: float = 30.0):
         self.base_url = base_url
-        self.username = username
+        self.username = username # TODO - Pulling from env vars
         self.password = password
         self.timeout = timeout
 
@@ -32,7 +32,7 @@ class ListmonkClient:
         print("enter")
         self._client = httpx.Client(
             base_url=self.base_url,
-            auth=httpx.BasicAuth(username=self.username, password=self.password), # TODO - This should be working
+            auth=httpx.BasicAuth(username=self.username, password=self.password),
             timeout=self.timeout,
             headers={"Content-Type": "application/json"},
         )
@@ -48,10 +48,15 @@ class ListmonkClient:
         try:
             print(f"_make_request: {path}")
             response = self._client.request(method, path, **kwargs)
+            # TODO
             print(response)
+            request = response.request
+            print(f"Request: {request.method} {request.url}") # TODO - using values from .env which would be admin values
+            print(f"Headers[authorization]: {request.headers['authorization']}")
+            # TODO
             response.raise_for_status()
             if method == HTTPMethod.DELETE:
-                return response.status_code == HTTPStatus.OK # TODO - This should not be assumed
+                return response.status_code == HTTPStatus.OK
             if response.content:
                 data = response.json()
                 return data.get("data", data)
@@ -66,7 +71,6 @@ class ListmonkClient:
 
     def post(self, path, json_data):
         """POST request."""
-        
         return self._make_request(HTTPMethod.POST, path, json=json_data)
 
     def put(self, path, json_data):
@@ -95,7 +99,7 @@ class ListmonkClient:
         print(data)
         return self._normalize_results(data)
 
-    def find_list_by_tag(self, tag): # TODO - Change to find list by name because it wouldn't work likethis
+    def find_list_by_tag(self, tag): # TODO - This won't work
         """Find a single list by tag."""
         lists = self.get_lists(tag=tag, per_page="1")
         return lists[0] if lists else None

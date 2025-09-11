@@ -112,7 +112,9 @@ def _modify_template(session: requests.Session, list_name: str, user_role_id: in
 
 
 if __name__ == "__main__":
-    # TODO - Would need list of accounts that need to be made
+    '''
+    This script handles the creation of all accounts required to run Listmonk and flows through rsssmonk
+    '''
     s = requests.Session()
     if _authenticate_with_listmonk(s):
         role_id = _make_user_role(s, _API_ROLE_NAME)

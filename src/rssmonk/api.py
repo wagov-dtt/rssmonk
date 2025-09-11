@@ -1,6 +1,6 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
 
-
+from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -35,6 +35,7 @@ if Settings.ensure_env_file():
     print("Created .env file with default settings. Please edit LISTMONK_APITOKEN before starting.")
 
 settings = Settings()
+security = HTTPBasic()
 
 # Configure Swagger UI with actual credentials from environment
 swagger_ui_params = {
@@ -219,7 +220,9 @@ async def health_check():
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{test_settings.listmonk_url}/api/health", timeout=10.0)
             listmonk_status = "healthy" if response.status_code == 200 else "unhealthy"
-        
+
+        # TODO - Check 
+
         # Get basic stats (without auth)
         return HealthResponse(
             status="healthy",
@@ -239,8 +242,9 @@ async def health_check():
     summary="Cache Statistics",
     description="Get RSS feed cache statistics and performance metrics"
 )
-async def get_cache_stats():
+async def get_cache_stats(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
     """Get feed cache statistics."""
+    # TODO - Check against admin
     return feed_cache.get_stats()
 
 
@@ -250,7 +254,8 @@ async def get_cache_stats():
     summary="Clear Feed Cache",
     description="Clear all RSS feed cache entries"
 )
-async def clear_cache():
+async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
+    # TODO - Check that the admin
     """Clear feed cache."""
     feed_cache.clear()
     return {"message": "Feed cache cleared successfully"}
@@ -266,9 +271,11 @@ async def clear_cache():
 )
 async def create_feed(
     request: FeedCreateRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
     print(request.url)
+    # TODO - This should only be accessiable by admin
     """Create a new RSS feed."""
     try:
         with rss_monk:
@@ -277,7 +284,6 @@ async def create_feed(
                 id=feed.id,
                 name=feed.name,
                 url=feed.url,
-                base_url=feed.base_url,
                 frequency=feed.frequency,
                 url_hash=feed.url_hash
             )
@@ -296,6 +302,7 @@ async def create_feed(
     description="Retrieve all configured RSS feeds with their details"
 )
 async def list_feeds(
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedListResponse:
     """List all RSS feeds."""
@@ -308,7 +315,6 @@ async def list_feeds(
                         id=feed.id,
                         name=feed.name,
                         url=feed.url,
-                        base_url=feed.base_url,
                         frequency=feed.frequency,
                         url_hash=feed.url_hash
                     )
@@ -330,6 +336,7 @@ async def list_feeds(
 )
 async def get_feed_by_url(
     url: str,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
     """Get feed by URL."""
@@ -343,7 +350,6 @@ async def get_feed_by_url(
                 id=feed.id,
                 name=feed.name,
                 url=feed.url,
-                base_url=feed.base_url,
                 frequency=feed.frequency,
                 url_hash=feed.url_hash
             )
@@ -362,6 +368,7 @@ async def get_feed_by_url(
 )
 async def delete_feed_by_url(
     url: str,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
     """Delete feed by URL."""
@@ -390,6 +397,7 @@ async def get_url_configurations(
     url: str,
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
+    # TODO - Not sure what this is for??
     """Get all configurations for a URL."""
     try:
         with rss_monk:
@@ -453,6 +461,7 @@ async def update_feed_configuration(
 )
 async def process_feed(
     request: FeedProcessRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedProcessResponse:
     """Process a single RSS feed."""
@@ -484,6 +493,7 @@ async def process_feed(
 )
 async def process_feeds_bulk(
     frequency: Frequency,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> BulkProcessResponse:
     """Process feeds by frequency."""
@@ -512,6 +522,7 @@ async def process_feeds_bulk(
 )
 async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionResponse:
     """Public subscription endpoint."""
+    # No filters enabled.
     try:
         # Use default settings for public endpoint
         with RSSMonk() as rss_monk:

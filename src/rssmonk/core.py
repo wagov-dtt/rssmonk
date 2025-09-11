@@ -141,15 +141,11 @@ class Feed(BaseModel):
     id: Optional[int] = None
     name: str
     url: str
-    frequency: Frequency
-    base_url: str = ""
+    frequency: List[Frequency]
     url_hash: str = ""
 
     def __init__(self, **data):
         super().__init__(**data)
-        if not self.base_url:
-            parsed = urlparse(self.url)
-            self.base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
         if not self.url_hash:
             self.url_hash = hashlib.sha256(self.url.encode()).hexdigest()
 
@@ -161,7 +157,7 @@ class Feed(BaseModel):
     @property
     def description(self) -> str:
         """Generate Listmonk description."""
-        return f"RSS Feed: {self.url}\nBase URL: {self.base_url}"
+        return f"{{\"rss_feed\": {self.url}, \"last_update:\": None, \"latest_guid\": None}}"
 
 
 class Subscriber(BaseModel):

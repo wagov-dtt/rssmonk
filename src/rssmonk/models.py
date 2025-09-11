@@ -13,7 +13,7 @@ class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
     
     url: HttpUrl = Field(..., description="RSS feed URL")
-    frequency: Frequency = Field(..., description="Polling frequency")
+    frequency: List[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
 
 
@@ -25,11 +25,17 @@ class FeedProcessRequest(BaseModel):
 
 
 class PublicSubscribeRequest(BaseModel):
-    """Request model for public subscription endpoint."""
+    """Request model for public subscription endpoint and no filter."""
     
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
+class SubscribeRequest(BaseModel): # TODO - Fix up
+    """Request model for public subscription endpoint."""
+    
+    email: str = Field(..., description="Subscriber email address")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
+    #filter: dict[Any] =  Field(..., description="The filter as JSON")
 
 # Response Models
 
@@ -39,8 +45,7 @@ class FeedResponse(BaseModel):
     id: int = Field(..., description="Listmonk list ID")
     name: str = Field(..., description="Feed name")
     url: str = Field(..., description="RSS feed URL")
-    base_url: str = Field(..., description="Base domain URL")
-    frequency: Frequency = Field(..., description="Polling frequency")
+    frequency: List[Frequency] = Field(..., description="Polling frequency")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
 
