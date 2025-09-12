@@ -1,6 +1,6 @@
 """Simple Typer CLI for RSS Monk."""
 
-from typing import List, Optional
+from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -113,7 +113,7 @@ def subscribe(
 def quick_setup(
     url: str = typer.Argument(help="RSS feed URL"),
     frequency: Frequency = typer.Argument(help="Polling frequency"),
-    emails: List[str] = typer.Argument(help="Subscriber emails"),
+    emails: list[str] = typer.Argument(help="Subscriber emails"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Feed name"),
 ):
     """Add feed and subscribe multiple emails in one command."""

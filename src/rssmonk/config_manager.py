@@ -1,6 +1,6 @@
 """Configuration management for RSS feed updates and migrations."""
 
-from typing import Dict, List, Optional
+from typing import Optional
 
 from .core import Feed, RSSMonk, Frequency
 from .logging_config import get_logger
@@ -14,7 +14,7 @@ class FeedConfigManager:
     def __init__(self, rss_monk: RSSMonk):
         self.rss_monk = rss_monk
     
-    def update_feed_config(self, url: str, new_frequency: Frequency, new_name: Optional[str] = None) -> Dict:
+    def update_feed_config(self, url: str, new_frequency: Frequency, new_name: Optional[str] = None) -> dict:
         """Update feed configuration, handling migrations and subscriber transfers."""
         try:
             # Find all existing feeds for this URL
@@ -69,54 +69,7 @@ class FeedConfigManager:
             logger.error(f"Failed to update feed configuration: {e}")
             raise
     
-    def replace_feed_config(self, url: str, new_frequency: Frequency, new_name: Optional[str] = None, 
-                           delete_old: bool = True) -> Dict:
-        """Replace feed configuration, optionally deleting old configurations."""
-        try:
-            # Find all existing feeds for this URL
-            existing_feeds = self._find_feeds_by_url(url)
-            
-            if not existing_feeds:
-                raise ValueError(f"No existing feed found for URL: {url}")
-            
-            # Create new feed configuration
-            new_feed = self.rss_monk.add_feed(url, new_frequency, new_name)
-            logger.info(f"Created replacement feed: {new_feed.name}")
-            
-            # Migrate all subscribers to new configuration
-            total_migrated = 0
-            for old_feed in existing_feeds:
-                try:
-                    migrated_count = self._migrate_subscribers(old_feed, new_feed)
-                    total_migrated += migrated_count
-                    logger.info(f"Migrated {migrated_count} subscribers from {old_feed.name}")
-                except Exception as e:
-                    logger.error(f"Failed to migrate from {old_feed.name}: {e}")
-            
-            # Delete old feeds if requested
-            deleted_feeds = []
-            if delete_old:
-                for old_feed in existing_feeds:
-                    try:
-                        if self.rss_monk.delete_feed(old_feed.url):
-                            deleted_feeds.append(old_feed.name)
-                            logger.info(f"Deleted old feed: {old_feed.name}")
-                    except Exception as e:
-                        logger.error(f"Failed to delete old feed {old_feed.name}: {e}")
-            
-            return {
-                "action": "replaced",
-                "new_feed": self._feed_to_dict(new_feed),
-                "subscribers_migrated": total_migrated,
-                "deleted_feeds": deleted_feeds,
-                "message": f"Replaced feed configurations with: {new_feed.name}"
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to replace feed configuration: {e}")
-            raise
-    
-    def _find_feeds_by_url(self, url: str) -> List[Feed]:
+    def _find_feeds_by_url(self, url: str) -> list[Feed]:
         """Find all feeds with the given URL."""
         all_feeds = self.rss_monk.list_feeds()
         return [feed for feed in all_feeds if feed.url == url]
@@ -156,7 +109,7 @@ class FeedConfigManager:
             logger.error(f"Failed to migrate subscribers: {e}")
             raise
     
-    def _feed_to_dict(self, feed: Feed) -> Dict:
+    def _feed_to_dict(self, feed: Feed) -> dict:
         """Convert Feed object to dictionary."""
         return {
             "id": feed.id,
@@ -166,7 +119,7 @@ class FeedConfigManager:
             "url_hash": feed.url_hash
         }
     
-    def get_url_configurations(self, url: str) -> Dict:
+    def get_url_configurations(self, url: str) -> dict:
         """Get all configurations for a given URL."""
         existing_feeds = self._find_feeds_by_url(url)
         

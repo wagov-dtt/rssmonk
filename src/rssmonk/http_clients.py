@@ -1,7 +1,9 @@
 """HTTP client utilities."""
 
+from typing import Optional
 from fastapi import HTTPException
 from http import HTTPMethod, HTTPStatus
+import os
 import httpx
 import feedparser
 
@@ -9,13 +11,12 @@ from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
-
 class ListmonkClient:
     """Listmonk API client with automatic JSON handling and error logging."""
 
     def __init__(self, base_url: str, username: str, password: str, timeout: float = 30.0):
         self.base_url = base_url
-        self.username = username # TODO - Pulling from env vars
+        self.username = username
         self.password = password
         self.timeout = timeout
 
@@ -41,7 +42,7 @@ class ListmonkClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._client:
             self._client.close()
-            print("exit")
+            self._client = None
 
     def _make_request(self, method, path, **kwargs):
         """Make HTTP request with retry logic and error handling."""
@@ -90,21 +91,29 @@ class ListmonkClient:
         else:
             return [data] if data else []
 
-    def get_lists(self, tag=None, per_page="all"):
+    def get_lists(self, name : Optional[str] = None, tag=None, per_page="all"):
         """Get all lists, optionally filtered by tag."""
-        params = {"per_page": per_page}
+        params = {"per_page": per_page, "": name}
+        if name:
+            params["name"] = tag
+
         if tag:
             params["tag"] = tag
         data = self.get("/api/lists", params=params)
         print(data)
         return self._normalize_results(data)
 
-    def find_list_by_tag(self, tag): # TODO - This won't work
+    def find_list_by_name(self, name):
+        """Find a single list by tag."""
+        lists = self.get_lists(name=name, per_page="1")
+        return lists[0] if lists else None
+
+    def find_list_by_tag(self, tag): # TODO - This won't work for what we need
         """Find a single list by tag."""
         lists = self.get_lists(tag=tag, per_page="1")
         return lists[0] if lists else None
 
-    def create_list(self, name, description, tags, list_type="public", optin="single"):
+    def create_list(self, name, description, tags:list[str], list_type="public", optin="single"):
         """Create a new list."""
         payload = {
             "name": name,
@@ -128,13 +137,13 @@ class ListmonkClient:
         payload = {
             "email": email,
             "name": name or email,
-            "status": status, # TODO - Change to confirmed
+            "status": status,
             "lists": lists or [],
             "preconfirm_subscriptions": True,
         }
         return self.post("/api/subscribers", payload)
 
-    def subscribe_to_lists(self, subscriber_ids, list_ids, status="confirmed"):
+    def subscribe_to_list(self, subscriber_id, list_id, filters, status="confirmed"):
         """Subscribe users to lists."""
         payload = {
             "ids": subscriber_ids,
@@ -142,7 +151,9 @@ class ListmonkClient:
             "target_list_ids": list_ids,
             "status": status,
         }
-        self.put("/api/subscribers/lists", payload)
+        self.put("/api/subscribers/lists", payload) # TODO - Not sure this works
+        
+        # TODO - Get the 
         return True
 
     def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):

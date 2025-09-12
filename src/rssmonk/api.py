@@ -418,8 +418,6 @@ async def get_url_configurations(
 async def update_feed_configuration(
     url: str,
     request: FeedCreateRequest,
-    migrate_subscribers: bool = True,
-    replace_existing: bool = False,
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
     """Update feed configuration with migration options."""
@@ -427,19 +425,11 @@ async def update_feed_configuration(
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
             
-            if replace_existing:
-                result = config_manager.replace_feed_config(
-                    url=url,
-                    new_frequency=request.frequency,
-                    new_name=request.name,
-                    delete_old=True
-                )
-            else:
-                result = config_manager.update_feed_config(
-                    url=url,
-                    new_frequency=request.frequency,
-                    new_name=request.name
-                )
+            result = config_manager.update_feed_config(
+                url=url,
+                new_frequency=request.frequency,
+                new_name=request.name
+            )
             
             # Invalidate cache for this URL
             feed_cache.invalidate_url(url)

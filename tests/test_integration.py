@@ -4,7 +4,6 @@ import asyncio
 import httpx
 import pytest
 import time
-from typing import Dict, List
 
 
 class IntegrationTestSuite:
@@ -54,7 +53,7 @@ class IntegrationTestSuite:
         assert data["status"] == "healthy"
         print("✓ Health check passed")
     
-    async def _create_test_feeds(self, client) -> List[Dict]:
+    async def _create_test_feeds(self, client) -> list[dict]:
         """Create test RSS feeds with different configurations."""
         test_feeds = [
             {
@@ -89,7 +88,7 @@ class IntegrationTestSuite:
         
         return created_feeds
     
-    async def _create_test_subscribers(self, client) -> List[Dict]:
+    async def _create_test_subscribers(self, client) -> list[dict]:
         """Create test subscribers."""
         test_emails = [
             "test1@example.com",
@@ -121,7 +120,7 @@ class IntegrationTestSuite:
         
         return subscribers
     
-    async def _subscribe_users_to_feeds(self, client, subscribers: List[Dict], feeds: List[Dict]):
+    async def _subscribe_users_to_feeds(self, client, subscribers: list[dict], feeds: list[dict]):
         """Subscribe users to feeds."""
         for subscriber in subscribers:
             for feed in feeds:
@@ -137,7 +136,7 @@ class IntegrationTestSuite:
                 else:
                     print(f"✗ Failed to subscribe {subscriber['email']} to {feed['name']}")
     
-    async def _process_feeds(self, client, feeds: List[Dict]) -> List[Dict]:
+    async def _process_feeds(self, client, feeds: list[dict]) -> list[dict]:
         """Process feeds and create campaigns."""
         campaigns = []
         for feed in feeds:
@@ -158,7 +157,7 @@ class IntegrationTestSuite:
         
         return campaigns
     
-    async def _verify_emails_in_mailpit(self, client, campaigns: List[Dict]):
+    async def _verify_emails_in_mailpit(self, client, campaigns: list[dict]):
         """Verify emails arrived in Mailpit."""
         # Wait a moment for emails to be processed
         await asyncio.sleep(2)
@@ -177,7 +176,7 @@ class IntegrationTestSuite:
             print(f"✗ Mailpit connection failed: {e}")
             return False
     
-    async def _test_config_updates(self, client, feeds: List[Dict]):
+    async def _test_config_updates(self, client, feeds: list[dict]):
         """Test updating feed configurations."""
         if not feeds:
             return
@@ -217,7 +216,7 @@ class IntegrationTestSuite:
         
         return None
     
-    async def _test_unsubscriptions(self, client, subscribers: List[Dict], feeds: List[Dict]):
+    async def _test_unsubscriptions(self, client, subscribers: list[dict], feeds: list[dict]):
         """Test unsubscription functionality."""
         if not subscribers or not feeds:
             return
@@ -233,7 +232,7 @@ class IntegrationTestSuite:
             if response.status_code == 200:
                 print(f"✓ Feed still exists: {feed['name']}")
     
-    async def _cleanup_test_data(self, client, feeds: List[Dict], subscribers: List[Dict]):
+    async def _cleanup_test_data(self, client, feeds: list[dict], subscribers: list[dict]):
         """Clean up test data."""
         # Delete feeds
         for feed in feeds:

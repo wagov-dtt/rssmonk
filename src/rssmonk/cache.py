@@ -3,7 +3,7 @@
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 import httpx
 import feedparser
 
@@ -21,7 +21,7 @@ class CachedFeed:
     content_hash: str
     etag: Optional[str]
     last_modified: Optional[str]
-    articles: List[Dict]
+    articles: list[dict]
     cached_at: datetime
     expires_at: datetime
     feed_title: Optional[str] = None
@@ -39,7 +39,7 @@ class FeedCache:
     """In-memory RSS feed cache with smart invalidation."""
     
     def __init__(self, max_entries: int = 1000, default_ttl_minutes: int = 60):
-        self.cache: Dict[str, CachedFeed] = {}
+        self.cache: dict[str, CachedFeed] = {}
         self.max_entries = max_entries
         self.default_ttl_minutes = default_ttl_minutes
         
@@ -65,7 +65,7 @@ class FeedCache:
                 del self.cache[key]
                 logger.debug(f"Evicted cache entry: {key}")
     
-    async def get_feed(self, url: str, user_agent: str, timeout: float = 30.0) -> Tuple[List[Dict], Optional[str]]:
+    async def get_feed(self, url: str, user_agent: str, timeout: float = 30.0) -> Tuple[list[dict], Optional[str]]:
         """Get RSS feed with intelligent caching."""
         cache_key = self._get_cache_key(url)
         cached_feed = self.cache.get(cache_key)
@@ -162,7 +162,7 @@ class FeedCache:
         self.cache.clear()
         logger.info("Cleared all feed cache")
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get cache statistics."""
         return {
             "total_entries": len(self.cache),

@@ -4,7 +4,7 @@ import hashlib
 import os
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,7 @@ from .http_clients import ListmonkClient
 from .logging_config import get_logger
 
 # Feed frequency configurations
-FREQUENCIES: Dict[str, Dict[str, Any]] = {
+FREQUENCIES: dict[str, dict[str, Any]] = {
     "freq:5min": {
         "interval_minutes": 5,
         "check_time": None,
@@ -141,7 +141,7 @@ class Feed(BaseModel):
     id: Optional[int] = None
     name: str
     url: str
-    frequency: List[Frequency]
+    frequency: list[Frequency]
     url_hash: str = ""
 
     def __init__(self, **data):
@@ -150,14 +150,14 @@ class Feed(BaseModel):
             self.url_hash = hashlib.sha256(self.url.encode()).hexdigest()
 
     @property
-    def tags(self) -> List[str]:
+    def tags(self) -> list[str]:
         """Generate Listmonk tags."""
-        return [f"freq:{self.frequency.value}", f"url:{self.url_hash}"]
+        return [f'freq:{x.value}' for x in self.frequency] + [f"url:{self.url_hash}"]
 
     @property
     def description(self) -> str:
         """Generate Listmonk description."""
-        return f"{{\"rss_feed\": {self.url}, \"last_update:\": None, \"latest_guid\": None}}"
+        return f'{{"rss_feed": "{self.url}", "last_update:": None, "last_guid": None}}'
 
 
 class Subscriber(BaseModel):
@@ -175,7 +175,7 @@ class Subscriber(BaseModel):
 
 class RSSMonk:
     """Main RSS Monk service - stateless, uses Listmonk for persistence."""
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Optional[Settings] = None): # TODO - Dual auths
         self.settings = settings or Settings()
         self.settings.validate_required()
 
@@ -206,7 +206,7 @@ class RSSMonk:
         # Check for existing feed with same URL but different frequency
         existing_lists = []
         for freq in Frequency:
-            lists = self._client.get_lists(tag=f"freq:{freq.value}")
+            lists = self._client.get_lists(tag=f"freq:{freq.value}") # TODO - Search by name and tag
             for lst in lists:
                 try:
                     existing_feed = self._parse_feed_from_list(lst)
@@ -222,7 +222,7 @@ class RSSMonk:
 
         # If URL exists with different frequencies, we allow it
         # Each frequency gets its own list for independent processing
-        unique_name = f"{name} ({frequency.value})"
+        unique_name = f"{name}" # TODO - Frequency variable is no longer essential?
         feed.name = unique_name
 
         # Create in Listmonk
@@ -234,8 +234,8 @@ class RSSMonk:
         
         return feed
 
-    def list_feeds(self) -> List[Feed]:
-        """List all feeds."""
+    def list_feeds(self) -> list[Feed]:
+        """list all feeds."""
         feeds = []
         for freq in Frequency:
             lists = self._client.get_lists(tag=f"freq:{freq.value}")
@@ -255,7 +255,7 @@ class RSSMonk:
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 
-    def delete_feed(self, url: str) -> bool:
+    def delete_feed(self, url: str) -> bool: #TODO - Dangerous to just call like that.
         """Delete feed by URL."""
         feed = self.get_feed_by_url(url)
         if feed and feed.id:
@@ -278,8 +278,8 @@ class RSSMonk:
             return Subscriber(id=s["id"], email=s["email"], name=s["name"])
         return self.add_subscriber(email)
 
-    def list_subscribers(self) -> List[Subscriber]:
-        """List all subscribers."""
+    def list_subscribers(self) -> list[Subscriber]:
+        """list all subscribers."""
         subs = self._client.get_subscribers()
         return [Subscriber(id=s["id"], email=s["email"], name=s["name"]) for s in subs]
 

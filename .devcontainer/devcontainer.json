@@ -13,6 +13,22 @@
 		"memory": "16gb",
 		"gpu": false
 	},
+	"customizations": {
+		// Set *default* container specific settings.json values on container create.
+		"settings": {},
+		"vscode": {
+			"extensions": [
+				"ms-python.debugpy",
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.vscode-python-envs",
+				"github.vscode-github-actions",
+				"ms-azuretools.vscode-azureresourcegroups",
+				"ms-azuretools.vscode-containers",
+				"nefrob.vscode-just-syntax"
+			]
+		}
+	},
 	"features": {
 	},
 	"onCreateCommand": ".devcontainer/onCreateCommand.sh"

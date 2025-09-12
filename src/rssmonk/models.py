@@ -1,6 +1,6 @@
 """Pydantic models for RSS Monk API."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -13,7 +13,7 @@ class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
     
     url: HttpUrl = Field(..., description="RSS feed URL")
-    frequency: List[Frequency] = Field(..., description="Polling frequency")
+    frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
 
 
@@ -45,7 +45,7 @@ class FeedResponse(BaseModel):
     id: int = Field(..., description="Listmonk list ID")
     name: str = Field(..., description="Feed name")
     url: str = Field(..., description="RSS feed URL")
-    frequency: List[Frequency] = Field(..., description="Polling frequency")
+    frequency: list[Frequency] = Field(..., description="Polling frequency")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
 
@@ -53,7 +53,7 @@ class FeedResponse(BaseModel):
 class FeedListResponse(BaseModel):
     """Response model for listing RSS feeds."""
     
-    feeds: List[FeedResponse] = Field(..., description="List of RSS feeds")
+    feeds: list[FeedResponse] = Field(..., description="list of RSS feeds")
     total: int = Field(..., description="Total number of feeds")
 
 
@@ -71,7 +71,7 @@ class BulkProcessResponse(BaseModel):
     frequency: Frequency = Field(..., description="Processed frequency")
     feeds_processed: int = Field(..., description="Number of feeds processed")
     total_campaigns: int = Field(..., description="Total campaigns created")
-    results: Dict[str, int] = Field(..., description="Per-feed campaign counts")
+    results: dict[str, int] = Field(..., description="Per-feed campaign counts")
 
 
 class SubscriptionResponse(BaseModel):
@@ -112,7 +112,7 @@ class ListmonkList(BaseModel):
     name: str
     type: str = "public"
     optin: str = "single" 
-    tags: List[str] = []
+    tags: list[str] = []
     description: Optional[str] = ""
     subscriber_count: Optional[int] = None
 
@@ -127,8 +127,8 @@ class ListmonkSubscriber(BaseModel):
     email: str
     name: str
     status: str = "enabled"
-    lists: List[int] = []
-    attribs: Dict[str, Any] = {}
+    lists: list[int] = []
+    attribs: dict[str, Any] = {}
     preconfirm_subscriptions: bool = True
 
 
@@ -145,8 +145,8 @@ class ListmonkCampaign(BaseModel):
     type: str = "regular"
     content_type: str = "html"
     status: str = "draft"
-    tags: List[str] = []
-    lists: List[int] = []
+    tags: list[str] = []
+    lists: list[int] = []
     started_at: Optional[str] = None
     to_send: Optional[int] = None
     sent: Optional[int] = None
@@ -156,12 +156,12 @@ class ListmonkCampaign(BaseModel):
 
 class ListmonkListsResponse(BaseModel):
     """Listmonk lists access response"""
-    data: List[ListmonkList] = Field(..., description="Response data")
+    data: list[ListmonkList] = Field(..., description="Response data")
 
 
 class ListmonkSubscriberResponse(BaseModel):
     """Listmonk subscriber access response"""
-    data: List[ListmonkSubscriber] = Field(..., description="Response data")
+    data: list[ListmonkSubscriber] = Field(..., description="Response data")
 
 
 # OpenAPI Response Models for Documentation
@@ -176,7 +176,7 @@ class ApiResponse(BaseModel):
 class PaginatedResponse(BaseModel):
     """Paginated response model."""
     
-    results: List[Any] = Field(..., description="Results list")
+    results: list[Any] = Field(..., description="Results list")
     query: Optional[str] = Field(None, description="Search query")
     total: int = Field(..., description="Total number of items")
     per_page: int = Field(..., description="Items per page")
