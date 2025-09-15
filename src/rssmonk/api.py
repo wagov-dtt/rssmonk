@@ -149,16 +149,10 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
         )
 
 
-def get_rss_monk(auth: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
+def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
-    username, password = auth
-    print(username)
-    print(password) # This might beed to be passed in somewhere
-    custom_settings = Settings(
-        listmonk_username=username,
-        listmonk_password=password
-    )
-    return RSSMonk(custom_settings)
+    username, password = credentials
+    return RSSMonk(local_creds=HTTPBasicCredentials(username=username, password=password))
 
 
 # Error handlers
@@ -274,7 +268,7 @@ async def create_feed(
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
-    print(request.url)
+    print(f'create_feed {request.url}')
     # TODO - This should only be accessiable by admin
     """Create a new RSS feed."""
     try:

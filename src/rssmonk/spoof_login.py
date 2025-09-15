@@ -27,8 +27,6 @@ def _authenticate_with_listmonk(session: requests.Session) -> bool :
         'username':'admin', # TODO
         'password':'admin123' # TODO
     }, timeout=10)
-    print(response.headers)
-    print(response.status_code)
     return response.status_code == 302
 
 # Need to return the user role id

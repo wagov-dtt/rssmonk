@@ -30,7 +30,6 @@ class ListmonkClient:
 
 
     def __enter__(self):
-        print("enter")
         self._client = httpx.Client(
             base_url=self.base_url,
             auth=httpx.BasicAuth(username=self.username, password=self.password),
@@ -49,11 +48,9 @@ class ListmonkClient:
         try:
             print(f"_make_request: {path}")
             response = self._client.request(method, path, **kwargs)
-            # TODO
-            print(response)
             request = response.request
-            print(f"Request: {request.method} {request.url}") # TODO - using values from .env which would be admin values
-            print(f"Headers[authorization]: {request.headers['authorization']}")
+            # TODO
+            print(f"Request: {request.method}, Auth: {request.headers['authorization']}, {request.url}")
             # TODO
             response.raise_for_status()
             if method == HTTPMethod.DELETE:
@@ -123,6 +120,11 @@ class ListmonkClient:
             "optin": optin,
         }
         return self.post("/api/lists", payload)
+
+    def update_list_data(self, id: str, data: dict):
+        """Create a new list."""
+        # TODO - Why is this not happy. Do I need to do a full item. WHYYYYYY
+        return self.put(f"/api/lists/{id}", data)
 
     def get_subscribers(self, query=None):
         """Get subscribers, optionally filtered by query."""

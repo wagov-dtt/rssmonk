@@ -5,8 +5,9 @@ import os
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
-from urllib.parse import urlparse
 
+from fastapi.security import HTTPBasicCredentials
+import httpx
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
@@ -157,7 +158,7 @@ class Feed(BaseModel):
     @property
     def description(self) -> str:
         """Generate Listmonk description."""
-        return f'{{"rss_feed": "{self.url}", "last_update:": None, "last_guid": None}}'
+        return f"RSS Feed: {self.url}"
 
 
 class Subscriber(BaseModel):
@@ -174,15 +175,22 @@ class Subscriber(BaseModel):
 
 
 class RSSMonk:
-    """Main RSS Monk service - stateless, uses Listmonk for persistence."""
-    def __init__(self, settings: Optional[Settings] = None): # TODO - Dual auths
+    """Main RSS Monk service - stateless, uses Listmonk for persistence. Should be used with"""
+    def __init__(self, local_creds: Optional[HTTPBasicCredentials] = None, settings: Optional[Settings] = None):
+        self.local_creds: Optional[HTTPBasicCredentials] = local_creds
         self.settings = settings or Settings()
         self.settings.validate_required()
 
-    # TODO - This currently relies on super admin values, the wrapper API needs to
-    # be more limiting and that there needs the header option to override
+    # Create two clients, local creds for access control and admin creds for use if required
     def __enter__(self):
+        print(f'creds: {self.local_creds}')
         self._client = ListmonkClient(
+            base_url=self.settings.listmonk_url,
+            username=self.local_creds.username if self.local_creds is not None else "",
+            password=self.local_creds.password if self.local_creds is not None else "",
+            timeout=self.settings.rss_timeout,
+        ).__enter__()
+        self._admin = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.settings.listmonk_username,
             password=self.settings.listmonk_password,
@@ -196,41 +204,37 @@ class RSSMonk:
 
     # Feed operations
 
-    def add_feed(self, url: str, frequency: Frequency, name: Optional[str] = None) -> Feed:
+    def add_feed(self, url: str, new_frequency: list[Frequency], name: Optional[str] = None) -> Feed:
         """Add RSS feed, handling existing URLs with different configurations."""
         if not name:
             name = self._get_feed_name(url)
 
-        feed = Feed(name=name, url=url, frequency=frequency)
+        # Create return
+        feed = Feed(name=name, url=url, frequency=new_frequency)
 
-        # Check for existing feed with same URL but different frequency
-        existing_lists = []
-        for freq in Frequency:
-            lists = self._client.get_lists(tag=f"freq:{freq.value}") # TODO - Search by name and tag
-            for lst in lists:
-                try:
-                    existing_feed = self._parse_feed_from_list(lst)
-                    if existing_feed.url == url:
-                        existing_lists.append((existing_feed, lst))
-                except Exception:
-                    continue
+        # Check for existing feed with same URL
+        print("1")
+        existing_feed = self.get_feed_by_url(url)
+        print("2")
 
-        # If exact match exists (same URL + frequency), return error
-        for existing_feed, _ in existing_lists:
-            if existing_feed.frequency == frequency:
-                raise ValueError(f"Feed with same URL and frequency already exists: {url}")
-
-        # If URL exists with different frequencies, we allow it
-        # Each frequency gets its own list for independent processing
-        unique_name = f"{name}" # TODO - Frequency variable is no longer essential?
-        feed.name = unique_name
-
-        # Create in Listmonk
-        result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags)
-        feed.id = result["id"]
-        
-        # Invalidate cache for this URL to ensure fresh fetch
-        feed_cache.invalidate_url(url)
+        if existing_feed is None:
+            # Create in Listmonk
+            result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags)
+            feed.id = result["id"]
+            
+            # Invalidate cache for this URL to ensure fresh fetch
+            feed_cache.invalidate_url(url)
+        else:
+            print("4")
+            # Set magic to check new frequency isn't already covered in existing list
+            if set(new_frequency) <= set(existing_feed.frequency):
+                raise ValueError(f"Feed with same URL and frequency(ies) already exists: {url}")
+            # TODO - Add new freq tags to end of the list and update
+            new_tags = existing_feed.tags
+            for freq in new_frequency:
+                new_tags.append(f"freq:{freq.value}")
+            self._client.update_list_data(existing_feed.id, new_tags)
+            pass
         
         return feed
 
@@ -366,11 +370,14 @@ class RSSMonk:
         """Parse feed from Listmonk list."""
         tags = lst.get("tags", [])
 
-        # Extract frequency
-        freq_tag = next((t for t in tags if t.startswith("freq:")), None)
-        if not freq_tag:
-            raise ValueError("No frequency tag")
-        frequency = Frequency(freq_tag.replace("freq:", ""))
+        print("_parse_feed_from_list")
+        # Extract frequency(ies)
+        frequency_list: list[Frequency] = []
+        for tag in tags:
+            if tag.startswith("freq:"):
+                frequency_list.append(Frequency(tag.replace("freq:", "")))
+        if len(frequency_list) == 0:
+            raise ValueError(f"No frequency tag found in existing list")
 
         # Extract URL from description
         desc = lst.get("description", "")
@@ -383,7 +390,7 @@ class RSSMonk:
         if not url:
             raise ValueError("No URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], url=url, frequency=frequency)
+        return Feed(id=lst["id"], name=lst["name"], url=url, frequency=frequency_list)
 
     def _find_new_articles(self, feed: Feed, articles: list) -> list:
         """Find new articles since last poll."""

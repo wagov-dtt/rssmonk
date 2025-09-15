@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: listmonk-app
-        image: listmonk/listmonk:latest
+        image: listmonk/listmonk:v5.1.0
         command: [sh, -c, "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"]
         resources:
           requests:
