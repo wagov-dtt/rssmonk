@@ -24,7 +24,7 @@ class FeedConfigManager:
                 raise ValueError(f"No existing feed found for URL: {url}")
             
             # Check if target configuration already exists
-            target_exists = any(feed.frequency == new_frequency for feed in existing_feeds)
+            target_exists = any(feed.frequencies == new_frequency for feed in existing_feeds)
             if target_exists:
                 return {
                     "action": "no_change",
@@ -115,7 +115,7 @@ class FeedConfigManager:
             "id": feed.id,
             "name": feed.name,
             "url": feed.url,
-            "frequency": feed.frequency.value,
+            "frequency": feed.frequencies.value,
             "url_hash": feed.url_hash
         }
     

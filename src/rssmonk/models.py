@@ -16,13 +16,16 @@ class FeedCreateRequest(BaseModel):
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
 
+class FeedAccountCreateRequest(BaseModel):
+    """Request model for creating an account for a RSS feed."""
+    
+    url: HttpUrl = Field(..., description="RSS feed URL")
 
 class FeedProcessRequest(BaseModel):
     """Request model for processing a specific feed."""
     
     url: HttpUrl = Field(..., description="RSS feed URL to process")
     auto_send: bool = Field(False, description="Automatically send created campaigns")
-
 
 class PublicSubscribeRequest(BaseModel):
     """Request model for public subscription endpoint and no filter."""
@@ -63,6 +66,13 @@ class FeedProcessResponse(BaseModel):
     feed_name: str = Field(..., description="Name of processed feed")
     campaigns_created: int = Field(..., description="Number of campaigns created")
     articles_processed: int = Field(..., description="Number of articles processed")
+
+
+class ApiAccountResponse():
+    """Response model for feed accounts."""
+    id: int = Field(..., description="Account ID")
+    name: int = Field(..., description="Account name")
+    api_password: str = Field(..., description="Password that is generated for the API account and never revealed again")
 
 
 class BulkProcessResponse(BaseModel):

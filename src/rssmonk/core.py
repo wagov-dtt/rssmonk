@@ -1,6 +1,7 @@
 """Simplified core models and service for RSS Monk."""
 
 import hashlib
+import hmac
 import os
 from datetime import datetime
 from enum import Enum
@@ -142,7 +143,7 @@ class Feed(BaseModel):
     id: Optional[int] = None
     name: str
     url: str
-    frequency: list[Frequency]
+    frequencies: list[Frequency]
     url_hash: str = ""
 
     def __init__(self, **data):
@@ -153,7 +154,7 @@ class Feed(BaseModel):
     @property
     def tags(self) -> list[str]:
         """Generate Listmonk tags."""
-        return [f'freq:{x.value}' for x in self.frequency] + [f"url:{self.url_hash}"]
+        return [f'freq:{x.value}' for x in self.frequencies] + [f"url:{self.url_hash}"]
 
     @property
     def description(self) -> str:
@@ -201,21 +202,21 @@ class RSSMonk:
     def __exit__(self, *args):
         if hasattr(self, "_client"):
             self._client.__exit__(*args)
+        if hasattr(self, "_admin"):
+            self._admin.__exit__(*args)
 
     # Feed operations
 
     def add_feed(self, url: str, new_frequency: list[Frequency], name: Optional[str] = None) -> Feed:
-        """Add RSS feed, handling existing URLs with different configurations."""
+        """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
             name = self._get_feed_name(url)
 
         # Create return
-        feed = Feed(name=name, url=url, frequency=new_frequency)
+        feed = Feed(name=name, url=url, frequencies=new_frequency)
 
         # Check for existing feed with same URL
-        print("1")
         existing_feed = self.get_feed_by_url(url)
-        print("2")
 
         if existing_feed is None:
             # Create in Listmonk
@@ -225,18 +226,25 @@ class RSSMonk:
             # Invalidate cache for this URL to ensure fresh fetch
             feed_cache.invalidate_url(url)
         else:
-            print("4")
-            # Set magic to check new frequency isn't already covered in existing list
-            if set(new_frequency) <= set(existing_feed.frequency):
-                raise ValueError(f"Feed with same URL and frequency(ies) already exists: {url}")
-            # TODO - Add new freq tags to end of the list and update
-            new_tags = existing_feed.tags
-            for freq in new_frequency:
-                new_tags.append(f"freq:{freq.value}")
-            self._client.update_list_data(existing_feed.id, new_tags)
-            pass
+            # No update required if the URL and frequencies are already covered
+            if set(new_frequency) <= set(existing_feed.frequencies):
+                raise ValueError(f"Feed with same URL and frequencies already exists: {url}")
+
+            # Add new freq tags to end of the list and update
+            for new_freq in new_frequency:
+                if f"freq:{new_freq.value}" not in existing_feed.tags:
+                    existing_feed.frequencies.append(new_freq)
+                    existing_feed.tags.append(f"freq:{new_freq.value}")
+
+            # Mandatory items
+            payload = {
+                "name": existing_feed.name,
+                "description": existing_feed.description,
+                "tags": existing_feed.tags,
+            }
+            self._client.update_list_data(existing_feed.id, payload)
         
-        return feed
+        return existing_feed
 
     def list_feeds(self) -> list[Feed]:
         """list all feeds."""
@@ -259,7 +267,7 @@ class RSSMonk:
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 
-    def delete_feed(self, url: str) -> bool: #TODO - Dangerous to just call like that.
+    def delete_feed(self, url: str) -> bool: # Admin only
         """Delete feed by URL."""
         feed = self.get_feed_by_url(url)
         if feed and feed.id:
@@ -313,10 +321,6 @@ class RSSMonk:
                 timeout=self.settings.rss_timeout
             )
 
-            # Update feed name if we got a better title from RSS
-            if feed_title and feed_title != feed.url and not feed.name.endswith(f"({feed.frequency.value})"):
-                feed.name = f"{feed_title} ({feed.frequency.value})"
-
             # Get new articles (check against last poll tag)
             new_articles = self._find_new_articles(feed, articles)
 
@@ -345,7 +349,7 @@ class RSSMonk:
 
     def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
         """Process all feeds of given frequency that are due."""
-        feeds = [f for f in self.list_feeds() if f.frequency == frequency]
+        feeds = [f for f in self.list_feeds() if frequency in f.frequencies]
         results = {}
 
         for feed in feeds:
@@ -370,7 +374,6 @@ class RSSMonk:
         """Parse feed from Listmonk list."""
         tags = lst.get("tags", [])
 
-        print("_parse_feed_from_list")
         # Extract frequency(ies)
         frequency_list: list[Frequency] = []
         for tag in tags:
@@ -390,7 +393,7 @@ class RSSMonk:
         if not url:
             raise ValueError("No URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], url=url, frequency=frequency_list)
+        return Feed(id=lst["id"], name=lst["name"], url=url, frequencies=frequency_list)
 
     def _find_new_articles(self, feed: Feed, articles: list) -> list:
         """Find new articles since last poll."""
@@ -403,7 +406,8 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            if tag.startswith(f"last-seen:{feed.frequency.value}:"):
+            # TODO - Figure out what this is for 
+            if tag.startswith(f"last-seen:{feed.frequencies.value}:"):
                 last_guid = tag.split(":", 3)[3]
                 break
 
@@ -419,7 +423,8 @@ class RSSMonk:
 
     def _should_poll(self, feed: Feed) -> bool:
         """Check if feed should be polled."""
-        config = FREQUENCIES.get(f"freq:{feed.frequency.value}")
+        # TODO - Figure out what this is for 
+        config = FREQUENCIES.get(f"freq:{feed.frequencies.value}")
         if not config:
             return False
 
@@ -429,7 +434,8 @@ class RSSMonk:
 
         last_poll = None
         for tag in tags:
-            if tag.startswith(f"last-poll:{feed.frequency.value}:"):
+            # TODO - Figure out what this is for 
+            if tag.startswith(f"last-poll:{feed.frequencies.value}:"):
                 try:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
                 except (ValueError, IndexError):
@@ -482,18 +488,21 @@ class RSSMonk:
         tags = [
             t
             for t in tags
-            if not t.startswith(f"last-poll:{feed.frequency.value}:")
-            and not t.startswith(f"last-seen:{feed.frequency.value}:")
+            # TODO - Figure out what this is for 
+            if not t.startswith(f"last-poll:{feed.frequencies.value}:")
+            and not t.startswith(f"last-seen:{feed.frequencies.value}:")
         ]
 
         # Add new poll time
         now = datetime.now()
-        tags.append(f"last-poll:{feed.frequency.value}:{now.isoformat()}")
+        # TODO - Figure out what this is for 
+        tags.append(f"last-poll:{feed.frequencies.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
         if articles:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
-            tags.append(f"last-seen:{feed.frequency.value}:{latest_guid}")
+            # TODO - Figure out what this is for 
+            tags.append(f"last-seen:{feed.frequencies.value}:{latest_guid}")
 
         # Update list
         self._client.put(
@@ -544,7 +553,83 @@ class RSSMonk:
             subject=title,
             body=content,
             list_ids=[feed.id],
-            tags=["rss", "automated", feed.frequency.value],
+            # TODO - Figure out what this is for 
+            tags=["rss", "automated", feed.frequencies.value],
         )
 
         return result["id"]
+
+
+
+class RSSMonkAdmin:
+    """Admin RSS Monk service. Handles users, access control and settings"""
+    def __init__(self, password: str, settings: Optional[Settings] = None):
+        self.settings = settings or Settings()
+        self.settings.validate_required()
+        if not hmac.compare_digest(self.settings.listmonk_password, password):
+            raise ValueError("Admin authentication failed")
+
+    # Create two clients, local creds for access control and admin creds for use if required
+    def __enter__(self):
+        print(f'creds: {self.local_creds}')
+        self._client = ListmonkClient(
+            base_url=self.settings.listmonk_url,
+            username=self.local_creds.username if self.local_creds is not None else "",
+            password=self.local_creds.password if self.local_creds is not None else "",
+            timeout=self.settings.rss_timeout,
+        ).__enter__()
+        return self
+
+    def __exit__(self, *args):
+        if hasattr(self, "_client"):
+            self._client.__exit__(*args)
+
+
+    def find_api_user(self, username: str):
+        pass
+
+
+    def create_api_user(self, username: str) -> str: # TODO - User id and password
+        """Create API user."""
+        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        lst = self._client.find_list_by_tag(f"url:{url_hash}")
+        return self._parse_feed_from_list(lst) if lst else None
+
+
+    def delete_api_user(self, username: str) -> str: # TODO - User id and password
+        """Delete API user."""
+        # TODO - Currently we delete and recreate the user here. That being said
+        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        lst = self._client.find_list_by_tag(f"url:{url_hash}")
+        return self._parse_feed_from_list(lst) if lst else None
+
+
+    def reset_api_user_password(self, username: str) -> str: # TODO - User id and password
+        """Reset API user password."""
+        # TODO - Currently we delete and recreate the user here.
+        # In the future, Listmonk may have a reset api password functionality for us
+        self.delete_api_user()
+        self.create_api_user()
+
+
+    def ensure_limited_role_exists(self):
+        # TODO - Simple, check limited user role exists, if not, create as admin
+        pass
+
+
+    def ensure_list_role(self, url: str):
+        # TODO - Simple, check limited list role exists for url, if not, create as admin
+        pass
+
+    def get_list_role_id_by_url(self, url: str) -> Optional[int]:
+        # TODO - Check if we can query... by name... or just filter until we see the url number 
+        self._client.get(f"/api/roles/lists")
+        pass
+
+
+    def delete_list_role(self, url: str):
+        role_id = self.get_list_role_id_by_url(url)
+        if role_id:
+            self._client.delete(f"/api/roles/{role_id}")
+            return True
+        return False

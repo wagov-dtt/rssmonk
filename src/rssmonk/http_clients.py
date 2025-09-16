@@ -3,7 +3,6 @@
 from typing import Optional
 from fastapi import HTTPException
 from http import HTTPMethod, HTTPStatus
-import os
 import httpx
 import feedparser
 
@@ -46,12 +45,7 @@ class ListmonkClient:
     def _make_request(self, method, path, **kwargs):
         """Make HTTP request with retry logic and error handling."""
         try:
-            print(f"_make_request: {path}")
             response = self._client.request(method, path, **kwargs)
-            request = response.request
-            # TODO
-            print(f"Request: {request.method}, Auth: {request.headers['authorization']}, {request.url}")
-            # TODO
             response.raise_for_status()
             if method == HTTPMethod.DELETE:
                 return response.status_code == HTTPStatus.OK
@@ -121,9 +115,8 @@ class ListmonkClient:
         }
         return self.post("/api/lists", payload)
 
-    def update_list_data(self, id: str, data: dict):
-        """Create a new list."""
-        # TODO - Why is this not happy. Do I need to do a full item. WHYYYYYY
+    def update_list_data(self, id: str, data):
+        """Update a new list."""
         return self.put(f"/api/lists/{id}", data)
 
     def get_subscribers(self, query=None):
@@ -148,14 +141,14 @@ class ListmonkClient:
     def subscribe_to_list(self, subscriber_id, list_id, filters, status="confirmed"):
         """Subscribe users to lists."""
         payload = {
-            "ids": subscriber_ids,
+            "ids": subscriber_id,
             "action": "add",
-            "target_list_ids": list_ids,
+            "target_list_ids": list_id,
             "status": status,
         }
         self.put("/api/subscribers/lists", payload) # TODO - Not sure this works
         
-        # TODO - Get the 
+        # TODO - Update the subscriber with the filter for the user
         return True
 
     def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):

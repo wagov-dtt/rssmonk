@@ -1,5 +1,6 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
 
+import hmac
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -12,11 +13,13 @@ print("In module products sys.path[0], __package__ ==", sys.path[0], __package__
 
 from .cache import feed_cache
 from .config_manager import FeedConfigManager
-from .core import RSSMonk, Settings
+from .core import RSSMonk, RSSMonkAdmin, Settings
 from .logging_config import get_logger
 from .models import (
+    ApiAccountResponse,
     BulkProcessResponse,
     ErrorResponse,
+    FeedAccountCreateRequest,
     FeedCreateRequest,
     FeedListResponse,
     FeedProcessRequest,
@@ -148,6 +151,9 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
             detail="Listmonk service unavailable"
         )
 
+def _validate_admin_auth(credentials: HTTPBasicCredentials) -> bool:
+    return hmac.compare_digest(bytes(credentials.password), bytes(settings.listmonk_password))
+
 
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
@@ -261,16 +267,18 @@ async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(secur
     status_code=201,
     tags=["feeds"],
     summary="Create RSS Feed",
-    description="Add a new RSS feed for processing and newsletter generation"
+    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists"
 )
 async def create_feed(
     request: FeedCreateRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
-    print(f'create_feed {request.url}')
-    # TODO - This should only be accessiable by admin
     """Create a new RSS feed."""
+
+    if not _validate_admin_auth(credentials=credentials):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
     try:
         with rss_monk:
             feed = rss_monk.add_feed(str(request.url), request.frequency, request.name)
@@ -278,8 +286,48 @@ async def create_feed(
                 id=feed.id,
                 name=feed.name,
                 url=feed.url,
-                frequency=feed.frequency,
+                frequency=feed.frequencies,
                 url_hash=feed.url_hash
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP create_feed: {e}")
+        raise
+
+
+@app.post(
+    "/api/feeds/account",
+    response_model=FeedResponse,
+    status_code=201,
+    tags=["feeds"],
+    summary="Create account RSS Feed",
+    description="Create a new limited access account to operate on the feed"
+)
+async def create_feed_account(
+    request: FeedAccountCreateRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> ApiAccountResponse:
+    """Create a new account for a RSS feed."""
+
+    if not _validate_admin_auth(credentials=credentials):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+    
+    admin_monk: RSSMonkAdmin = RSSMonkAdmin(rss_monk.settings.listmonk_password)
+
+    try:
+        with rss_monk:
+            user = admin_monk.find_api_user(username=f'user_{request.url}')
+            if feed is not None:
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"A user already exists for {request.url}")
+
+            # TODO - Ensure limited role has been created
+            admin_monk.create_api_user
+            # TODO - Check is account has already been created
+            feed = rss_monk.create_user(str(request.url))
+            return ApiAccountResponse(
+                # TODO
             )
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -300,6 +348,7 @@ async def list_feeds(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedListResponse:
     """List all RSS feeds."""
+    
     try:
         with rss_monk:
             feeds = rss_monk.list_feeds()
@@ -309,7 +358,7 @@ async def list_feeds(
                         id=feed.id,
                         name=feed.name,
                         url=feed.url,
-                        frequency=feed.frequency,
+                        frequency=feed.frequencies,
                         url_hash=feed.url_hash
                     )
                     for feed in feeds
@@ -344,7 +393,7 @@ async def get_feed_by_url(
                 id=feed.id,
                 name=feed.name,
                 url=feed.url,
-                frequency=feed.frequency,
+                frequency=feed.frequencies,
                 url_hash=feed.url_hash
             )
     except HTTPException:
@@ -366,6 +415,10 @@ async def delete_feed_by_url(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
     """Delete feed by URL."""
+
+    if not _validate_admin_auth(credentials=credentials):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
     try:
         with rss_monk:
             if rss_monk.delete_feed(url):
