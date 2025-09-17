@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from .core import Frequency
+from .core import Frequency, ListVisibilityType
 
 
 # Request Models
@@ -15,6 +15,7 @@ class FeedCreateRequest(BaseModel):
     url: HttpUrl = Field(..., description="RSS feed URL")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
+    visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
 
 class FeedAccountCreateRequest(BaseModel):
     """Request model for creating an account for a RSS feed."""
@@ -33,12 +34,20 @@ class PublicSubscribeRequest(BaseModel):
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
-class SubscribeRequest(BaseModel): # TODO - Fix up
-    """Request model for public subscription endpoint."""
+class SubscribeRequest(BaseModel):
+    """Request model for a subscription endpoint with a filter and email confirmation."""
     
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
-    #filter: dict[Any] =  Field(..., description="The filter as JSON")
+    filter: Optional[dict]= Field(..., description="The filter as JSON")
+    need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
+
+class SubscribeConfirmRequest(BaseModel):
+    """Request model for a subscription confirmation endpoint."""
+    
+    email: str = Field(..., description="Subscriber email address")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
+    uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
 
 # Response Models
 

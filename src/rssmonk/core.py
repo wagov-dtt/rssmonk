@@ -6,11 +6,14 @@ import os
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
+import uuid
 
 from fastapi.security import HTTPBasicCredentials
 import httpx
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
+
+from rssmonk.utils import make_url_hash
 
 from .cache import feed_cache
 from .http_clients import ListmonkClient
@@ -39,6 +42,13 @@ FREQUENCIES: dict[str, dict[str, Any]] = {
 }
 
 logger = get_logger(__name__)
+
+
+class ListVisibilityType(str, Enum):
+    """List visibility type."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
 
 
 class Frequency(str, Enum):
@@ -168,6 +178,7 @@ class Subscriber(BaseModel):
     id: Optional[int] = None
     email: str
     name: str = ""
+    filter: Optional[dict] = None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -207,7 +218,8 @@ class RSSMonk:
 
     # Feed operations
 
-    def add_feed(self, url: str, new_frequency: list[Frequency], name: Optional[str] = None) -> Feed:
+    def add_feed(self, url: str, new_frequency: list[Frequency], name: Optional[str] = None,
+                 visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
         """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
             name = self._get_feed_name(url)
@@ -220,15 +232,16 @@ class RSSMonk:
 
         if existing_feed is None:
             # Create in Listmonk
-            result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags)
+            result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags, list_type=visibility)
             feed.id = result["id"]
             
             # Invalidate cache for this URL to ensure fresh fetch
             feed_cache.invalidate_url(url)
+            return feed
         else:
             # No update required if the URL and frequencies are already covered
             if set(new_frequency) <= set(existing_feed.frequencies):
-                raise ValueError(f"Feed with same URL and frequencies already exists: {url}")
+                raise ValueError(f"Feed with same URL and frequency combination already exists: {url}")
 
             # Add new freq tags to end of the list and update
             for new_freq in new_frequency:
@@ -236,15 +249,13 @@ class RSSMonk:
                     existing_feed.frequencies.append(new_freq)
                     existing_feed.tags.append(f"freq:{new_freq.value}")
 
-            # Mandatory items
             payload = {
                 "name": existing_feed.name,
                 "description": existing_feed.description,
                 "tags": existing_feed.tags,
             }
             self._client.update_list_data(existing_feed.id, payload)
-        
-        return existing_feed
+            return existing_feed
 
     def list_feeds(self) -> list[Feed]:
         """list all feeds."""
@@ -263,7 +274,7 @@ class RSSMonk:
 
     def get_feed_by_url(self, url: str) -> Optional[Feed]:
         """Get feed by URL."""
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        url_hash = make_url_hash(url)
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 
@@ -303,8 +314,46 @@ class RSSMonk:
         if not feed or not feed.id:
             raise ValueError(f"Feed not found: {feed_url}")
 
-        self._client.subscribe_to_lists([subscriber.id], [feed.id])
+        self._client.subscribe_to_list(subscriber.id, feed.id)
         return True
+    
+    def add_filter(self, email: str, feed_url: str, need_confirm: bool, filter: dict) -> Optional[str]:
+        """Adds either a pending filter, or main filter. Returns uuid of the pending filter"""
+        feed = self.get_feed_by_url(feed_url)
+        sub_list = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs: dict  = sub_list[0] if sub_list is not None else None
+        print(subs)
+        if not feed or not feed.id:
+            raise ValueError(f"Feed not found: {feed_url}")
+        if not subs or "id" not in subs:
+            raise ValueError(f"Subscriber not found: {email}")
+
+        url_hash = make_url_hash(feed_url) # Used to access the subscription in the attributes
+        # TODO - Get the attribs from the user. If not there, make it
+        # attribs: {
+        #   url_hash: {
+        #     active: dict
+        #     uuid: {
+        #       filter: dict
+        #       expires: timestamp
+        #     }
+        #   }
+        # }
+        if need_confirm:
+            filter_uuid = uuid.uuid4().hex()
+            # TODO - Add filter with 24 hours expiry
+            timestamp = int(datetime.now().timestamp())
+            uuid_dict : dict = {filter_uuid: {'filter': filter, 'expires': timestamp}}
+            # 
+            pass
+        else:
+            new_filter = { url_hash: {'active': filter} }
+            pass
+
+        # TODO - Push subscriber back in
+        self._client.update_subscriber(subs.id, subs)
+        return True
+
 
     # Feed processing
 
@@ -561,7 +610,7 @@ class RSSMonk:
 
 
 
-class RSSMonkAdmin:
+class AdminRSSMonk:
     """Admin RSS Monk service. Handles users, access control and settings"""
     def __init__(self, password: str, settings: Optional[Settings] = None):
         self.settings = settings or Settings()
@@ -591,15 +640,15 @@ class RSSMonkAdmin:
 
     def create_api_user(self, username: str) -> str: # TODO - User id and password
         """Create API user."""
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        url_hash = make_url_hash(url)
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 
 
     def delete_api_user(self, username: str) -> str: # TODO - User id and password
         """Delete API user."""
-        # TODO - Currently we delete and recreate the user here. That being said
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        # TODO - Currently we delete and recreate the user here.
+        url_hash = make_url_hash(url)
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 

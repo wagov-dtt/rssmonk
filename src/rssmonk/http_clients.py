@@ -104,7 +104,7 @@ class ListmonkClient:
         lists = self.get_lists(tag=tag, per_page="1")
         return lists[0] if lists else None
 
-    def create_list(self, name, description, tags:list[str], list_type="public", optin="single"):
+    def create_list(self, name, description, tags:list[str], list_type="private", optin="single"):
         """Create a new list."""
         payload = {
             "name": name,
@@ -120,11 +120,9 @@ class ListmonkClient:
         return self.put(f"/api/lists/{id}", data)
 
     def get_subscribers(self, query=None):
-        """Get subscribers, optionally filtered by query."""
+        """Get subscribers, optionally filtered by query. Filters are not applied here"""
         params = {"query": query} if query else {}
         data = self.get("/api/subscribers", params=params)
-        # TODO - Change to alter attributes
-        print("get_subscribers")
         return self._normalize_results(data)
 
     def create_subscriber(self, email, name=None, status="enabled", lists=None):
@@ -138,7 +136,11 @@ class ListmonkClient:
         }
         return self.post("/api/subscribers", payload)
 
-    def subscribe_to_list(self, subscriber_id, list_id, filters, status="confirmed"):
+    def update_subscriber(self, sub_id: int, body: dict):
+        """Create a new subscriber."""
+        return self.put(f"/api/subscribers/{sub_id}", body)
+
+    def subscribe_to_list(self, subscriber_id, list_id, status="confirmed"):
         """Subscribe users to lists."""
         payload = {
             "ids": subscriber_id,
@@ -146,9 +148,7 @@ class ListmonkClient:
             "target_list_ids": list_id,
             "status": status,
         }
-        self.put("/api/subscribers/lists", payload) # TODO - Not sure this works
-        
-        # TODO - Update the subscriber with the filter for the user
+        self.put("/api/subscribers/lists", payload)        
         return True
 
     def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):

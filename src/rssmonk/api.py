@@ -8,12 +8,14 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from http import HTTPStatus
 import httpx
 
-import sys    
+import sys
+
+from rssmonk.utils import make_url_hash    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
 from .config_manager import FeedConfigManager
-from .core import RSSMonk, RSSMonkAdmin, Settings
+from .core import RSSMonk, AdminRSSMonk, Settings
 from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
@@ -28,6 +30,8 @@ from .models import (
     Frequency,
     HealthResponse,
     PublicSubscribeRequest,
+    SubscribeConfirmRequest,
+    SubscribeRequest,
     SubscriptionResponse,
 )
 
@@ -152,7 +156,9 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
         )
 
 def _validate_admin_auth(credentials: HTTPBasicCredentials) -> bool:
-    return hmac.compare_digest(bytes(credentials.password), bytes(settings.listmonk_password))
+    # Only used as a quick check before going to work against Listmonk.
+    # The password with Listmonk may have drifted, but Ops will sync them
+    return hmac.compare_digest(credentials.password, settings.listmonk_password)
 
 
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
@@ -310,11 +316,13 @@ async def create_feed_account(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> ApiAccountResponse:
     """Create a new account for a RSS feed."""
+    # TODO - This is currently not working. Remove 418 once fixed
+    raise HTTPException(status_code=HTTPStatus.IM_A_TEAPOT)
 
     if not _validate_admin_auth(credentials=credentials):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
     
-    admin_monk: RSSMonkAdmin = RSSMonkAdmin(rss_monk.settings.listmonk_password)
+    admin_monk: AdminRSSMonk = AdminRSSMonk(rss_monk.settings.listmonk_password)
 
     try:
         with rss_monk:
@@ -549,6 +557,63 @@ async def process_feeds_bulk(
         logger.error(f"Failed to process feeds bulk: {e}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Bulk processing failed")
 
+@app.post(
+    "/api/feeds/subscribe",
+    response_model=SubscriptionResponse,
+    tags=["feeds"],
+    summary="Subscribe to a Feed",
+    description="Subscribe an email address to an RSS feed. Authentication required"
+)
+async def feed_subscribe(
+    request: SubscribeRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> SubscriptionResponse:
+    """Feed subscription endpoint."""
+    # This can cover public, or private feeds
+    try:
+        # Use default settings for public endpoint
+        with rss_monk:
+            rss_monk.subscribe(request.email, str(request.feed_url))
+            if request.filter:
+                # Add filter to the subscriber
+                uuid = rss_monk.add_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
+                if request.need_confirm is not None and request.need_confirm:
+                    url_hash = make_url_hash(request.feed_url)
+                    # TODO - Make email to send
+                    # TODO - Spit out the uuid of the pending subscription to console until email is properly worked on
+                    pass
+            return SubscriptionResponse(
+                message="Subscription successful"
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to subscribe: {e}")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
+
+@app.post(
+    "/api/feed/subscribe-confirm",
+    response_model=SubscriptionResponse,
+    tags=["feeds"],
+    summary="Confirm subscription to a Feed",
+    description="Confirm the filtered subscription of an email address to an RSS feed. Authentication required"
+)
+async def feed_subscribe_confirm(
+    request: SubscribeConfirmRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)]
+) -> SubscriptionResponse:
+    """Feed subscription endpoint."""
+    try:
+        # Use default settings for public endpoint
+        with RSSMonk() as rss_monk:
+            # TODO - Check subscription for the user
+            pass
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to subscribe: {e}")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
 
 @app.post(
     "/api/public/subscribe",

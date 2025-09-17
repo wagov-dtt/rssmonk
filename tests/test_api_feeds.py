@@ -6,7 +6,13 @@ from fastapi.testclient import TestClient
 
 
 def test_create_feed():
-    """Test create feed endpoint."""
+    """
+    Tests create feed endpoint.
+    - Create feed with permutations of url, name, frequency and list_visibility
+    - Create feed that already exists with a subset of frequencies
+    - Create feed with already exists with new frequencies
+
+    """
     # TODO - This will require a Listmonk to be run to be the endpoint
     # Set required env var for import
     os.environ['LISTMONK_APITOKEN'] = 'test-token'
