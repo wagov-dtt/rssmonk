@@ -39,14 +39,13 @@ class SubscribeRequest(BaseModel):
     
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
-    filter: Optional[dict]= Field(..., description="The filter as JSON")
+    filter: Optional[dict] = Field(..., description="The filter as JSON")
     need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
 
 class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""
     
     email: str = Field(..., description="Subscriber email address")
-    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
     uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
 
 # Response Models

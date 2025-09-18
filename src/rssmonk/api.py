@@ -1,6 +1,7 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
 
 import hmac
+import traceback
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -10,7 +11,7 @@ import httpx
 
 import sys
 
-from rssmonk.utils import make_url_hash    
+from rssmonk.utils import FEED_ACCOUNT_PREFIX, make_url_hash    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -575,13 +576,19 @@ async def feed_subscribe(
         # Use default settings for public endpoint
         with rss_monk:
             rss_monk.subscribe(request.email, str(request.feed_url))
-            if request.filter:
+            if request.filter is not None:
                 # Add filter to the subscriber
-                uuid = rss_monk.add_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
+                uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
+                print("2")
                 if request.need_confirm is not None and request.need_confirm:
-                    url_hash = make_url_hash(request.feed_url)
+                    url_hash = make_url_hash(request.feed_url.encoded_string())
+                    transaction = {
+                        "subscriber_email": request.email,
+                    }
+                    # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
+                    print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # TODO - Make email to send
-                    # TODO - Spit out the uuid of the pending subscription to console until email is properly worked on
+                    rss_monk._client.make_transactional(transaction)
                     pass
             return SubscriptionResponse(
                 message="Subscription successful"
@@ -607,8 +614,29 @@ async def feed_subscribe_confirm(
     try:
         # Use default settings for public endpoint
         with RSSMonk() as rss_monk:
-            # TODO - Check subscription for the user
-            pass
+            email = request.email
+            sub_list = rss_monk._client.get_subscribers(query=f"subscribers.email = '{email}'")
+            uuid = request.uuid
+            subs: dict  = sub_list[0] if sub_list is not None else None
+            if not subs or "id" not in subs:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
+
+            # Search for subscription for the user
+            feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip()
+            if feed_hash not in subs["attrib"]:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
+
+            feed_attribs = subs["attrib"][feed_hash]
+            if uuid not in feed_attribs:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
+
+            feed_attribs[uuid]['expires'] # TODO - Check expired time
+            # Expired links are removed from the attributes for one feed
+            if not feed_attribs: # Expired
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
+            # TODO - Move filter to feed_attribs
+            # TODO - Push into main
+            
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except Exception as e:

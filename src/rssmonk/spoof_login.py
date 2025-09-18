@@ -115,8 +115,8 @@ if __name__ == "__main__":
     '''
     s = requests.Session()
     if _authenticate_with_listmonk(s):
+        # TODO - Make admin api, admin RSS Monk can do the rest?
         role_id = _make_user_role(s, _API_ROLE_NAME)
-        print(_make_list_set(s, "mediastatements", role_id))
 
         # TODO - Modify default campaign
         # TODO - Remove all others?

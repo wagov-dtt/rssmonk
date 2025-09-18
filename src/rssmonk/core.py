@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
 import uuid
@@ -13,7 +13,7 @@ import httpx
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from rssmonk.utils import make_url_hash
+from rssmonk.utils import make_url_hash, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import ListmonkClient
@@ -195,7 +195,6 @@ class RSSMonk:
 
     # Create two clients, local creds for access control and admin creds for use if required
     def __enter__(self):
-        print(f'creds: {self.local_creds}')
         self._client = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.local_creds.username if self.local_creds is not None else "",
@@ -310,26 +309,35 @@ class RSSMonk:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
         feed = self.get_feed_by_url(feed_url)
-
         if not feed or not feed.id:
             raise ValueError(f"Feed not found: {feed_url}")
 
-        self._client.subscribe_to_list(subscriber.id, feed.id)
+        self._client.subscribe_to_list([subscriber.id], [feed.id])
+        return True
+
+    def unsubscribe(self, email: str, feed_url: str) -> bool:
+        """Subscribe email to feed."""
+        subscriber = self.get_or_create_subscriber(email)
+        feed = self.get_feed_by_url(feed_url)
+        if not feed or not feed.id:
+            raise ValueError(f"Feed not found: {feed_url}")
+
+        self._client.unsubscribe_to_list([subscriber.id], [feed.id])
         return True
     
-    def add_filter(self, email: str, feed_url: str, need_confirm: bool, filter: dict) -> Optional[str]:
-        """Adds either a pending filter, or main filter. Returns uuid of the pending filter"""
+    def update_filter(self, email: str, feed_url: str, need_confirmation: bool, filter: dict) -> Optional[str]:
+        """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_url(feed_url)
         sub_list = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
         subs: dict  = sub_list[0] if sub_list is not None else None
-        print(subs)
+
         if not feed or not feed.id:
             raise ValueError(f"Feed not found: {feed_url}")
         if not subs or "id" not in subs:
             raise ValueError(f"Subscriber not found: {email}")
 
         url_hash = make_url_hash(feed_url) # Used to access the subscription in the attributes
-        # TODO - Get the attribs from the user. If not there, make it
+        # Attribs format - url-hash and uuids are permitted to be many
         # attribs: {
         #   url_hash: {
         #     active: dict
@@ -339,20 +347,24 @@ class RSSMonk:
         #     }
         #   }
         # }
-        if need_confirm:
-            filter_uuid = uuid.uuid4().hex()
-            # TODO - Add filter with 24 hours expiry
-            timestamp = int(datetime.now().timestamp())
-            uuid_dict : dict = {filter_uuid: {'filter': filter, 'expires': timestamp}}
-            # 
-            pass
+        attribs = subs['attribs']
+        url_dict = attribs[url_hash] if url_hash in attribs else {}
+        filter_uuid = str(uuid.uuid4())
+        if need_confirmation:
+            # Add filter with 24 hours expiry
+            timestamp = int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp())
+            url_dict[filter_uuid] = {'filter': filter, 'expires': timestamp}
         else:
-            new_filter = { url_hash: {'active': filter} }
-            pass
+            url_dict = {'active': filter}
+        attribs[url_hash] = url_dict
 
-        # TODO - Push subscriber back in
-        self._client.update_subscriber(subs.id, subs)
-        return True
+        # Have to covert the extracted lists to be a plain list of numbers to retain subscriptions
+        subs["lists"] = numberfy_subbed_lists(subs["lists"])
+
+        # Update the subscriber
+        self._client.update_subscriber(subs["id"], subs)
+        return filter_uuid if need_confirmation else None
+
 
 
     # Feed processing
@@ -620,7 +632,6 @@ class AdminRSSMonk:
 
     # Create two clients, local creds for access control and admin creds for use if required
     def __enter__(self):
-        print(f'creds: {self.local_creds}')
         self._client = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.local_creds.username if self.local_creds is not None else "",

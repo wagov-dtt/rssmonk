@@ -100,8 +100,7 @@ class FeedConfigManager:
             
             if subscriber_ids:
                 # Add subscribers to new list
-                for subscriber_id in subscriber_ids:
-                    self.rss_monk._client.subscribe_to_list(subscriber_id, to_feed.id)
+                self.rss_monk._client.subscribe_to_list([subscriber_ids], [to_feed.id])
                 logger.info(f"Migrated {len(subscriber_ids)} subscribers from {from_feed.name} to {to_feed.name}")
                 return len(subscriber_ids)
             

@@ -138,14 +138,33 @@ class ListmonkClient:
 
     def update_subscriber(self, sub_id: int, body: dict):
         """Create a new subscriber."""
-        return self.put(f"/api/subscribers/{sub_id}", body)
+        payload = {
+            "email": body["email"],
+            "name": body["name"],
+            "status": body["status"],
+            "lists": body["lists"], # Needs to be a list of numbers
+            "attribs": body["attribs"],
+            "preconfirm_subscriptions": True,
+        }
+        return self.put(f"/api/subscribers/{sub_id}", payload)
 
-    def subscribe_to_list(self, subscriber_id, list_id, status="confirmed"):
+    def subscribe_to_list(self, subscriber_ids: list[int], list_ids: list[int], status="confirmed"):
         """Subscribe users to lists."""
         payload = {
-            "ids": subscriber_id,
+            "ids": subscriber_ids,
             "action": "add",
-            "target_list_ids": list_id,
+            "target_list_ids": list_ids,
+            "status": status,
+        }
+        self.put("/api/subscribers/lists", payload)        
+        return True
+
+    def unsubscribe_to_list(self, subscriber_ids: list[int], list_ids: list[int], status="unsubscribed"):
+        """Subscribe users to lists."""
+        payload = {
+            "ids": subscriber_ids,
+            "action": "remove",
+            "target_list_ids": list_ids,
             "status": status,
         }
         self.put("/api/subscribers/lists", payload)        
@@ -172,6 +191,17 @@ class ListmonkClient:
         self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
+    def make_transactional(self, transaction):
+        """Send transactional email."""
+        payload = {
+            "subscriber_email": "user@test.com",
+            "from_email": "noreply@noreply", # TODO - This needs to be an env var
+            "template_id": 3,
+            "data": {},
+            "subject": "",
+            "content_type": "html"
+        }
+        return self.post(f"/api/tx", payload)
 
 def create_client():
     """Create a Listmonk client with environment config."""
