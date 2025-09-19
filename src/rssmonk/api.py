@@ -1,7 +1,7 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
 
+from datetime import datetime, timezone
 import hmac
-import traceback
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -11,7 +11,9 @@ import httpx
 
 import sys
 
-from rssmonk.utils import FEED_ACCOUNT_PREFIX, make_url_hash    
+from pydantic import BaseModel
+
+from rssmonk.utils import FEED_ACCOUNT_PREFIX, make_url_hash, numberfy_subbed_lists    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -21,6 +23,7 @@ from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
     BulkProcessResponse,
+    EmptyResponse,
     ErrorResponse,
     FeedAccountCreateRequest,
     FeedCreateRequest,
@@ -33,7 +36,10 @@ from .models import (
     PublicSubscribeRequest,
     SubscribeConfirmRequest,
     SubscribeRequest,
+    SubscriptionPreferencesRequest,
+    SubscriptionPreferencesResponse,
     SubscriptionResponse,
+    UnSubscribeRequest,
 )
 
 logger = get_logger(__name__)
@@ -558,6 +564,39 @@ async def process_feeds_bulk(
         logger.error(f"Failed to process feeds bulk: {e}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Bulk processing failed")
 
+
+@app.get(
+    "/api/feeds/subscribe-preferences",
+    response_model=SubscriptionPreferencesResponse,
+    tags=["feeds"],
+    summary="Subscribe to a Feed",
+    description="Subscribe an email address to an RSS feed. Authentication required"
+)
+async def feed_get_subscription_preferences(
+    request: SubscriptionPreferencesRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> SubscriptionPreferencesResponse:
+    """Get feed subscription user's preferences endpoint."""
+    try:
+        with rss_monk:
+            attribs = rss_monk.get_subscriber_feed_filter(request.email)
+            if attribs is None:
+                # Remove feeds not permitted to be seen by the account
+                #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is fixed
+                feed_hash = make_url_hash(request.feed_url.encoded_string())
+                print(attribs) # TODO - Fix here
+                if feed_hash in attribs:
+                    attribs = attribs[feed_hash] # Remove all but the feed's hash
+                    return SubscriptionPreferencesResponse(filter=attribs)
+            return SubscriptionPreferencesResponse(filter={})
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Subscription fetch failed: {e}")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription retrieval failed")
+
+
 @app.post(
     "/api/feeds/subscribe",
     response_model=SubscriptionResponse,
@@ -579,7 +618,6 @@ async def feed_subscribe(
             if request.filter is not None:
                 # Add filter to the subscriber
                 uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
-                print("2")
                 if request.need_confirm is not None and request.need_confirm:
                     url_hash = make_url_hash(request.feed_url.encoded_string())
                     transaction = {
@@ -588,7 +626,7 @@ async def feed_subscribe(
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # TODO - Make email to send
-                    rss_monk._client.make_transactional(transaction)
+                    #rss_monk._client.make_transactional(transaction)
                     pass
             return SubscriptionResponse(
                 message="Subscription successful"
@@ -600,20 +638,21 @@ async def feed_subscribe(
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
 
 @app.post(
-    "/api/feed/subscribe-confirm",
-    response_model=SubscriptionResponse,
+    "/api/feeds/subscribe-confirm",
+    response_model=EmptyResponse,
     tags=["feeds"],
     summary="Confirm subscription to a Feed",
     description="Confirm the filtered subscription of an email address to an RSS feed. Authentication required"
 )
 async def feed_subscribe_confirm(
     request: SubscribeConfirmRequest,
-    credentials: Annotated[HTTPBasicCredentials, Depends(security)]
-) -> SubscriptionResponse:
-    """Feed subscription endpoint."""
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)   
+):
+    """Feed subscription confirmation endpoint."""
     try:
         # Use default settings for public endpoint
-        with RSSMonk() as rss_monk:
+        with rss_monk:
             email = request.email
             sub_list = rss_monk._client.get_subscribers(query=f"subscribers.email = '{email}'")
             uuid = request.uuid
@@ -622,26 +661,92 @@ async def feed_subscribe_confirm(
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
 
             # Search for subscription for the user
-            feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip()
-            if feed_hash not in subs["attrib"]:
-                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
-
-            feed_attribs = subs["attrib"][feed_hash]
-            if uuid not in feed_attribs:
-                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
-
-            feed_attribs[uuid]['expires'] # TODO - Check expired time
-            # Expired links are removed from the attributes for one feed
-            if not feed_attribs: # Expired
+            #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is fixed
+            feed_hash = make_url_hash(request.feed_url.encoded_string())
+            if feed_hash not in subs["attribs"]:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
-            # TODO - Move filter to feed_attribs
-            # TODO - Push into main
-            
+
+            feed_attribs = subs["attribs"][feed_hash]
+            print(uuid)
+            if uuid not in feed_attribs:
+                # Count as expired
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
+
+            # Expired links are removed from the attributes for one feed
+            if feed_attribs[uuid]['expires'] < datetime.now(timezone.utc).timestamp():
+                # No deletion will occur here, there will be a cronjob to remove expired pending filters
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
+
+            # Move filter to feed_attribs
+            feed_attribs["filter"] = feed_attribs[uuid]["filter"]
+            del subs["attribs"][feed_hash][uuid]
+            # Have to covert the extracted lists to be a plain list of numbers to retain subscriptions
+            subs["lists"] = numberfy_subbed_lists(subs["lists"])
+            # Update the subscriber
+            rss_monk._client.update_subscriber(subs["id"], subs)
+            return EmptyResponse()
+       
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except HTTPException as e:
+        raise e # Deliberate reraise
     except Exception as e:
-        logger.error(f"Failed to subscribe: {e}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
+        logger.error(f"Failed to confirm subscription: {e}")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
+
+@app.post(
+    "/api/feeds/unsubscribe",
+    response_model=EmptyResponse,
+    tags=["feeds"],
+    summary="Unsubscribes a user from a Feed",
+    description="Removes the email address from a RSS feed. Authentication required"
+)
+async def feed_unsubscribe(
+    request: UnSubscribeRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)   
+):
+    """Feed subscription confirmation endpoint."""
+    try:
+        # Use default settings for public endpoint
+        with rss_monk:
+            email = request.email
+            sub_list = rss_monk._client.get_subscribers(query=f"subscribers.email = '{email}'")
+            subs: dict  = sub_list[0] if sub_list is not None else None
+            if not subs or "id" not in subs:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
+
+            # Search for subscription for the user to delete
+            #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is done
+            feed_hash = make_url_hash(request.feed_url.encoded_string())
+            feed_list = rss_monk._client.find_list_by_tag(f'url:{feed_hash}')
+            if feed_list is None:
+                # Treat as if the subscriber has been removed from the list. 
+                if feed_hash in credentials.username:
+                    # Log this discrepency. The feed appears to have gome missing, with the account linked to it, still existing
+                    logger.warning("Non existent feed (hash: %s) access with user account %s. Possible misconfiguration", feed_hash, credentials.username)
+                return EmptyResponse()
+
+            feed_data = rss_monk._parse_feed_from_list(feed_list)
+            print(feed_data)
+            if feed_hash in subs["attribs"]: # Else case is handled as if it was done
+                del subs["attribs"][feed_hash]
+                subs_lists = numberfy_subbed_lists(subs["lists"])
+                print(subs_lists)
+                print(feed_data.id)
+                subs["lists"] = subs_lists.remove(feed_data.id) # TODO WHY?
+
+                # Update the subscriber
+                rss_monk._client.update_subscriber(subs["id"], subs)
+            return EmptyResponse()
+       
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except HTTPException as e:
+        raise e # Deliberate reraise
+    except Exception as e:
+        logger.error(f"Failed to confirm subscription: {e}")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
 
 @app.post(
     "/api/public/subscribe",

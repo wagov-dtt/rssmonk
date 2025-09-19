@@ -178,7 +178,7 @@ class Subscriber(BaseModel):
     id: Optional[int] = None
     email: str
     name: str = ""
-    filter: Optional[dict] = None
+    attribs: Optional[dict] = None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -292,6 +292,14 @@ class RSSMonk:
         result = self._client.create_subscriber(email=email, name=name or email)
         return Subscriber(id=result["id"], email=result["email"], name=result["name"])
 
+    def get_subscriber_feed_filter(self, email: str) -> Optional[dict]:
+        """Get existing subscriber's data block."""
+        subs = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
+        if subs:
+            s = subs[0]
+            return s["attribs"]
+        return None
+
     def get_or_create_subscriber(self, email: str) -> Subscriber:
         """Get existing or create new subscriber."""
         subs = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
@@ -366,7 +374,6 @@ class RSSMonk:
         return filter_uuid if need_confirmation else None
 
 
-
     # Feed processing
 
     async def process_feed(self, feed: Feed, auto_send: Optional[bool] = None) -> int:
@@ -435,7 +442,7 @@ class RSSMonk:
         """Parse feed from Listmonk list."""
         tags = lst.get("tags", [])
 
-        # Extract frequency(ies)
+        # Extract frequencies
         frequency_list: list[Frequency] = []
         for tag in tags:
             if tag.startswith("freq:"):

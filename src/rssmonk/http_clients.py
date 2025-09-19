@@ -91,7 +91,6 @@ class ListmonkClient:
         if tag:
             params["tag"] = tag
         data = self.get("/api/lists", params=params)
-        print(data)
         return self._normalize_results(data)
 
     def find_list_by_name(self, name):
@@ -99,7 +98,7 @@ class ListmonkClient:
         lists = self.get_lists(name=name, per_page="1")
         return lists[0] if lists else None
 
-    def find_list_by_tag(self, tag): # TODO - This won't work for what we need
+    def find_list_by_tag(self, tag):
         """Find a single list by tag."""
         lists = self.get_lists(tag=tag, per_page="1")
         return lists[0] if lists else None
@@ -191,10 +190,10 @@ class ListmonkClient:
         self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
-    def make_transactional(self, transaction):
+    def make_transactional(self, transaction : dict):
         """Send transactional email."""
         payload = {
-            "subscriber_email": "user@test.com",
+            "subscriber_email": transaction["subscriber_email"],
             "from_email": "noreply@noreply", # TODO - This needs to be an env var
             "template_id": 3,
             "data": {},

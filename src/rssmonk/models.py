@@ -42,13 +42,28 @@ class SubscribeRequest(BaseModel):
     filter: Optional[dict] = Field(..., description="The filter as JSON")
     need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
 
+class SubscriptionPreferencesRequest(BaseModel):
+    """Request model for a subscription endpoint with filters for the feed."""
+    email: str = Field(..., description="Subscriber email address")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
+
 class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""
     
     email: str = Field(..., description="Subscriber email address")
     uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to") # TODO - This is temporary until credentials determine the feed
+
+class UnSubscribeRequest(BaseModel):
+    """Response model for a subscription preferences (filter)."""
+
+    email: str = Field(..., description="Subscriber email address")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for") # TODO - This is temporary until credentials determine the feed
 
 # Response Models
+
+class EmptyResponse(BaseModel):
+    pass
 
 class FeedResponse(BaseModel):
     """Response model for RSS feed information."""
@@ -91,6 +106,10 @@ class BulkProcessResponse(BaseModel):
     total_campaigns: int = Field(..., description="Total campaigns created")
     results: dict[str, int] = Field(..., description="Per-feed campaign counts")
 
+
+class SubscriptionPreferencesResponse(BaseModel):
+    """Request model for a subscription endpoint with filters for the feed."""
+    filter: dict = Field(..., description="The filter as JSON, or empty for no filters")
 
 class SubscriptionResponse(BaseModel):
     """Response model for subscription operations."""
