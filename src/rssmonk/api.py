@@ -581,14 +581,13 @@ async def feed_get_subscription_preferences(
     try:
         with rss_monk:
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
-            if attribs is None:
+            if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
                 #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is fixed
                 feed_hash = make_url_hash(request.feed_url.encoded_string())
-                print(attribs) # TODO - Fix here
                 if feed_hash in attribs:
                     attribs = attribs[feed_hash] # Remove all but the feed's hash
-                    return SubscriptionPreferencesResponse(filter=attribs)
+                    return SubscriptionPreferencesResponse(filter=attribs["filter"])
             return SubscriptionPreferencesResponse(filter={})
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
