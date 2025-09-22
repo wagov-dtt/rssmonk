@@ -145,7 +145,8 @@ class ListmonkClient:
             "attribs": body["attribs"],
             "preconfirm_subscriptions": True,
         }
-        return self.put(f"/api/subscribers/{sub_id}", payload)
+        response = self.put(f"/api/subscribers/{sub_id}", payload)
+        return response
 
     def subscribe_to_list(self, subscriber_ids: list[int], list_ids: list[int], status="confirmed"):
         """Subscribe users to lists."""

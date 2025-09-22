@@ -585,9 +585,9 @@ async def feed_get_subscription_preferences(
                 # Remove feeds not permitted to be seen by the account
                 #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is fixed
                 feed_hash = make_url_hash(request.feed_url.encoded_string())
-                if feed_hash in attribs:
-                    attribs = attribs[feed_hash] # Remove all but the feed's hash
-                    return SubscriptionPreferencesResponse(filter=attribs["filter"])
+                print(attribs)
+                if feed_hash in attribs and "filter" in attribs[feed_hash]:
+                    return SubscriptionPreferencesResponse(filter=attribs[feed_hash]["filter"]) # TODO - Need to operate as list of dicts
             return SubscriptionPreferencesResponse(filter={})
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -666,12 +666,12 @@ async def feed_subscribe_confirm(
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
             feed_attribs = subs["attribs"][feed_hash]
-            print(uuid)
             if uuid not in feed_attribs:
                 # Count as expired
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
             # Expired links are removed from the attributes for one feed
+            print(f'{feed_attribs[uuid]['expires']} < {datetime.now(timezone.utc).timestamp()}')
             if feed_attribs[uuid]['expires'] < datetime.now(timezone.utc).timestamp():
                 # No deletion will occur here, there will be a cronjob to remove expired pending filters
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
@@ -727,16 +727,17 @@ async def feed_unsubscribe(
                 return EmptyResponse()
 
             feed_data = rss_monk._parse_feed_from_list(feed_list)
-            print(feed_data)
             if feed_hash in subs["attribs"]: # Else case is handled as if it was done
                 del subs["attribs"][feed_hash]
-                subs_lists = numberfy_subbed_lists(subs["lists"])
-                print(subs_lists)
-                print(feed_data.id)
-                subs["lists"] = subs_lists.remove(feed_data.id) # TODO WHY?
 
-                # Update the subscriber
-                rss_monk._client.update_subscriber(subs["id"], subs)
+            # Remove subscription from lists
+            subs_lists = numberfy_subbed_lists(subs["lists"])
+            if feed_data.id in subs_lists:
+                subs_lists.remove(feed_data.id)
+            subs["lists"] = subs_lists
+
+            # Update the subscriber
+            rss_monk._client.update_subscriber(subs["id"], subs)
             return EmptyResponse()
        
     except ValueError as e:
@@ -745,7 +746,8 @@ async def feed_unsubscribe(
         raise e # Deliberate reraise
     except Exception as e:
         logger.error(f"Failed to confirm subscription: {e}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed")
+
 
 @app.post(
     "/api/public/subscribe",
@@ -788,11 +790,13 @@ async def listmonk_passthrough(
 ):
     print(f"{path} at /api")
     """Passthrough authenticated requests to Listmonk API."""
+    # TODO - FastAPI doesn't need this code snipper, this should be handled with positioning of functions.
     # Skip our own endpoints
-    if path in ["feeds", "feeds/process", "feeds/process/bulk", "public/subscribe"] or path.startswith("feeds/"):
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
+    # if path in ["feeds", "feeds/process", "feeds/process/bulk", "public/subscribe"] or path.startswith("feeds/"):
+    #    raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
     
     username, password = auth
+    print(password)
     
     try:
         async with httpx.AsyncClient() as client:
