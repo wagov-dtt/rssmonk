@@ -13,7 +13,7 @@ import sys
 
 from pydantic import BaseModel
 
-from rssmonk.utils import FEED_ACCOUNT_PREFIX, make_url_hash, numberfy_subbed_lists    
+from rssmonk.utils import FEED_ACCOUNT_PREFIX, ErrorMessages, make_url_hash, numberfy_subbed_lists    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -166,7 +166,6 @@ def _validate_admin_auth(credentials: HTTPBasicCredentials) -> bool:
     # Only used as a quick check before going to work against Listmonk.
     # The password with Listmonk may have drifted, but Ops will sync them
     return hmac.compare_digest(credentials.password, settings.listmonk_password)
-
 
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
@@ -580,6 +579,9 @@ async def feed_get_subscription_preferences(
     """Get feed subscription user's preferences endpoint."""
     try:
         with rss_monk:
+            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
+
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
@@ -613,19 +615,25 @@ async def feed_subscribe(
     try:
         # Use default settings for public endpoint
         with rss_monk:
+            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
+            
             rss_monk.subscribe(request.email, str(request.feed_url))
             if request.filter is not None:
                 # Add filter to the subscriber
                 uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
                     url_hash = make_url_hash(request.feed_url.encoded_string())
+                    base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... not sure how to get this
+                    confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
                     transaction = {
                         "subscriber_email": request.email,
+                        "confirmation_link": confirmation_link,
                     }
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
-                    # TODO - Make email to send
-                    #rss_monk._client.make_transactional(transaction)
+                    # Send email out for the user - # TODO - Use proper values
+                    rss_monk._client.make_transactional(transaction, "noreply@noreply", 3)
                     pass
             return SubscriptionResponse(
                 message="Subscription successful"
@@ -652,8 +660,11 @@ async def feed_subscribe_confirm(
     try:
         # Use default settings for public endpoint
         with rss_monk:
+            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
+
             email = request.email
-            sub_list = rss_monk._client.get_subscribers(query=f"subscribers.email = '{email}'")
+            sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{email}'")
             uuid = request.uuid
             subs: dict  = sub_list[0] if sub_list is not None else None
             if not subs or "id" not in subs:
@@ -709,8 +720,11 @@ async def feed_unsubscribe(
     try:
         # Use default settings for public endpoint
         with rss_monk:
+            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=ErrorMessages.NO_AUTH_FEED)
+
             email = request.email
-            sub_list = rss_monk._client.get_subscribers(query=f"subscribers.email = '{email}'")
+            sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{email}'")
             subs: dict  = sub_list[0] if sub_list is not None else None
             if not subs or "id" not in subs:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
@@ -725,21 +739,21 @@ async def feed_unsubscribe(
                     # Log this discrepency. The feed appears to have gome missing, with the account linked to it, still existing
                     logger.warning("Non existent feed (hash: %s) access with user account %s. Possible misconfiguration", feed_hash, credentials.username)
                 return EmptyResponse()
-
             feed_data = rss_monk._parse_feed_from_list(feed_list)
-            if feed_hash in subs["attribs"]: # Else case is handled as if it was done
-                del subs["attribs"][feed_hash]
 
-            # Remove subscription from lists
+            # Remove list from subscriber's list
             subs_lists = numberfy_subbed_lists(subs["lists"])
             if feed_data.id in subs_lists:
                 subs_lists.remove(feed_data.id)
             subs["lists"] = subs_lists
 
+            # Remove subscription filters from the subscriber
+            if feed_hash in subs["attribs"]:
+                del subs["attribs"][feed_hash]
+
             # Update the subscriber
             rss_monk._client.update_subscriber(subs["id"], subs)
             return EmptyResponse()
-       
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except HTTPException as e:

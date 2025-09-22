@@ -86,7 +86,7 @@ class ListmonkClient:
         """Get all lists, optionally filtered by tag."""
         params = {"per_page": per_page, "": name}
         if name:
-            params["name"] = tag
+            params["name"] = name
 
         if tag:
             params["tag"] = tag
@@ -181,27 +181,27 @@ class ListmonkClient:
             "content_type": content_type,
             "tags": tags or [],
         }
-        # TODO - Design is to remove campaigns as they are not useful to emailing... maybe?
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
-        #return self.post("/api/campaigns", payload)
+
+        # Not really required except for a mass unsubscribe
+        return self.post("/api/campaigns", payload)
 
     def start_campaign(self, campaign_id):
         """Start a campaign."""
         # TODO - Leave, because there's no campaigns to kick off...?
-        self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
-    def make_transactional(self, transaction : dict):
+    def make_transactional(self, transaction: dict, reply_email: str, template_id: int):
         """Send transactional email."""
         payload = {
-            "subscriber_email": transaction["subscriber_email"],
-            "from_email": "noreply@noreply", # TODO - This needs to be an env var
-            "template_id": 3,
+            "subscriber_emails": transaction["subscriber_emails"],
+            "from_email": reply_email,
+            "template_id": template_id,
             "data": {},
             "subject": "",
             "content_type": "html"
         }
         return self.post(f"/api/tx", payload)
+
 
 def create_client():
     """Create a Listmonk client with environment config."""

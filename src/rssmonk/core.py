@@ -13,7 +13,7 @@ import httpx
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from rssmonk.utils import make_url_hash, numberfy_subbed_lists
+from rssmonk.utils import make_url_hash, make_url_tag, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import ListmonkClient
@@ -214,6 +214,15 @@ class RSSMonk:
             self._client.__exit__(*args)
         if hasattr(self, "_admin"):
             self._admin.__exit__(*args)
+
+
+    def _validate_feed_visibility(self, credentials: HTTPBasicCredentials, feed_url: str) -> bool:
+        # Only used as a quick check before going to work against Listmonk.
+        # The password with Listmonk may have drifted, but Ops will sync them
+        found_feed = self._client.find_list_by_tag(tag=make_url_tag(feed_url))
+        print(found_feed)
+        return found_feed is not None
+        
 
     # Feed operations
 
