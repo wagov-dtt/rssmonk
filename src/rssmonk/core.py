@@ -222,7 +222,83 @@ class RSSMonk:
         found_feed = self._client.find_list_by_tag(tag=make_url_tag(feed_url))
         print(found_feed)
         return found_feed is not None
-        
+
+
+    # Account operations
+
+    def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> str: # TODO - password
+        """Create API user."""
+        # Pull password from secrets (would rather push up but TBD)
+        data = {
+            "username": api_name,
+            "email": "", "name":"",
+            "type": "api", "status": "enabled",
+            "password": None, "password_login": False,
+            "password2": None, "passwordLogin": False,
+            "userRoleId": user_role_id, "listRoleId": list_role_id,
+            "user_role_id": user_role_id, "list_role_id": list_role_id
+        }
+        response = self._admin.post("/api/users", data)
+
+        if response.status_code == 200:
+            # Return password
+            data = response.json()
+            return data["password"]
+        elif (response.status_code == 500 and ("already exists" in response.text)):
+            # TODO - Already exists, return error so they can recreate account, or bail
+            return 2
+        else:
+            # TODO - Other error
+            return 0
+
+
+    def delete_api_user(self, username: str) -> str: # TODO - User id and password
+        """Delete API user."""
+        # TODO - Currently we delete and recreate the user here.
+        user = self._admin.find_api_user_username(username)
+        self._admin.delete()
+        return self._parse_feed_from_list(lst) if lst else None
+
+
+    def create_list_role(self, list_name: str, list_id: int) -> int:
+        data= {
+            "name": f'{list_name}-role',
+            "permissions": ["subscribers:get","subscribers:manage","tx:send","templates:get"]
+        }
+        response = self._client.post("api/roles/lists", data, timeout=10)
+        return response.status_code == 200 or (response.status_code == 500 and ("already exists" in response.text))
+
+
+    def reset_api_user_password(self, username: str) -> str: # TODO - User id and password
+        """Reset API user password."""
+        # Currently we delete and recreate the user here.
+        # In the future, Listmonk may have a reset api password functionality
+        self.delete_api_user(username)
+        return self.create_api_user(username)
+
+
+    def ensure_limited_role_exists(self, url: str):
+        # TODO - Simple, check limited user role exists, if not, create as admin
+        pass
+
+
+    def ensure_list_role(self, url: str):
+        # TODO - Simple, check limited list role exists for url, if not, create as admin
+        pass
+
+    def get_list_role_id_by_url(self, url: str) -> Optional[int]:
+        # TODO - Check if we can query... by name... or just filter until we see the url number 
+        self._client.get(f"/api/roles/lists")
+        pass
+
+
+    def delete_list_role(self, url: str):
+        role_id = self.get_list_role_id_by_url(url)
+        if role_id:
+            self._client.delete(f"/api/roles/{role_id}")
+            return True
+        return False
+
 
     # Feed operations
 
@@ -635,77 +711,3 @@ class RSSMonk:
         )
 
         return result["id"]
-
-
-
-class AdminRSSMonk:
-    """Admin RSS Monk service. Handles users, access control and settings"""
-    def __init__(self, password: str, settings: Optional[Settings] = None):
-        self.settings = settings or Settings()
-        self.settings.validate_required()
-        if not hmac.compare_digest(self.settings.listmonk_password, password):
-            raise ValueError("Admin authentication failed")
-
-    # Create two clients, local creds for access control and admin creds for use if required
-    def __enter__(self):
-        self._client = ListmonkClient(
-            base_url=self.settings.listmonk_url,
-            username=self.local_creds.username if self.local_creds is not None else "",
-            password=self.local_creds.password if self.local_creds is not None else "",
-            timeout=self.settings.rss_timeout,
-        ).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        if hasattr(self, "_client"):
-            self._client.__exit__(*args)
-
-
-    def find_api_user(self, username: str):
-        pass
-
-
-    def create_api_user(self, username: str) -> str: # TODO - User id and password
-        """Create API user."""
-        url_hash = make_url_hash(url)
-        lst = self._client.find_list_by_tag(f"url:{url_hash}")
-        return self._parse_feed_from_list(lst) if lst else None
-
-
-    def delete_api_user(self, username: str) -> str: # TODO - User id and password
-        """Delete API user."""
-        # TODO - Currently we delete and recreate the user here.
-        url_hash = make_url_hash(url)
-        lst = self._client.find_list_by_tag(f"url:{url_hash}")
-        return self._parse_feed_from_list(lst) if lst else None
-
-
-    def reset_api_user_password(self, username: str) -> str: # TODO - User id and password
-        """Reset API user password."""
-        # TODO - Currently we delete and recreate the user here.
-        # In the future, Listmonk may have a reset api password functionality for us
-        self.delete_api_user()
-        self.create_api_user()
-
-
-    def ensure_limited_role_exists(self):
-        # TODO - Simple, check limited user role exists, if not, create as admin
-        pass
-
-
-    def ensure_list_role(self, url: str):
-        # TODO - Simple, check limited list role exists for url, if not, create as admin
-        pass
-
-    def get_list_role_id_by_url(self, url: str) -> Optional[int]:
-        # TODO - Check if we can query... by name... or just filter until we see the url number 
-        self._client.get(f"/api/roles/lists")
-        pass
-
-
-    def delete_list_role(self, url: str):
-        role_id = self.get_list_role_id_by_url(url)
-        if role_id:
-            self._client.delete(f"/api/roles/{role_id}")
-            return True
-        return False

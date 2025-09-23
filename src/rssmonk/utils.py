@@ -22,3 +22,6 @@ def make_url_tag(url: str) -> str:
 
 def make_url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
+
+def make_api_username(feed_url :str) -> str:
+    return f"{make_url_hash(feed_url)}-api"

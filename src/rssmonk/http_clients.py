@@ -187,7 +187,7 @@ class ListmonkClient:
 
     def start_campaign(self, campaign_id):
         """Start a campaign."""
-        # TODO - Leave, because there's no campaigns to kick off...?
+        self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
     def make_transactional(self, transaction: dict, reply_email: str, template_id: int):

@@ -14,6 +14,8 @@ import random
 import string
 import requests
 
+from rssmonk.utils import make_url_hash
+
 _API_ROLE_NAME = "api-role"
 #_URL = "http://listmonk.rssmonk.svc.cluster.local:9000"
 _URL = "http://localhost:9000"
@@ -33,80 +35,44 @@ def _authenticate_with_listmonk(session: requests.Session) -> bool :
 def _make_user_role(session: requests.Session, role_name: str) -> int:
     response = session.post(f'{_URL}/api/roles/users', data={
         "name":role_name,
-        "permissions":["subscribers:get","subscribers:manage","tx:send"]
+        "permissions":["subscribers:get","subscribers:manage","tx:send","templates:get"]
     }, timeout=10)
     return response.status_code == 200 or (response.status_code == 500 and ("already exists" in response.text))
 
 
-def _make_list(session: requests.Session, list_name: str) -> int:
-    # Check list for existance
-    response = session.get(f'{_URL}/api/lists?page=1&query={list_name}&order_by=id&order=asc', timeout=10)
-    if response.status_code == 200:
-        response_json = response.json()
-        data = response_json['data']
-        if data['total'] > 1:
-            # This is bad and will require manual clean up.
-            # TODO - Send error message or alert
-            pass
-        elif data['total'] == 1:
-            # Return ID
-            if 'data' in response.json and 'results' in response.json['data'] and 'id' in response.json['data']['results'][0]:
-                return response.json['data']['results'][0]['id']
-        else:
-            # List name is not primary key
-            response = session.post(f'{_URL}/api/lists', data={
-                "name":f"{list_name}_list",
-                "type":"public",
-                "optin":"single",
-                "tags":[]
-            }, timeout=10)
-            if response.status_code == 200:
-                # Need to get the ID out
-                if 'data' in response.json and 'id' in response.json['data']:
-                    return response.json['data']['id']
-
-    # TODO - return list id. WHY is this the only one with this response...
-    return 0
-
-
-def _make_list_role(session: requests.Session, list_name: str, list_id: int) -> int:
-    response = session.post(f'{_URL}/api/roles/lists', data={
-        "name":f'{list_name}-role',
-        "permissions":["subscribers:get","subscribers:manage","tx:send"]
-    }, timeout=10)
-    return response.status_code == 200 or (response.status_code == 500 and ("already exists" in response.text))
-
-
-def _make_list_api(session: requests.Session, list_name: str, user_role: int, list_role: int) -> int:
+def _create_admin_api_account(session: requests.Session, api_name: str) -> string:
     # Pull password from secrets (would rather push up but TBD)
     response = session.post(f'{_URL}/api/users', data={
-        "username":f"{list_name}-api-user",
-        "email":"", "name":"",
-        "type":"api",
-        "password":None,"passwordLogin":False,
-        "status":"enabled",
-        "userRoleId":user_role, "listRoleId":list_role,
-        "password2":None, "password_login":False,
-        "user_role_id":user_role, "list_role_id":list_role
-    }, timeout=10)
+        "username": api_name,
+        "email": "", "name":"",
+        "type": "api", "status": "enabled",
+        "password": None, "password_login": False,
+        "password2": None, "passwordLogin": False,
+        "userRoleId": 1, "listRoleId": None,
+        "user_role_id": 1, "list_role_id": None
+    }, timeout=30)
 
     # Need to return the list passcode
     if response.status_code == 200:
-        return 1
+        # Return password
+        data = response.json()
+        return data["password"]
     elif (response.status_code == 500 and ("already exists" in response.text)):
+        # TODO - Already exists, return error so they can recreate account, or bail
         return 2
+    else:
+        # TODO - Other error
+        return 0
 
 
-def _make_list_set(session: requests.Session, list_name: str, user_role_id: int) -> bool:
-    list_id =_make_list(session, list_name); 
-    list_role_id = _make_list_role(session, list_name, list_id)
-    return _make_list_api(session, list_name, user_role_id, list_role_id)
-
-
-def _modify_template(session: requests.Session, list_name: str, user_role_id: int) -> bool:
-    list_id =_make_list(session, list_name); 
-    list_role_id = _make_list_role(session, list_name, list_id)
-    return _make_list_api(session, list_name, user_role_id, list_role_id)
+def _make_template():
+    template = {
+        "name": "Blank transactional template",
+        "type": "tx",
+        "subject": "{{ .Tx.Data.header }}",
+        "body": "<!doctype html>\n<html>\n<head>\n</head>\n<body>\n{{ .Tx.Data.body }}\n</body>\n</html>",
+    }
+    # TODO - push template into system. Hopefully at location 5
 
 
 if __name__ == "__main__":
@@ -115,8 +81,9 @@ if __name__ == "__main__":
     '''
     s = requests.Session()
     if _authenticate_with_listmonk(s):
-        # TODO - Make admin api, admin RSS Monk can do the rest?
+        # TODO - Make admin api
         role_id = _make_user_role(s, _API_ROLE_NAME)
+        _make_template()
 
         # TODO - Modify default campaign
         # TODO - Remove all others?
@@ -124,4 +91,4 @@ if __name__ == "__main__":
         print("Done")
     else:
         print("failed to auth")
-    s.close()    
+    s.close()

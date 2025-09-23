@@ -11,14 +11,12 @@ import httpx
 
 import sys
 
-from pydantic import BaseModel
-
 from rssmonk.utils import FEED_ACCOUNT_PREFIX, ErrorMessages, make_url_hash, numberfy_subbed_lists    
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
 from .config_manager import FeedConfigManager
-from .core import RSSMonk, AdminRSSMonk, Settings
+from .core import RSSMonk, Settings
 from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
@@ -289,6 +287,7 @@ async def create_feed(
     """Create a new RSS feed."""
 
     if not _validate_admin_auth(credentials=credentials):
+        print("asd")
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -322,24 +321,23 @@ async def create_feed_account(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> ApiAccountResponse:
     """Create a new account for a RSS feed."""
-    # TODO - This is currently not working. Remove 418 once fixed
-    raise HTTPException(status_code=HTTPStatus.IM_A_TEAPOT)
-
     if not _validate_admin_auth(credentials=credentials):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
-    
-    admin_monk: AdminRSSMonk = AdminRSSMonk(rss_monk.settings.listmonk_password)
 
     try:
         with rss_monk:
-            user = admin_monk.find_api_user(username=f'user_{request.url}')
+            feed_hash = make_url_hash(request.feed_url.encoded_string())
+            account_name = f'user_{feed_hash}'
+            user = rss_monk.create_api_user(username=account_name)
             if feed is not None:
                 raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"A user already exists for {request.url}")
 
             # TODO - Ensure limited role has been created
-            admin_monk.create_api_user
-            # TODO - Check is account has already been created
-            feed = rss_monk.create_user(str(request.url))
+            # TODO - Check if account has already been created
+            feed = rss_monk._admin.create_user(account_name)
+            # TODO - Create list role
+            # TODO - Create api user
+            rss_monk._admin.create_api_user(account_name)
             return ApiAccountResponse(
                 # TODO
             )
@@ -624,11 +622,19 @@ async def feed_subscribe(
                 uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
                     url_hash = make_url_hash(request.feed_url.encoded_string())
-                    base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... not sure how to get this
+                    base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
+                    email_body='Hi,<br>Thanks for subscribing to media statement updates from the WA Government.<br>You\’ve chosen to receive' \
+                               ' updates for:<p>{{filter}}</p>To start getting updates, you need to verify your email address.<br>Please click' \
+                               ' the link below to verify your email address:<p><ahref="{{verification_link}}" target="_blank" rel="noopener' \
+                               ' noreferrer">{{verification_link}}</a></p>For your security, this link will expire in 24 hours.<br>If it has' \
+                               ' expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank"' \
+                               ' rel="noopener noreferrer">here</a> and start again.<br>If you did not make this request, please ignore this' \
+                               ' email.<p>Thank you.<br>WA Government Media Statement Team.'
                     transaction = {
-                        "subscriber_email": request.email,
-                        "confirmation_link": confirmation_link,
+                        "subscriber_emails": [request.email],
+                        "header": "Media Statement Registration",
+                        "body": email_body,
                     }
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
