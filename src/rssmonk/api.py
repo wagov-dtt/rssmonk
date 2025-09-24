@@ -624,22 +624,24 @@ async def feed_subscribe(
                     url_hash = make_url_hash(request.feed_url.encoded_string())
                     base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
-                    email_body='Hi,<br>Thanks for subscribing to media statement updates from the WA Government.<br>You\’ve chosen to receive' \
-                               ' updates for:<p>{{filter}}</p>To start getting updates, you need to verify your email address.<br>Please click' \
-                               ' the link below to verify your email address:<p><ahref="{{verification_link}}" target="_blank" rel="noopener' \
-                               ' noreferrer">{{verification_link}}</a></p>For your security, this link will expire in 24 hours.<br>If it has' \
-                               ' expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank"' \
-                               ' rel="noopener noreferrer">here</a> and start again.<br>If you did not make this request, please ignore this' \
-                               ' email.<p>Thank you.<br>WA Government Media Statement Team.'
+                    subject = ""
+                    email_body ='Hi,<br>Thanks for subscribing to media statement updates from the WA Government.<br>You\’ve chosen to receive' \
+                                ' updates for:<p>{{filter}}</p>To start getting updates, you need to verify your email address.<br>Please click' \
+                                ' the link below to verify your email address:<p><ahref="{{confirmation_link}}" target="_blank" rel="noopener' \
+                                ' noreferrer">{{confirmation_link}}</a></p>For your security, this link will expire in 24 hours.<br>If it has' \
+                                ' expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank"' \
+                                ' rel="noopener noreferrer">here</a> and start again.<br>If you did not make this request, please ignore this' \
+                                ' email.<p>Thank you.<br>WA Government Media Statement Team.'
                     transaction = {
                         "subscriber_emails": [request.email],
                         "header": "Media Statement Registration",
                         "body": email_body,
+                        "confirmation_link": confirmation_link
                     }
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # Send email out for the user - # TODO - Use proper values
-                    rss_monk._client.make_transactional(transaction, "noreply@noreply", 3)
+                    rss_monk._client.make_transactional("noreply@noreply", 3, subject, transaction)
                     pass
             return SubscriptionResponse(
                 message="Subscription successful"

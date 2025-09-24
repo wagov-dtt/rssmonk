@@ -1,7 +1,8 @@
 
 import httpx
 
-# Quick dirty item to test user creation. get users is not paginated
+# Quick dirty item to test user creation limits get users is not paginated.
+# 1k so far
 if __name__ == "__main__":
     username="adminapi"
     password="" # TODO - fill in
@@ -23,6 +24,8 @@ if __name__ == "__main__":
             "user_role_id": 1, "list_role_id": None
         }
         response = client.post("/api/users", json=json_data)
-        print(response)
+        if response.status_code != 200:
+            print(response)
 
+    print("Done")
     client.close()
