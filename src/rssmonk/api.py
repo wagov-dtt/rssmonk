@@ -139,6 +139,9 @@ security = HTTPBasic()
 
 async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -> tuple[str, str]:
     """Validate credentials against Listmonk API."""
+    if settings.validate_admin_auth(credentials.username, credentials.password):
+        return credentials.username, credentials.password
+
     try:
         # Test credentials against Listmonk
         async with httpx.AsyncClient() as client:
@@ -160,14 +163,10 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
             detail="Listmonk service unavailable"
         )
 
-def _validate_admin_auth(credentials: HTTPBasicCredentials) -> bool:
-    # Only used as a quick check before going to work against Listmonk.
-    # The password with Listmonk may have drifted, but Ops will sync them
-    return hmac.compare_digest(credentials.password, settings.listmonk_password)
-
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
     username, password = credentials
+    print("get_rss_monk")
     return RSSMonk(local_creds=HTTPBasicCredentials(username=username, password=password))
 
 
@@ -286,8 +285,7 @@ async def create_feed(
 ) -> FeedResponse:
     """Create a new RSS feed."""
 
-    if not _validate_admin_auth(credentials=credentials):
-        print("asd")
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -321,7 +319,7 @@ async def create_feed_account(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> ApiAccountResponse:
     """Create a new account for a RSS feed."""
-    if not _validate_admin_auth(credentials=credentials):
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -428,7 +426,7 @@ async def delete_feed_by_url(
 ):
     """Delete feed by URL."""
 
-    if not _validate_admin_auth(credentials=credentials):
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -624,28 +622,24 @@ async def feed_subscribe(
                     url_hash = make_url_hash(request.feed_url.encoded_string())
                     base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
-                    subject = ""
+                    subject = "Media Statement Registration"
                     email_body ='Hi,<br>Thanks for subscribing to media statement updates from the WA Government.<br>You\’ve chosen to receive' \
                                 ' updates for:<p>{{filter}}</p>To start getting updates, you need to verify your email address.<br>Please click' \
-                                ' the link below to verify your email address:<p><ahref="{{confirmation_link}}" target="_blank" rel="noopener' \
+                                f' the link below to verify your email address:<p><ahref="{confirmation_link}" target="_blank" rel="noopener' \
                                 ' noreferrer">{{confirmation_link}}</a></p>For your security, this link will expire in 24 hours.<br>If it has' \
                                 ' expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank"' \
                                 ' rel="noopener noreferrer">here</a> and start again.<br>If you did not make this request, please ignore this' \
                                 ' email.<p>Thank you.<br>WA Government Media Statement Team.'
                     transaction = {
                         "subscriber_emails": [request.email],
-                        "header": "Media Statement Registration",
                         "body": email_body,
                         "confirmation_link": confirmation_link
                     }
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # Send email out for the user - # TODO - Use proper values
-                    rss_monk._client.make_transactional("noreply@noreply", 3, subject, transaction)
-                    pass
-            return SubscriptionResponse(
-                message="Subscription successful"
-            )
+                    rss_monk._client.make_transactional("noreply@noreply", 5, transaction, subject)
+            return SubscriptionResponse(message="Subscription successful")
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except Exception as e:

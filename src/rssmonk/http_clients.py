@@ -1,22 +1,30 @@
 """HTTP client utilities."""
 
+from enum import Enum
 from typing import Optional
 from fastapi import HTTPException
 from http import HTTPMethod, HTTPStatus
 import httpx
 import feedparser
+import requests
 
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
+class AuthType(str, Enum):
+    """Authentication method type."""
+    BASIC = "basic"
+    SESSION = "session"
+
 class ListmonkClient:
     """Listmonk API client with automatic JSON handling and error logging."""
 
-    def __init__(self, base_url: str, username: str, password: str, timeout: float = 30.0):
+    def __init__(self, base_url: str, username: str, password: str, auth_type: AuthType, timeout: float = 30.0):
         self.base_url = base_url
         self.username = username
         self.password = password
+        self.auth_type = auth_type
         self.timeout = timeout
 
         if not self.username:
@@ -29,18 +37,42 @@ class ListmonkClient:
 
 
     def __enter__(self):
+        if self.auth_type == AuthType.SESSION:
+            self.cookies = self._init_listmonk_session()
+
         self._client = httpx.Client(
             base_url=self.base_url,
-            auth=httpx.BasicAuth(username=self.username, password=self.password),
+            auth=httpx.BasicAuth(username=self.username, password=self.password) if self.auth_type == AuthType.BASIC else None,
+            cookies=self.cookies if self.auth_type == AuthType.SESSION else None,
             timeout=self.timeout,
             headers={"Content-Type": "application/json"},
-        )
+        )   
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._client:
             self._client.close()
             self._client = None
+
+    def _init_listmonk_session(self) -> dict:
+        session = requests.Session()
+        # Collect the nonce from the login page to satisfy CSRF protection
+        response = session.get(f'{self.base_url}/admin/login')
+        login_data={
+            'username': self.username,
+            'password': self.password,
+            'nonce': session.cookies['nonce'],
+            'next': '/admin'
+        }
+
+        response = session.post(f'{self.base_url}/admin/login', data=login_data, allow_redirects=False, timeout=30)
+        if response.status_code == 302:
+            return {
+                'nonce': session.cookies['nonce'],
+                'session': session.cookies['session'],
+            }
+        else:
+            raise HTTPException(status_code=HTTPStatus.IM_A_TEAPOT)
 
     def _make_request(self, method, path, **kwargs):
         """Make HTTP request with retry logic and error handling."""
@@ -193,7 +225,7 @@ class ListmonkClient:
     def make_transactional(self, reply_email: str, template_id: int, data: dict, subject: str):
         """Send transactional email."""
         payload = {
-            "subscriber_emails": transaction["subscriber_emails"],
+            "subscriber_emails": data["subscriber_emails"],
             "from_email": reply_email,
             "template_id": template_id,
             "data": data,

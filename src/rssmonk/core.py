@@ -16,7 +16,7 @@ from pydantic_settings import BaseSettings
 from rssmonk.utils import make_url_hash, make_url_tag, numberfy_subbed_lists
 
 from .cache import feed_cache
-from .http_clients import ListmonkClient
+from .http_clients import AuthType, ListmonkClient
 from .logging_config import get_logger
 
 # Feed frequency configurations
@@ -99,6 +99,12 @@ class Settings(BaseSettings):
         """Validate required settings."""
         if not self.listmonk_password:
             raise ValueError("LISTMONK_APITOKEN environment variable is required")
+
+
+    def validate_admin_auth(self, username: str, password: str) -> bool:
+        # Only used as a quick check against settings (env vars) before going to work against Listmonk.
+        return hmac.compare_digest(password, self.listmonk_password) and username == self.listmonk_username
+
 
     @classmethod
     def ensure_env_file(cls) -> bool:
@@ -199,13 +205,17 @@ class RSSMonk:
             base_url=self.settings.listmonk_url,
             username=self.local_creds.username if self.local_creds is not None else "",
             password=self.local_creds.password if self.local_creds is not None else "",
-            timeout=self.settings.rss_timeout,
+            auth_type=AuthType.SESSION if self.settings.validate_admin_auth(
+                self.local_creds.username if self.local_creds is not None else "",
+                self.local_creds.password if self.local_creds is not None else "") else AuthType.BASIC,
+            timeout=self.settings.rss_timeout
         ).__enter__()
         self._admin = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.settings.listmonk_username,
             password=self.settings.listmonk_password,
-            timeout=self.settings.rss_timeout,
+            auth_type=AuthType.SESSION,
+            timeout=self.settings.rss_timeout
         ).__enter__()
         return self
 
@@ -238,18 +248,16 @@ class RSSMonk:
             "userRoleId": user_role_id, "listRoleId": list_role_id,
             "user_role_id": user_role_id, "list_role_id": list_role_id
         }
+        print("1")
         response = self._admin.post("/api/users", data)
-
+        print("2")
         if response.status_code == 200:
             # Return password
             data = response.json()
             return data["password"]
-        elif (response.status_code == 500 and ("already exists" in response.text)):
+        #elif (response.status_code == 500 and ("already exists" in response.text)):
             # TODO - Already exists, return error so they can recreate account, or bail
-            return 2
-        else:
-            # TODO - Other error
-            return 0
+        return ""
 
 
     def delete_api_user(self, username: str) -> str: # TODO - User id and password
