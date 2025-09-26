@@ -222,7 +222,7 @@ class ListmonkClient:
         self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
-    def make_transactional(self, reply_email: str, template_id: int, data: dict, subject: str):
+    def make_transactional(self, reply_email: str, template_id: int, content_type: str, data: dict, subject: str):
         """Send transactional email."""
         payload = {
             "subscriber_emails": data["subscriber_emails"],
@@ -230,7 +230,7 @@ class ListmonkClient:
             "template_id": template_id,
             "data": data,
             "subject": subject,
-            "content_type": "html"
+            "content_type": content_type
         }
         return self.post(f"/api/tx", payload)
 

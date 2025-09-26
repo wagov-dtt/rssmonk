@@ -23,6 +23,7 @@ from .models import (
     BulkProcessResponse,
     EmptyResponse,
     ErrorResponse,
+    FeedAccountConfigurationRequest,
     FeedAccountCreateRequest,
     FeedCreateRequest,
     FeedListResponse,
@@ -118,18 +119,6 @@ RSS Monk uses Listmonk lists as the source of truth:
             "name": "health",
             "description": "Health and status monitoring",
         },
-        {
-            "name": "listmonk-lists",
-            "description": "Listmonk list management (passthrough)",
-        },
-        {
-            "name": "listmonk-subscribers",
-            "description": "Listmonk subscriber management (passthrough)",
-        },
-        {
-            "name": "listmonk-campaigns",
-            "description": "Listmonk campaign management (passthrough)",
-        },
     ],
     swagger_ui_parameters=swagger_ui_params,
 )
@@ -166,7 +155,6 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
     username, password = credentials
-    print("get_rss_monk")
     return RSSMonk(local_creds=HTTPBasicCredentials(username=username, password=password))
 
 
@@ -275,8 +263,8 @@ async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(secur
     response_model=FeedResponse,
     status_code=201,
     tags=["feeds"],
-    summary="Create RSS Feed",
-    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists"
+    summary="Create RSS Feed (Requires admin privledges)",
+    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Requires admin privledges."
 )
 async def create_feed(
     request: FeedCreateRequest,
@@ -307,11 +295,11 @@ async def create_feed(
 
 @app.post(
     "/api/feeds/account",
-    response_model=FeedResponse,
+    response_model=FeedCreateRequest,
     status_code=201,
     tags=["feeds"],
-    summary="Create account RSS Feed",
-    description="Create a new limited access account to operate on the feed"
+    summary="Create account RSS Feed (Requires admin privledges)",
+    description="Create a new limited access account to operate on the feed. Requires admin privledges."
 )
 async def create_feed_account(
     request: FeedAccountCreateRequest,
@@ -324,20 +312,21 @@ async def create_feed_account(
 
     try:
         with rss_monk:
-            feed_hash = make_url_hash(request.feed_url.encoded_string())
+            feed_hash = make_url_hash(str(request.feed_url))
             account_name = f'user_{feed_hash}'
-            user = rss_monk.create_api_user(username=account_name)
             if feed is not None:
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"A user already exists for {request.url}")
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"A user already exists for {request.feed_url}")
 
             # TODO - Ensure limited role has been created
             # TODO - Check if account has already been created
             feed = rss_monk._admin.create_user(account_name)
             # TODO - Create list role
+            list_role_id = rss_monk.create_list_role(url=str(request.feed_url))
+            user_role_id = rss_monk.create_limited_user_role()
             # TODO - Create api user
-            rss_monk._admin.create_api_user(account_name)
+            user = rss_monk.create_api_user(username=account_name)
             return ApiAccountResponse(
-                # TODO
+                id = user
             )
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -416,8 +405,8 @@ async def get_feed_by_url(
 @app.delete(
     "/api/feeds/by-url",
     tags=["feeds"],
-    summary="Delete Feed by URL",
-    description="Remove an RSS feed by its URL"
+    summary="Delete Feed by URL (Requires admin privledges)",
+    description="Remove an RSS feed by its URL. Requires admin privledges."
 )
 async def delete_feed_by_url(
     url: str,
@@ -445,13 +434,13 @@ async def delete_feed_by_url(
 
 
 @app.get(
-    "/api/feeds/configurations/{url:path}",
+    "/api/feeds/configurations",
     tags=["feeds"],
     summary="Get URL Configurations",
     description="Get all feed configurations for a specific URL"
 )
 async def get_url_configurations(
-    url: str,
+    request: FeedAccountConfigurationRequest,
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
     # TODO - Not sure what this is for??
@@ -459,7 +448,7 @@ async def get_url_configurations(
     try:
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
-            configurations = config_manager.get_url_configurations(url)
+            configurations = config_manager.get_url_configurations(request.url)
             return configurations
     except Exception as e:
         logger.error(f"Failed to get URL configurations: {e}")
@@ -467,13 +456,12 @@ async def get_url_configurations(
 
 
 @app.put(
-    "/api/feeds/configurations/{url:path}",
+    "/api/feeds/configurations",
     tags=["feeds"],
     summary="Update Feed Configuration",
     description="Update feed configuration for a URL, with optional subscriber migration"
 )
 async def update_feed_configuration(
-    url: str,
     request: FeedCreateRequest,
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
@@ -483,7 +471,7 @@ async def update_feed_configuration(
             config_manager = FeedConfigManager(rss_monk)
             
             result = config_manager.update_feed_config(
-                url=url,
+                url=request.url,
                 new_frequency=request.frequency,
                 new_name=request.name
             )
@@ -564,8 +552,8 @@ async def process_feeds_bulk(
     "/api/feeds/subscribe-preferences",
     response_model=SubscriptionPreferencesResponse,
     tags=["feeds"],
-    summary="Subscribe to a Feed",
-    description="Subscribe an email address to an RSS feed. Authentication required"
+    summary="Get Feed preferences",
+    description="Requests the preferences of an email address' RSS feed subscription. Authentication required"
 )
 async def feed_get_subscription_preferences(
     request: SubscriptionPreferencesRequest,
@@ -575,9 +563,7 @@ async def feed_get_subscription_preferences(
     """Get feed subscription user's preferences endpoint."""
     try:
         with rss_monk:
-            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
-
+            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
@@ -611,25 +597,40 @@ async def feed_subscribe(
     try:
         # Use default settings for public endpoint
         with rss_monk:
-            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
-            
+            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
             rss_monk.subscribe(request.email, str(request.feed_url))
             if request.filter is not None:
                 # Add filter to the subscriber
                 uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
+                    # TODO - This needs to be stored somewhere else instead of here. Could use a subscriber that
                     url_hash = make_url_hash(request.feed_url.encoded_string())
                     base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
+                    reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
-                    email_body ='Hi,<br>Thanks for subscribing to media statement updates from the WA Government.<br>You\’ve chosen to receive' \
-                                ' updates for:<p>{{filter}}</p>To start getting updates, you need to verify your email address.<br>Please click' \
-                                f' the link below to verify your email address:<p><ahref="{confirmation_link}" target="_blank" rel="noopener' \
-                                ' noreferrer">{{confirmation_link}}</a></p>For your security, this link will expire in 24 hours.<br>If it has' \
-                                ' expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank"' \
-                                ' rel="noopener noreferrer">here</a> and start again.<br>If you did not make this request, please ignore this' \
-                                ' email.<p>Thank you.<br>WA Government Media Statement Team.'
+                    # TODO - Listmonk put it in as urlencoded, need to try and fix this
+                    email_body = """
+Hi,
+
+Thanks for subscribing to media statement updates from the WA Government.
+You’ve chosen to receive updates for:
+
+{{filter}}
+
+To start getting updates, you need to verify your email address.
+Please click the link below to verify your email address:
+
+<a href="{{confirmation_link}}" target="_blank" rel="noopener noreferrer">{{confirmation_link}}</a>
+
+For your security, this link will expire in 24 hours.
+
+If it has expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank" rel="noopener noreferrer">here</a> and start again.
+
+If you did not make this request, please ignore this email.
+
+Thank you.
+WA Government Media Statement Team."""
                     transaction = {
                         "subscriber_emails": [request.email],
                         "body": email_body,
@@ -638,7 +639,7 @@ async def feed_subscribe(
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # Send email out for the user - # TODO - Use proper values
-                    rss_monk._client.make_transactional("noreply@noreply", 5, transaction, subject)
+                    rss_monk._client.make_transactional(reply_email, 5, "markdown", transaction, subject)
             return SubscriptionResponse(message="Subscription successful")
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -662,9 +663,7 @@ async def feed_subscribe_confirm(
     try:
         # Use default settings for public endpoint
         with rss_monk:
-            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
-
+            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
             email = request.email
             sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{email}'")
             uuid = request.uuid
@@ -722,11 +721,9 @@ async def feed_unsubscribe(
     try:
         # Use default settings for public endpoint
         with rss_monk:
-            if not rss_monk._validate_feed_visibility(credentials=credentials, feed_url=str(request.feed_url)):
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=ErrorMessages.NO_AUTH_FEED)
-
-            email = request.email
-            sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+            sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{request.email}'")
+            print(sub_list)
             subs: dict  = sub_list[0] if sub_list is not None else None
             if not subs or "id" not in subs:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
@@ -761,7 +758,7 @@ async def feed_unsubscribe(
     except HTTPException as e:
         raise e # Deliberate reraise
     except Exception as e:
-        logger.error(f"Failed to confirm subscription: {e}")
+        logger.error(f"Failed to unsubscribe: {e}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed")
 
 

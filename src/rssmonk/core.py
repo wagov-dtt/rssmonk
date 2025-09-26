@@ -2,6 +2,8 @@
 
 import hashlib
 import hmac
+from http import HTTPStatus
+from http.client import HTTPException
 import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -226,12 +228,15 @@ class RSSMonk:
             self._admin.__exit__(*args)
 
 
-    def _validate_feed_visibility(self, credentials: HTTPBasicCredentials, feed_url: str) -> bool:
-        # Only used as a quick check before going to work against Listmonk.
-        # The password with Listmonk may have drifted, but Ops will sync them
-        found_feed = self._client.find_list_by_tag(tag=make_url_tag(feed_url))
-        print(found_feed)
-        return found_feed is not None
+    def _validate_feed_visibility(self, feed_url: str | None = None, feed_hash: str | None = None):
+        '''Check if the active credentials can see the feed's mailing list'''
+        if feed_url is None and feed_hash is None:
+            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
+
+        # Hash is used as a higher priority than the url
+        found_feed = self._client.find_list_by_tag(tag=feed_hash if feed_hash is not None else make_url_tag(feed_url))
+        if found_feed is None:
+            raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
 
 
     # Account operations
@@ -268,13 +273,14 @@ class RSSMonk:
         return self._parse_feed_from_list(lst) if lst else None
 
 
-    def create_list_role(self, list_name: str, list_id: int) -> int:
+    def create_limited_user_role(self, list_name: str, list_id: int) -> int:
         data= {
-            "name": f'{list_name}-role',
+            "name": f'limited-user-role',
             "permissions": ["subscribers:get","subscribers:manage","tx:send","templates:get"]
         }
         response = self._client.post("api/roles/lists", data, timeout=10)
         return response.status_code == 200 or (response.status_code == 500 and ("already exists" in response.text))
+        # TODO - if 500, fetch name in user roles, there should not be many
 
 
     def reset_api_user_password(self, username: str) -> str: # TODO - User id and password
@@ -291,6 +297,10 @@ class RSSMonk:
 
 
     def ensure_list_role(self, url: str):
+        # TODO - Simple, check limited list role exists for url, if not, create as admin
+        pass
+
+    def create_list_role(self, url: str):
         # TODO - Simple, check limited list role exists for url, if not, create as admin
         pass
 
@@ -522,7 +532,7 @@ class RSSMonk:
     # Helper methods
 
     def _get_feed_name(self, url: str) -> str:
-        """Get feed name from URL."""
+        """Get feed name from URL if one can be found, or the URL."""
         try:
             import feedparser
 

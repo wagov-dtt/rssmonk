@@ -11,16 +11,21 @@ from .core import Frequency, ListVisibilityType
 
 class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
-    
+
     url: HttpUrl = Field(..., description="RSS feed URL")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
 
+class FeedAccountConfigurationRequest(BaseModel):
+    """Request model for obtaining the configuration from a RSS feed."""
+
+    url: HttpUrl = Field(..., description="RSS feed URL")
+
 class FeedAccountCreateRequest(BaseModel):
     """Request model for creating an account for a RSS feed."""
     
-    url: HttpUrl = Field(..., description="RSS feed URL")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL")
 
 class FeedProcessRequest(BaseModel):
     """Request model for processing a specific feed."""

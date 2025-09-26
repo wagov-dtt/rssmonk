@@ -24,4 +24,7 @@ def make_url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
 
 def make_api_username(feed_url :str) -> str:
-    return f"{make_url_hash(feed_url)}-api"
+    return f"api-{make_url_hash(feed_url)}"
+
+def get_api_from_username(username :str) -> str:
+    return username.replace("api-", "").strip()
