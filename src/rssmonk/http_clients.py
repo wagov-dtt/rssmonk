@@ -83,6 +83,7 @@ class ListmonkClient:
                 return response.status_code == HTTPStatus.OK
             if response.content:
                 data = response.json()
+                # Listmonk idiosyncrasy
                 return data.get("data", data)
             return True
         except httpx.HTTPError as e:
@@ -233,6 +234,11 @@ class ListmonkClient:
             "content_type": content_type
         }
         return self.post(f"/api/tx", payload)
+
+    def get_users(self) -> list | None:
+        """Get the user list."""
+        data = self.get("/api/users")
+        return self._normalize_results(data)
 
 
 def create_client():

@@ -79,3 +79,8 @@ if __name__ == "__main__":
         print("Done")
     else:
         print("failed to auth")
+
+
+# 1. Create feeds at /api/feeds
+# 2. Create account at /api/feeds/account
+# 3. Store somewhere... 

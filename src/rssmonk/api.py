@@ -278,11 +278,11 @@ async def create_feed(
 
     try:
         with rss_monk:
-            feed = rss_monk.add_feed(str(request.url), request.frequency, request.name)
+            feed = rss_monk.add_feed(str(request.feed_url), request.frequency, request.name)
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
-                url=feed.url,
+                feed_url=feed.url,
                 frequency=feed.frequencies,
                 url_hash=feed.url_hash
             )
@@ -314,17 +314,20 @@ async def create_feed_account(
         with rss_monk:
             feed_hash = make_url_hash(str(request.feed_url))
             account_name = f'user_{feed_hash}'
-            if feed is not None:
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"A user already exists for {request.feed_url}")
 
-            # TODO - Ensure limited role has been created
-            # TODO - Check if account has already been created
-            feed = rss_monk._admin.create_user(account_name)
-            # TODO - Create list role
-            list_role_id = rss_monk.create_list_role(url=str(request.feed_url))
-            user_role_id = rss_monk.create_limited_user_role()
-            # TODO - Create api user
-            user = rss_monk.create_api_user(username=account_name)
+            # Check if account has already been created
+            user_data = rss_monk.get_user_by_name(account_name)
+            if user_data is not None:
+                raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=f"A user already exists for {request.feed_url}")
+
+            # Ensure limited user role has been created
+            role_id = rss_monk.ensure_limited_user_role_exists()
+            user_id = user_data["id"]
+
+            # Ensure list role has been created
+
+            # Create api user and return data to log in
+            user = rss_monk.create_api_user(account_name, role_id, user)
             return ApiAccountResponse(
                 id = user
             )
@@ -448,7 +451,7 @@ async def get_url_configurations(
     try:
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
-            configurations = config_manager.get_url_configurations(request.url)
+            configurations = config_manager.get_url_configurations(request.feed_url)
             return configurations
     except Exception as e:
         logger.error(f"Failed to get URL configurations: {e}")
@@ -471,13 +474,13 @@ async def update_feed_configuration(
             config_manager = FeedConfigManager(rss_monk)
             
             result = config_manager.update_feed_config(
-                url=request.url,
+                url=request.feed_url,
                 new_frequency=request.frequency,
                 new_name=request.name
             )
             
             # Invalidate cache for this URL
-            feed_cache.invalidate_url(url)
+            feed_cache.invalidate_url(request.feed_url)
             
             return result
     except ValueError as e:
@@ -502,7 +505,7 @@ async def process_feed(
     """Process a single RSS feed."""
     try:
         with rss_monk:
-            feed = rss_monk.get_feed_by_url(str(request.url))
+            feed = rss_monk.get_feed_by_url(str(request.feed_url))
             if not feed:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
@@ -632,6 +635,7 @@ If you did not make this request, please ignore this email.
 Thank you.
 WA Government Media Statement Team."""
                     transaction = {
+                        
                         "subscriber_emails": [request.email],
                         "body": email_body,
                         "confirmation_link": confirmation_link
@@ -639,7 +643,7 @@ WA Government Media Statement Team."""
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # Send email out for the user - # TODO - Use proper values
-                    rss_monk._client.make_transactional(reply_email, 5, "markdown", transaction, subject)
+                    rss_monk._client.make_transactional(reply_email, 5, "html", transaction, subject)
             return SubscriptionResponse(message="Subscription successful")
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -809,8 +813,7 @@ async def listmonk_passthrough(
     #    raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
     
     username, password = auth
-    print(password)
-    
+        
     try:
         async with httpx.AsyncClient() as client:
             # Forward the request to Listmonk

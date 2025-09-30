@@ -241,6 +241,17 @@ class RSSMonk:
 
     # Account operations
 
+
+    def get_user_by_name(self, api_name: str) -> dict | None:
+        """Get user by name"""
+        user_list = self._admin.get_users()
+        if user_list is not None and type(user_list) is list:
+            for user in user_list:
+                if type(user) is dict and user["username"] == api_name:
+                    return user
+        return None
+
+
     def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> str: # TODO - password
         """Create API user."""
         # Pull password from secrets (would rather push up but TBD)
@@ -273,14 +284,23 @@ class RSSMonk:
         return self._parse_feed_from_list(lst) if lst else None
 
 
-    def create_limited_user_role(self, list_name: str, list_id: int) -> int:
+    def ensure_limited_user_role_exists(self, list_name: str, list_id: int) -> int:
+        """Obtains the limited user role ID. Creates the role if it does not exist"""
+        role_name = "limited-user-role"
         data= {
-            "name": f'limited-user-role',
+            "name": role_name,
             "permissions": ["subscribers:get","subscribers:manage","tx:send","templates:get"]
         }
         response = self._client.post("api/roles/lists", data, timeout=10)
-        return response.status_code == 200 or (response.status_code == 500 and ("already exists" in response.text))
-        # TODO - if 500, fetch name in user roles, there should not be many
+        if response.status_code == 200:
+            pass
+        elif (response.status_code == 500 and ("already exists" in response.text)):
+            # Fetch name in user roles, there should not be many
+            response = self._client.get("api/roles/lists", data, timeout=10)
+            if response.status_code == 200:
+                print(response.json)
+
+        return -1
 
 
     def reset_api_user_password(self, username: str) -> str: # TODO - User id and password

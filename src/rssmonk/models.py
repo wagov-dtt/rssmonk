@@ -12,7 +12,7 @@ from .core import Frequency, ListVisibilityType
 class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
 
-    url: HttpUrl = Field(..., description="RSS feed URL")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
@@ -20,7 +20,7 @@ class FeedCreateRequest(BaseModel):
 class FeedAccountConfigurationRequest(BaseModel):
     """Request model for obtaining the configuration from a RSS feed."""
 
-    url: HttpUrl = Field(..., description="RSS feed URL")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL")
 
 class FeedAccountCreateRequest(BaseModel):
     """Request model for creating an account for a RSS feed."""
@@ -30,7 +30,7 @@ class FeedAccountCreateRequest(BaseModel):
 class FeedProcessRequest(BaseModel):
     """Request model for processing a specific feed."""
     
-    url: HttpUrl = Field(..., description="RSS feed URL to process")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
     auto_send: bool = Field(False, description="Automatically send created campaigns")
 
 class PublicSubscribeRequest(BaseModel):
@@ -75,7 +75,7 @@ class FeedResponse(BaseModel):
     
     id: int = Field(..., description="Listmonk list ID")
     name: str = Field(..., description="Feed name")
-    url: str = Field(..., description="RSS feed URL")
+    feed_url: str = Field(..., description="RSS feed URL")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
