@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 from http import HTTPStatus
-from http.client import HTTPException
+from fastapi import HTTPException
 import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -14,6 +14,7 @@ from fastapi.security import HTTPBasicCredentials
 import httpx
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
+from requests import Response
 
 from rssmonk.utils import make_url_hash, make_url_tag, numberfy_subbed_lists
 
@@ -252,7 +253,7 @@ class RSSMonk:
         return None
 
 
-    def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> str: # TODO - password
+    def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> dict | None:
         """Create API user."""
         # Pull password from secrets (would rather push up but TBD)
         data = {
@@ -264,70 +265,101 @@ class RSSMonk:
             "userRoleId": user_role_id, "listRoleId": list_role_id,
             "user_role_id": user_role_id, "list_role_id": list_role_id
         }
-        print("1")
-        response = self._admin.post("/api/users", data)
-        print("2")
-        if response.status_code == 200:
-            # Return password
-            data = response.json()
-            return data["password"]
-        #elif (response.status_code == 500 and ("already exists" in response.text)):
-            # TODO - Already exists, return error so they can recreate account, or bail
-        return ""
+
+        try:
+            response = self._admin.post("/api/users", data)
+            if type(response) is not dict:
+                raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+            
+            return response
+        except httpx.HTTPStatusError as e:
+            if (e.response.status_code == 500 and ("already exists" in e.response.text)):
+                # Already exists, return error so they can recreate account, or bail
+                raise HTTPException(status_code=HTTPStatus.CONFLICT)
+            else:
+                raise
 
 
-    def delete_api_user(self, username: str) -> str: # TODO - User id and password
+    def delete_api_user(self, api_name: str) -> bool: # TODO - User id and password
         """Delete API user."""
-        # TODO - Currently we delete and recreate the user here.
-        user = self._admin.find_api_user_username(username)
-        self._admin.delete()
-        return self._parse_feed_from_list(lst) if lst else None
+        users = self.get_user_by_name(api_name)
+        if users is None:
+            return True # Count as deleted
+
+        return self._admin.delete(f"/api/users/{users["id"]}")
 
 
-    def ensure_limited_user_role_exists(self, list_name: str, list_id: int) -> int:
-        """Obtains the limited user role ID. Creates the role if it does not exist"""
-        role_name = "limited-user-role"
-        data= {
-            "name": role_name,
-            "permissions": ["subscribers:get","subscribers:manage","tx:send","templates:get"]
-        }
-        response = self._client.post("api/roles/lists", data, timeout=10)
-        if response.status_code == 200:
-            pass
-        elif (response.status_code == 500 and ("already exists" in response.text)):
-            # Fetch name in user roles, there should not be many
-            response = self._client.get("api/roles/lists", data, timeout=10)
-            if response.status_code == 200:
-                print(response.json)
-
-        return -1
-
-
-    def reset_api_user_password(self, username: str) -> str: # TODO - User id and password
+    def reset_api_user_password(self, username: str) -> str:
         """Reset API user password."""
         # Currently we delete and recreate the user here.
         # In the future, Listmonk may have a reset api password functionality
         self.delete_api_user(username)
         return self.create_api_user(username)
+    
+
+    def ensure_limited_user_role_exists(self) -> int:
+        """Obtains the limited user role ID. Creates the role if it does not exist"""
+        role_name = "limited-user-role"
+        payload= {
+            "name": role_name,
+            "permissions": [
+                "subscribers:get",
+                "subscribers:manage",
+                "tx:send",
+                "templates:get"
+            ]
+        }
+
+        try:
+            response = self._client.post("api/roles/users", payload)
+            return response["id"]
+        except httpx.HTTPStatusError as e:
+            if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
+                raise
+            
+            # User role already exists. Find the user role with the same name
+            user_roles = self._client.get("api/roles/users")
+            for role in user_roles:
+                if type(role) is dict and role["name"] == role_name:
+                    return role["id"]
 
 
-    def ensure_limited_role_exists(self, url: str):
-        # TODO - Simple, check limited user role exists, if not, create as admin
-        pass
+    def ensure_list_role(self, url: str) -> int:
+        feed_hash = make_url_hash(url)
+        list_role_name = f"{feed_hash}-role"
+
+        # Get the list to get the ID to make the role.
+        list_data = self._admin.find_list_by_tag(make_url_tag(url))
+        if list_data is None:
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="List does not exist")
+
+        # Check for existance, by creating it, otherwise, retrieve id
+        payload = {
+            "name": list_role_name, # Name is unique
+            "lists": [ {"id": list_data["id"], "permissions": ["list:get","list:manage"] } ]
+        }
+
+        try:
+            response = self._admin.post("/api/roles/lists", payload)
+            return response[0]["id"]
+        except httpx.HTTPStatusError as e:
+            if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
+                raise
+
+            # User role already exists. Fetch name in user roles, there should not be many
+            return self.get_list_role_id_by_url(url)
 
 
-    def ensure_list_role(self, url: str):
-        # TODO - Simple, check limited list role exists for url, if not, create as admin
-        pass
 
-    def create_list_role(self, url: str):
-        # TODO - Simple, check limited list role exists for url, if not, create as admin
-        pass
+    def get_list_role_id_by_url(self, url: str) -> int:
+        feed_hash = make_url_hash(url)
+        list_role_name = f"{feed_hash}-role"
 
-    def get_list_role_id_by_url(self, url: str) -> Optional[int]:
-        # TODO - Check if we can query... by name... or just filter until we see the url number 
-        self._client.get(f"/api/roles/lists")
-        pass
+        list_roles = self._client.get("api/roles/lists")
+        for list_role in list_roles:
+            if type(list_role) is dict and list_role["name"] == list_role_name:
+                return list_role["id"]
+        return -1
 
 
     def delete_list_role(self, url: str):

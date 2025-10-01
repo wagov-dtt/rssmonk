@@ -35,8 +35,8 @@ def _authenticate_with_listmonk() -> Optional[requests.Session]:
     response = session.post(f'{_URL}/admin/login', data=login_data, allow_redirects=False, timeout=30)
     return session if response.status_code == 302 else None
 
-
 def _make_limited_user_role(session: requests.Session) -> bool:
+    # TODO - Remove in favour of RSSMonk
     payload = {
         "name": _FEED_ROLE_NAME,
         "permissions": ["subscribers:get","subscribers:manage","tx:send","templates:get"]

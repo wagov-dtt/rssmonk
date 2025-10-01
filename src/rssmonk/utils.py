@@ -18,7 +18,7 @@ def numberfy_subbed_lists(subs : list[dict]):
     return subbed_lists
 
 def make_url_tag(url: str) -> str:
-    return f"url:{hashlib.sha256(url.encode()).hexdigest()}"
+    return f"url:{make_url_hash(url)}"
 
 def make_url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()

@@ -24,7 +24,7 @@ from .models import (
     EmptyResponse,
     ErrorResponse,
     FeedAccountConfigurationRequest,
-    FeedAccountCreateRequest,
+    FeedAccountRequest,
     FeedCreateRequest,
     FeedListResponse,
     FeedProcessRequest,
@@ -218,7 +218,7 @@ async def health_check():
             response = await client.get(f"{test_settings.listmonk_url}/api/health", timeout=10.0)
             listmonk_status = "healthy" if response.status_code == 200 else "unhealthy"
 
-        # TODO - Check 
+        # TODO - Check postgres
 
         # Get basic stats (without auth)
         return HealthResponse(
@@ -241,7 +241,9 @@ async def health_check():
 )
 async def get_cache_stats(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
     """Get feed cache statistics."""
-    # TODO - Check against admin
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
     return feed_cache.get_stats()
 
 
@@ -252,8 +254,10 @@ async def get_cache_stats(credentials: Annotated[HTTPBasicCredentials, Depends(s
     description="Clear all RSS feed cache entries"
 )
 async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
-    # TODO - Check that the admin
     """Clear feed cache."""
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
     feed_cache.clear()
     return {"message": "Feed cache cleared successfully"}
 
@@ -295,14 +299,14 @@ async def create_feed(
 
 @app.post(
     "/api/feeds/account",
-    response_model=FeedCreateRequest,
+    response_model=ApiAccountResponse,
     status_code=201,
     tags=["feeds"],
     summary="Create account RSS Feed (Requires admin privledges)",
     description="Create a new limited access account to operate on the feed. Requires admin privledges."
 )
 async def create_feed_account(
-    request: FeedAccountCreateRequest,
+    request: FeedAccountRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> ApiAccountResponse:
@@ -312,24 +316,28 @@ async def create_feed_account(
 
     try:
         with rss_monk:
-            feed_hash = make_url_hash(str(request.feed_url))
+            feed_url = str(request.feed_url)
+            feed_hash = make_url_hash(feed_url)
             account_name = f'user_{feed_hash}'
 
-            # Check if account has already been created
+            # Ensure limited user role has been created
+            user_role_id = rss_monk.ensure_limited_user_role_exists()
+
+            # Ensure list role to access the feed's list has been created
+            list_role_id = rss_monk.ensure_list_role(feed_url)
+
+            # Return if account has already been created. They should have the credentials stored.
             user_data = rss_monk.get_user_by_name(account_name)
             if user_data is not None:
                 raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=f"A user already exists for {request.feed_url}")
 
-            # Ensure limited user role has been created
-            role_id = rss_monk.ensure_limited_user_role_exists()
-            user_id = user_data["id"]
-
-            # Ensure list role has been created
-
             # Create api user and return data to log in
-            user = rss_monk.create_api_user(account_name, role_id, user)
+            api_user = rss_monk.create_api_user(account_name, user_role_id, list_role_id)
+            print(api_user)
             return ApiAccountResponse(
-                id = user
+                id=api_user["id"],
+                name=account_name,
+                api_password=api_user["password"]
             )
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -409,10 +417,11 @@ async def get_feed_by_url(
     "/api/feeds/by-url",
     tags=["feeds"],
     summary="Delete Feed by URL (Requires admin privledges)",
-    description="Remove an RSS feed by its URL. Requires admin privledges."
+    description="Remove an RSS feed by its URL and remove it from all subscribers." \
+    " It will also remove list roles and the account created. Requires admin privledges."
 )
 async def delete_feed_by_url(
-    url: str,
+    feed_url: str,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
@@ -423,10 +432,13 @@ async def delete_feed_by_url(
 
     try:
         with rss_monk:
-            if rss_monk.delete_feed(url):
+            if rss_monk.delete_feed(feed_url):
                 # Invalidate cache for this URL
-                feed_cache.invalidate_url(url)
-                return {"message": "Feed deleted successfully"}
+                feed_cache.invalidate_url(feed_url)
+            
+            # TODO = Delete user
+            # TODO - Delete list role
+                return {"message": "Feed, associated roles and account have been deleted successfully"}
             else:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
     except HTTPException:
@@ -574,7 +586,8 @@ async def feed_get_subscription_preferences(
                 feed_hash = make_url_hash(request.feed_url.encoded_string())
                 print(attribs)
                 if feed_hash in attribs and "filter" in attribs[feed_hash]:
-                    return SubscriptionPreferencesResponse(filter=attribs[feed_hash]["filter"]) # TODO - Need to operate as list of dicts
+                    # TODO - Need to remove the other accounts that the credentials aren't meant to see
+                    return SubscriptionPreferencesResponse(filter=attribs[feed_hash]["filter"])
             return SubscriptionPreferencesResponse(filter={})
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -601,7 +614,7 @@ async def feed_subscribe(
         # Use default settings for public endpoint
         with rss_monk:
             rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
-            rss_monk.subscribe(request.email, str(request.feed_url))
+            rss_monk.subscribe(request.email, str(request.feed_url)) # TODO = This does not appear to work?
             if request.filter is not None:
                 # Add filter to the subscriber
                 uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)

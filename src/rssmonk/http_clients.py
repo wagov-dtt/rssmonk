@@ -75,7 +75,7 @@ class ListmonkClient:
             raise HTTPException(status_code=HTTPStatus.IM_A_TEAPOT)
 
     def _make_request(self, method, path, **kwargs):
-        """Make HTTP request with retry logic and error handling."""
+        """Make HTTP request with error handling."""
         try:
             response = self._client.request(method, path, **kwargs)
             response.raise_for_status()
@@ -247,7 +247,7 @@ def create_client():
 
 
 def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk/2.0"):
-    """Fetch and parse RSS feed with retry logic."""
+    """Fetch and parse RSS feed."""
     try:
         logger.info(f"Fetching feed: {feed_url}")
 

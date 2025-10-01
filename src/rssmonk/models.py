@@ -22,7 +22,7 @@ class FeedAccountConfigurationRequest(BaseModel):
 
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
 
-class FeedAccountCreateRequest(BaseModel):
+class FeedAccountRequest(BaseModel):
     """Request model for creating an account for a RSS feed."""
     
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
@@ -96,10 +96,10 @@ class FeedProcessResponse(BaseModel):
     articles_processed: int = Field(..., description="Number of articles processed")
 
 
-class ApiAccountResponse():
+class ApiAccountResponse(BaseModel):
     """Response model for feed accounts."""
     id: int = Field(..., description="Account ID")
-    name: int = Field(..., description="Account name")
+    name: str = Field(..., description="Account name")
     api_password: str = Field(..., description="Password that is generated for the API account and never revealed again")
 
 
