@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 from requests import Response
 
+from rssmonk.email_store import EmailTemplateStore
 from rssmonk.utils import make_url_hash, make_url_tag, numberfy_subbed_lists
 
 from .cache import feed_cache
@@ -201,6 +202,7 @@ class RSSMonk:
         self.local_creds: Optional[HTTPBasicCredentials] = local_creds
         self.settings = settings or Settings()
         self.settings.validate_required()
+        self.email_templates = EmailTemplateStore()
 
     # Create two clients, local creds for access control and admin creds for use if required
     def __enter__(self):
@@ -230,7 +232,7 @@ class RSSMonk:
 
 
     def _validate_feed_visibility(self, feed_url: str | None = None, feed_hash: str | None = None):
-        '''Check if the active credentials can see the feed's mailing list'''
+        '''Check if the active credentials can see the feed's mailing list. Requires either feed_url or feed_hash, which has priority'''
         if feed_url is None and feed_hash is None:
             raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
 
@@ -341,7 +343,8 @@ class RSSMonk:
 
         try:
             response = self._admin.post("/api/roles/lists", payload)
-            return response[0]["id"]
+            if type(response) is dict:
+                return response["id"]
         except httpx.HTTPStatusError as e:
             if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
                 raise
@@ -444,12 +447,12 @@ class RSSMonk:
 
     def add_subscriber(self, email: str, name: Optional[str] = None) -> Subscriber:
         """Add subscriber."""
-        result = self._client.create_subscriber(email=email, name=name or email)
+        result = self._admin.create_subscriber(email=email, name=name or email)
         return Subscriber(id=result["id"], email=result["email"], name=result["name"])
 
     def get_subscriber_feed_filter(self, email: str) -> Optional[dict]:
         """Get existing subscriber's data block."""
-        subs = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         if subs:
             s = subs[0]
             return s["attribs"]
@@ -457,7 +460,7 @@ class RSSMonk:
 
     def get_or_create_subscriber(self, email: str) -> Subscriber:
         """Get existing or create new subscriber."""
-        subs = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         if subs:
             s = subs[0]
             return Subscriber(id=s["id"], email=s["email"], name=s["name"])
@@ -491,7 +494,7 @@ class RSSMonk:
     def update_filter(self, email: str, feed_url: str, need_confirmation: bool, filter: dict) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_url(feed_url)
-        sub_list = self._client.get_subscribers(query=f"subscribers.email = '{email}'")
+        sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         subs: dict  = sub_list[0] if sub_list is not None else None
 
         if not feed or not feed.id:

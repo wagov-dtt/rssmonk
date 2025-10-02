@@ -298,6 +298,42 @@ async def create_feed(
 
 
 @app.post(
+    "/api/feeds/templates",
+    response_model=FeedResponse,
+    status_code=201,
+    tags=["feeds"],
+    summary="Create email templates for RSS Feed (Requires admin privledges)",
+    description="Creates or updates email templates for RSS feed for newsletter generation. Requires admin privledges."
+)
+async def create_feed(
+    request: FeedCreateRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> FeedResponse:
+    """Create a new RSS feed."""
+
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
+    try:
+        with rss_monk:
+            template_id = rss_monk.add_template(str(request.feed_url), subject, body) # TODO - DO
+            return FeedResponse(
+                id=feed.id,
+                name=feed.name,
+                feed_url=feed.url,
+                frequency=feed.frequencies,
+                url_hash=feed.url_hash
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP create_feed: {e}")
+        raise
+
+
+
+@app.post(
     "/api/feeds/account",
     response_model=ApiAccountResponse,
     status_code=201,
@@ -576,9 +612,9 @@ async def feed_get_subscription_preferences(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> SubscriptionPreferencesResponse:
     """Get feed subscription user's preferences endpoint."""
-    try:
-        with rss_monk:
-            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+    with rss_monk:
+        rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+        try:
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
@@ -589,11 +625,11 @@ async def feed_get_subscription_preferences(
                     # TODO - Need to remove the other accounts that the credentials aren't meant to see
                     return SubscriptionPreferencesResponse(filter=attribs[feed_hash]["filter"])
             return SubscriptionPreferencesResponse(filter={})
-    except ValueError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.error(f"Subscription fetch failed: {e}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription retrieval failed")
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"Subscription fetch failed: {e}")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription retrieval failed")
 
 
 @app.post(
@@ -610,59 +646,42 @@ async def feed_subscribe(
 ) -> SubscriptionResponse:
     """Feed subscription endpoint."""
     # This can cover public, or private feeds
-    try:
-        # Use default settings for public endpoint
-        with rss_monk:
-            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+    with rss_monk:
+        rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+        try:
             rss_monk.subscribe(request.email, str(request.feed_url)) # TODO = This does not appear to work?
             if request.filter is not None:
+                # TODO - Verify the filter consists of filters and 
                 # Add filter to the subscriber
                 uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
-                    # TODO - This needs to be stored somewhere else instead of here. Could use a subscriber that
                     url_hash = make_url_hash(request.feed_url.encoded_string())
                     base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
                     reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
+                    
                     # TODO - Listmonk put it in as urlencoded, need to try and fix this
-                    email_body = """
-Hi,
+                    #template = rss_monk.email_templates.get_subscribe_email(str(request.feed_url)) # TODO - Need to push into the 
+                    template = rss_monk._admin.find_email_template_by_name(f"feed_url".name)
 
-Thanks for subscribing to media statement updates from the WA Government.
-You’ve chosen to receive updates for:
-
-{{filter}}
-
-To start getting updates, you need to verify your email address.
-Please click the link below to verify your email address:
-
-<a href="{{confirmation_link}}" target="_blank" rel="noopener noreferrer">{{confirmation_link}}</a>
-
-For your security, this link will expire in 24 hours.
-
-If it has expired, you can return to the manage subscription page <a href="{{subscription_link}}" target="_blank" rel="noopener noreferrer">here</a> and start again.
-
-If you did not make this request, please ignore this email.
-
-Thank you.
-WA Government Media Statement Team."""
                     transaction = {
-                        
                         "subscriber_emails": [request.email],
-                        "body": email_body,
+                        "subject": template.subject,
+                        "subscription_link": "",
                         "confirmation_link": confirmation_link
                     }
                     # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
                     # Send email out for the user - # TODO - Use proper values
-                    rss_monk._client.make_transactional(reply_email, 5, "html", transaction, subject)
+                    rss_monk._client.send_transactional(reply_email, template["id"], "html", subject, transaction)
             return SubscriptionResponse(message="Subscription successful")
-    except ValueError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to subscribe: {e}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"Failed to subscribe: {e}")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
+
 
 @app.post(
     "/api/feeds/subscribe-confirm",
@@ -677,10 +696,9 @@ async def feed_subscribe_confirm(
     rss_monk: RSSMonk = Depends(get_rss_monk)   
 ):
     """Feed subscription confirmation endpoint."""
-    try:
-        # Use default settings for public endpoint
-        with rss_monk:
-            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+    with rss_monk:
+        rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+        try:
             email = request.email
             sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{email}'")
             uuid = request.uuid
@@ -714,13 +732,13 @@ async def feed_subscribe_confirm(
             rss_monk._client.update_subscriber(subs["id"], subs)
             return EmptyResponse()
        
-    except ValueError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-    except HTTPException as e:
-        raise e # Deliberate reraise
-    except Exception as e:
-        logger.error(f"Failed to confirm subscription: {e}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except HTTPException as e:
+            raise e # Deliberate reraise
+        except Exception as e:
+            logger.error(f"Failed to confirm subscription: {e}")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
 
 @app.post(
     "/api/feeds/unsubscribe",
@@ -735,10 +753,9 @@ async def feed_unsubscribe(
     rss_monk: RSSMonk = Depends(get_rss_monk)   
 ):
     """Feed subscription confirmation endpoint."""
-    try:
-        # Use default settings for public endpoint
-        with rss_monk:
-            rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+    with rss_monk:
+        rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+        try:
             sub_list = rss_monk._admin.get_subscribers(query=f"subscribers.email = '{request.email}'")
             print(sub_list)
             subs: dict  = sub_list[0] if sub_list is not None else None
@@ -770,13 +787,13 @@ async def feed_unsubscribe(
             # Update the subscriber
             rss_monk._client.update_subscriber(subs["id"], subs)
             return EmptyResponse()
-    except ValueError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-    except HTTPException as e:
-        raise e # Deliberate reraise
-    except Exception as e:
-        logger.error(f"Failed to unsubscribe: {e}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed")
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except HTTPException as e:
+            raise e # Deliberate reraise
+        except Exception as e:
+            logger.error(f"Failed to unsubscribe: {e}")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed")
 
 
 @app.post(

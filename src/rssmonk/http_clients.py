@@ -8,6 +8,8 @@ import httpx
 import feedparser
 import requests
 
+from rssmonk.email_store import EmailTemplate
+
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -223,7 +225,33 @@ class ListmonkClient:
         self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
-    def make_transactional(self, reply_email: str, template_id: int, content_type: str, data: dict, subject: str):
+    def get_templates(self):
+        """Get all templates."""
+        data = self.get("/api/templates")
+        return self._normalize_results(data)
+
+    def find_email_template_by_name(self, template_name: str) -> dict | None:
+        """Find a single email template by tag."""
+        templates = self.get_templates()
+        for template in templates:
+            if template["name"] == template_name:
+                return template
+        return None
+
+    def create_email_template(self, template: EmailTemplate):
+        """Creates the email template"""
+        payload = {
+            "name": template.name,
+            "type": "tx",
+            "subject": template.subject,
+            "body": template.body
+        }
+        return self.post("/api/templates", json=payload)
+
+    def delete_email_template(self, template_id: int):
+        return self.delete(f"/api/templates/{template_id}")
+
+    def send_transactional(self, reply_email: str, template_id: int, content_type: str, subject: str, data: dict):
         """Send transactional email."""
         payload = {
             "subscriber_emails": data["subscriber_emails"],

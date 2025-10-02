@@ -73,8 +73,9 @@ if __name__ == "__main__":
         with session:
             # Make limited user role for feed accounts
             _make_limited_user_role(session)
-            for _ in range(1000):
+            for item in range(1):
                 _set_up_transactional_template(session)
+                #response = session.delete(f'{_URL}/api/templates/{(item + 173786)}')
 
         print("Done")
     else:
@@ -83,4 +84,4 @@ if __name__ == "__main__":
 
 # 1. Create feeds at /api/feeds
 # 2. Create account at /api/feeds/account
-# 3. Store somewhere... 
+# 3. Store somewhere...
