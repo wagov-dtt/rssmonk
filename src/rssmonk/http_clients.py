@@ -9,6 +9,8 @@ import feedparser
 import requests
 
 from rssmonk.email_store import EmailTemplate
+from rssmonk.models import ListmonkTemplate, EmailType
+from rssmonk.utils import make_template_name
 
 from .logging_config import get_logger
 
@@ -230,8 +232,10 @@ class ListmonkClient:
         data = self.get("/api/templates")
         return self._normalize_results(data)
 
-    def find_email_template_by_name(self, template_name: str) -> dict | None:
-        """Find a single email template by tag."""
+    def find_email_template(self, feed_url: str, template_type: EmailType) -> ListmonkTemplate | None:
+        """Find a single email template."""
+        template_name = make_template_name(feed_url, template_type)
+        print(template_name)
         templates = self.get_templates()
         for template in templates:
             if template["name"] == template_name:
@@ -239,14 +243,24 @@ class ListmonkClient:
         return None
 
     def create_email_template(self, template: EmailTemplate):
-        """Creates the email template"""
+        """Create the email template"""
         payload = {
             "name": template.name,
             "type": "tx",
             "subject": template.subject,
             "body": template.body
         }
-        return self.post("/api/templates", json=payload)
+        return self.post("/api/templates", payload)
+
+    def update_email_template(self, ident: int, template: EmailTemplate):
+        """Update the email template"""
+        payload = {
+            "name": template.name,
+            "type": "tx",
+            "subject": template.subject,
+            "body": template.body
+        }
+        return self.put(f"/api/templates/{ident}", payload)
 
     def delete_email_template(self, template_id: int):
         return self.delete(f"/api/templates/{template_id}")

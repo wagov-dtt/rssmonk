@@ -1,6 +1,9 @@
 import hashlib
 
+from rssmonk.models import EmailType
+
 FEED_ACCOUNT_PREFIX = "user_"
+ROLE_PREFIX = "list_role_"
 
 class ErrorMessages:
     NO_AUTH_FEED = "Not authorised to interact with this feed"
@@ -24,7 +27,13 @@ def make_url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
 
 def make_api_username(feed_url :str) -> str:
-    return f"api-{make_url_hash(feed_url)}"
+    return FEED_ACCOUNT_PREFIX + make_url_hash(feed_url)
 
-def get_api_from_username(username :str) -> str:
-    return username.replace("api-", "").strip()
+def get_feed_hash_from_username(username :str) -> str:
+    return username.replace(FEED_ACCOUNT_PREFIX, "").strip()
+
+def make_feed_role_name(url: str) -> str:
+    return ROLE_PREFIX + make_url_hash(url)
+
+def make_template_name(feed_url: str, type: EmailType) -> str:
+    return f"{make_url_hash(feed_url)}-{type.value}"

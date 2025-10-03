@@ -29,7 +29,7 @@ Hi,<p>
 Thanks for subscribing to media statement updates from the WA Government.<br>
 You’ve chosen to receive updates for:<p>
 {{- range $item := .Tx.Data.filter }}
-- {{ $item <br>}}
+- {{ $item }}
 {{- end }}  
 To start getting updates, you need to verify your email address.<br>
 Please click the link below to verify your email address:<p>

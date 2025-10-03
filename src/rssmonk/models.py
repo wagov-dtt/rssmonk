@@ -1,10 +1,107 @@
 """Pydantic models for RSS Monk API."""
 
+from enum import Enum
+import hashlib
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from .core import Frequency, ListVisibilityType
+# Data Type Models
+
+# Feed frequency configurations
+def get_frequencies_settings() -> dict[str, dict[str, Any]]:
+    return {
+        "freq:5min": {
+            "interval_minutes": 5,
+            "check_time": None,
+            "check_day": None,
+            "description": "Every 5 minutes",
+        },
+        "freq:daily": {
+            "interval_minutes": None,
+            "check_time": (17, 0),  # 5pm
+            "check_day": None,
+            "description": "Daily at 5pm",
+        },
+        "freq:weekly": {
+            "interval_minutes": None,
+            "check_time": (17, 0),  # 5pm
+            "check_day": 4,  # Friday
+            "description": "Weekly on Friday at 5pm",
+        },
+    }
+
+class ListVisibilityType(str, Enum):
+    """List visibility type."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+class Frequency(str, Enum):
+    """Polling frequencies."""
+
+    FIVE_MIN = "5min"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+class Feed(BaseModel):
+    """RSS feed model."""
+
+    id: Optional[int] = None
+    name: str
+    url: str
+    frequencies: list[Frequency]
+    url_hash: str = ""
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.url_hash:
+            self.url_hash = hashlib.sha256(self.url.encode()).hexdigest()
+
+    @property
+    def tags(self) -> list[str]:
+        """Generate Listmonk tags."""
+        return [f'freq:{x.value}' for x in self.frequencies] + [f"url:{self.url_hash}"]
+
+    @property
+    def description(self) -> str:
+        """Generate Listmonk description."""
+        return f"RSS Feed: {self.url}"
+
+class ListmonkTemplate(BaseModel):
+    id: Optional[int] = None
+    name: str
+    subject: Optional[str] = None
+    type: str = "tx"
+    body: str
+    body_source: Optional[str] = None
+    is_default: bool = False
+
+class Subscriber(BaseModel):
+    """Subscriber model."""
+
+    id: Optional[int] = None
+    email: str
+    name: str = ""
+    attribs: Optional[dict] = None
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.name:
+            self.name = self.email
+
+class EmailType(str, Enum):
+    """Email types."""
+
+    SUBSCRIBE = "subscribe" # Subscribe with filters
+    SUB_CONFIRM = "sub_confirm"
+
+    UNSUBSCRIBE = "unsubscribe"
+    UNSUB_CONFIRM = "unsub_confirm"
+
+    INSTANT_DIGEST = "instant_digest"
+    DAILY_DIGEST = "daily_digest"
+    WEEKLY_DIGEST = "weekly_digest"
 
 
 # Request Models
@@ -33,6 +130,15 @@ class FeedProcessRequest(BaseModel):
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
     auto_send: bool = Field(False, description="Automatically send created campaigns")
 
+class TemplateRequest(BaseModel):
+    """Request model for creating a template for a RSS feed."""
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
+    phase_type: EmailType = Field(..., description="The email template subject line")
+    type: str = Field(..., description="Type of the template (campaign, campaign_visual, or tx)")
+    subject: Optional[str] = Field(None, description="The email template subject line")
+    body_source: Optional[str] = Field(None, description="If type is campaign_visual, the JSON source for the email-builder tempalate")
+    body: str = Field(..., description="HTML body of the template")
+
 class PublicSubscribeRequest(BaseModel):
     """Request model for public subscription endpoint and no filter."""
     
@@ -44,7 +150,7 @@ class SubscribeRequest(BaseModel):
     
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
-    filter: Optional[dict] = Field(..., description="The filter as JSON")
+    filter: Optional[dict[Frequency, list[str]]] = Field(..., description="The filter as JSON")
     need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
 
 class SubscriptionPreferencesRequest(BaseModel):
@@ -57,13 +163,13 @@ class SubscribeConfirmRequest(BaseModel):
     
     email: str = Field(..., description="Subscriber email address")
     uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
-    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to") # TODO - This is temporary until credentials determine the feed
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
 class UnSubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
 
     email: str = Field(..., description="Subscriber email address")
-    feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for") # TODO - This is temporary until credentials determine the feed
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
 
 # Response Models
 
@@ -96,8 +202,21 @@ class FeedProcessResponse(BaseModel):
     articles_processed: int = Field(..., description="Number of articles processed")
 
 
+class TemplateResponse(BaseModel):
+    """Response model for a template RSS feed."""
+
+    id: int = Field(..., description="ID of the template")
+    name: str = Field(..., description="Name of the template")
+    subject: Optional[str] = Field(..., description="The email template subject line")
+    type: str = Field(..., description="Type of the template (campaign, campaign_visual, or tx)")
+    body: str = Field(..., description="HTML body of the template")
+    body_source: Optional[str] = Field(..., description="If type is campaign_visual, the JSON source for the email-builder tempalate")
+    is_default: bool = Field(..., description="RSS feed URL")
+
+
 class ApiAccountResponse(BaseModel):
     """Response model for feed accounts."""
+
     id: int = Field(..., description="Account ID")
     name: str = Field(..., description="Account name")
     api_password: str = Field(..., description="Password that is generated for the API account and never revealed again")

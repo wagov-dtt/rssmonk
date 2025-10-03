@@ -73,9 +73,9 @@ if __name__ == "__main__":
         with session:
             # Make limited user role for feed accounts
             _make_limited_user_role(session)
-            for item in range(1):
+            for item in range(100):
                 _set_up_transactional_template(session)
-                #response = session.delete(f'{_URL}/api/templates/{(item + 173786)}')
+                #response = session.delete(f'{_URL}/api/templates/{(item + 7064)}')
 
         print("Done")
     else:

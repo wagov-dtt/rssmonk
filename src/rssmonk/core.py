@@ -1,66 +1,29 @@
 """Simplified core models and service for RSS Monk."""
 
-import hashlib
-import hmac
-from http import HTTPStatus
-from fastapi import HTTPException
 import os
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from typing import Any, Optional
+import hmac
+import httpx
 import uuid
 
-from fastapi.security import HTTPBasicCredentials
-import httpx
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
-from requests import Response
+from http import HTTPStatus
+from fastapi import HTTPException
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from rssmonk.email_store import EmailTemplateStore
-from rssmonk.utils import make_url_hash, make_url_tag, numberfy_subbed_lists
+from fastapi.security import HTTPBasicCredentials
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+from rssmonk.email_store import EmailTemplate, EmailTemplateStore
+from rssmonk.models import EmailType, Feed, Frequency, ListVisibilityType, Subscriber, get_frequencies_settings
+from rssmonk.utils import make_feed_role_name, make_url_hash, make_url_tag, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
 from .logging_config import get_logger
 
-# Feed frequency configurations
-FREQUENCIES: dict[str, dict[str, Any]] = {
-    "freq:5min": {
-        "interval_minutes": 5,
-        "check_time": None,
-        "check_day": None,
-        "description": "Every 5 minutes",
-    },
-    "freq:daily": {
-        "interval_minutes": None,
-        "check_time": (17, 0),  # 5pm
-        "check_day": None,
-        "description": "Daily at 5pm",
-    },
-    "freq:weekly": {
-        "interval_minutes": None,
-        "check_time": (17, 0),  # 5pm
-        "check_day": 4,  # Friday
-        "description": "Weekly on Friday at 5pm",
-    },
-}
 
 logger = get_logger(__name__)
-
-
-class ListVisibilityType(str, Enum):
-    """List visibility type."""
-
-    PUBLIC = "public"
-    PRIVATE = "private"
-
-
-class Frequency(str, Enum):
-    """Polling frequencies."""
-
-    FIVE_MIN = "5min"
-    DAILY = "daily"
-    WEEKLY = "weekly"
 
 
 class Settings(BaseSettings):
@@ -155,45 +118,6 @@ class Settings(BaseSettings):
             return True
         except OSError:
             return False
-
-
-class Feed(BaseModel):
-    """RSS feed model."""
-
-    id: Optional[int] = None
-    name: str
-    url: str
-    frequencies: list[Frequency]
-    url_hash: str = ""
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if not self.url_hash:
-            self.url_hash = hashlib.sha256(self.url.encode()).hexdigest()
-
-    @property
-    def tags(self) -> list[str]:
-        """Generate Listmonk tags."""
-        return [f'freq:{x.value}' for x in self.frequencies] + [f"url:{self.url_hash}"]
-
-    @property
-    def description(self) -> str:
-        """Generate Listmonk description."""
-        return f"RSS Feed: {self.url}"
-
-
-class Subscriber(BaseModel):
-    """Subscriber model."""
-
-    id: Optional[int] = None
-    email: str
-    name: str = ""
-    attribs: Optional[dict] = None
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if not self.name:
-            self.name = self.email
 
 
 class RSSMonk:
@@ -327,8 +251,7 @@ class RSSMonk:
 
 
     def ensure_list_role(self, url: str) -> int:
-        feed_hash = make_url_hash(url)
-        list_role_name = f"{feed_hash}-role"
+        list_role_name = make_feed_role_name(url)
 
         # Get the list to get the ID to make the role.
         list_data = self._admin.find_list_by_tag(make_url_tag(url))
@@ -351,7 +274,6 @@ class RSSMonk:
 
             # User role already exists. Fetch name in user roles, there should not be many
             return self.get_list_role_id_by_url(url)
-
 
 
     def get_list_role_id_by_url(self, url: str) -> int:
@@ -443,6 +365,30 @@ class RSSMonk:
             return True
         return False
 
+
+    # Template operations
+
+    def get_template(self, feed_url: str, template_type: EmailType):
+        """Get a template associated with a feed and template type"""
+        return self._admin.find_email_template(feed_url, template_type)
+
+    def add_update_template(self, feed_url: str, template_type: EmailType, new_template: EmailTemplate):
+        """Insert or update an email template for a feed"""
+        template = self._admin.find_email_template(feed_url, template_type)
+        if template is None:
+            return self._admin.create_email_template(new_template)
+        else:
+            return self._admin.update_email_template(template["id"], new_template)
+
+    def delete_templates(self, feed_url: str):
+        """Delete all templates associated with the feed"""
+        templates = self._admin.get_templates()
+        url_hash = make_url_hash(feed_url)
+        for template in templates:
+            if url_hash in template["name"]:
+                self._admin.delete_email_template(template["id"])
+
+
     # Subscriber operations
 
     def add_subscriber(self, email: str, name: Optional[str] = None) -> Subscriber:
@@ -491,7 +437,7 @@ class RSSMonk:
         self._client.unsubscribe_to_list([subscriber.id], [feed.id])
         return True
     
-    def update_filter(self, email: str, feed_url: str, need_confirmation: bool, filter: dict) -> Optional[str]:
+    def update_subscriber_filter(self, email: str, feed_url: str, need_confirmation: bool, filter: dict) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_url(feed_url)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
@@ -650,7 +596,7 @@ class RSSMonk:
     def _should_poll(self, feed: Feed) -> bool:
         """Check if feed should be polled."""
         # TODO - Figure out what this is for 
-        config = FREQUENCIES.get(f"freq:{feed.frequencies.value}")
+        config = get_frequencies_settings().get(f"freq:{feed.frequencies.value}")
         if not config:
             return False
 

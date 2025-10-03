@@ -11,7 +11,7 @@ import httpx
 
 import sys
 
-from rssmonk.utils import FEED_ACCOUNT_PREFIX, ErrorMessages, make_url_hash, numberfy_subbed_lists    
+from rssmonk.utils import make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -38,6 +38,10 @@ from .models import (
     SubscriptionPreferencesRequest,
     SubscriptionPreferencesResponse,
     SubscriptionResponse,
+    EmailType,
+    ListmonkTemplate,
+    TemplateRequest,
+    TemplateResponse,
     UnSubscribeRequest,
 )
 
@@ -299,38 +303,43 @@ async def create_feed(
 
 @app.post(
     "/api/feeds/templates",
-    response_model=FeedResponse,
+    response_model=TemplateResponse,
     status_code=201,
     tags=["feeds"],
     summary="Create email templates for RSS Feed (Requires admin privledges)",
     description="Creates or updates email templates for RSS feed for newsletter generation. Requires admin privledges."
 )
 async def create_feed(
-    request: FeedCreateRequest,
+    request: TemplateRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
-) -> FeedResponse:
-    """Create a new RSS feed."""
+) -> TemplateResponse:
+    """Create a template"""
 
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
-        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
-
-    try:
-        with rss_monk:
-            template_id = rss_monk.add_template(str(request.feed_url), subject, body) # TODO - DO
-            return FeedResponse(
-                id=feed.id,
-                name=feed.name,
-                feed_url=feed.url,
-                frequency=feed.frequencies,
-                url_hash=feed.url_hash
+    with rss_monk:
+        rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+        try:
+            # Insert the feed template
+            template_name = make_template_name(str(request.feed_url), request.phase_type)
+            template_response = rss_monk.add_update_template(str(request.feed_url), request.phase_type,
+                                                         ListmonkTemplate(name=template_name,
+                                                                          body=request.body,
+                                                                          body_source=request.body_source,
+                                                                          subject=request.subject))
+            return TemplateResponse(
+                id = template_response["id"],
+                name = template_name,
+                subject = request.subject,
+                type = "tx",
+                body = request.body,
+                body_source = request.body_source,
+                is_default = False,
             )
-    except ValueError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP create_feed: {e}")
-        raise
-
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP create_feed: {e}")
+            raise
 
 
 @app.post(
@@ -353,8 +362,7 @@ async def create_feed_account(
     try:
         with rss_monk:
             feed_url = str(request.feed_url)
-            feed_hash = make_url_hash(feed_url)
-            account_name = f'user_{feed_hash}'
+            account_name = make_api_username(feed_url)
 
             # Ensure limited user role has been created
             user_role_id = rss_monk.ensure_limited_user_role_exists()
@@ -454,7 +462,7 @@ async def get_feed_by_url(
     tags=["feeds"],
     summary="Delete Feed by URL (Requires admin privledges)",
     description="Remove an RSS feed by its URL and remove it from all subscribers." \
-    " It will also remove list roles and the account created. Requires admin privledges."
+    " It will also remove list roles, the account created and all associated email templates. Requires admin privledges."
 )
 async def delete_feed_by_url(
     feed_url: str,
@@ -468,12 +476,16 @@ async def delete_feed_by_url(
 
     try:
         with rss_monk:
+            # Deleting the feed will automatically remove it from all subscribers
             if rss_monk.delete_feed(feed_url):
                 # Invalidate cache for this URL
                 feed_cache.invalidate_url(feed_url)
-            
-            # TODO = Delete user
-            # TODO - Delete list role
+
+                # Delete list role associated with the feed. The user account will be automatically deleted
+                rss_monk.delete_list_role(feed_url)
+
+                # Delete templates associated with the url
+                rss_monk.delete_templates(feed_url)
                 return {"message": "Feed, associated roles and account have been deleted successfully"}
             else:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
@@ -647,27 +659,30 @@ async def feed_subscribe(
     """Feed subscription endpoint."""
     # This can cover public, or private feeds
     with rss_monk:
-        rss_monk._validate_feed_visibility(feed_url=str(request.feed_url))
+        feed_url = str(request.feed_url)
+        rss_monk._validate_feed_visibility(feed_url=feed_url)
         try:
             rss_monk.subscribe(request.email, str(request.feed_url)) # TODO = This does not appear to work?
             if request.filter is not None:
                 # TODO - Verify the filter consists of filters and 
                 # Add filter to the subscriber
-                uuid = rss_monk.update_filter(request.email, str(request.feed_url), request.need_confirm, request.filter)
+                uuid = rss_monk.update_subscriber_filter(request.email, feed_url, request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
                     url_hash = make_url_hash(request.feed_url.encoded_string())
-                    base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable
+                    base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable??
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
                     reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
                     
-                    # TODO - Listmonk put it in as urlencoded, need to try and fix this
-                    #template = rss_monk.email_templates.get_subscribe_email(str(request.feed_url)) # TODO - Need to push into the 
-                    template = rss_monk._admin.find_email_template_by_name(f"feed_url".name)
+                    # TODO - Listmonk put it in as urlencoded, need to try and fix this for better...
+                    #template = rss_monk.email_templates.get_subscribe_email(feed_url) # TODO - Need to push into the 
+                    template = rss_monk.get_template(feed_url, EmailType.SUBSCRIBE)
+                    print(template)
 
+                    # TODO - How to make generic?
                     transaction = {
                         "subscriber_emails": [request.email],
-                        "subject": template.subject,
+                        "subject": template["subject"],
                         "subscription_link": "",
                         "confirmation_link": confirmation_link
                     }
