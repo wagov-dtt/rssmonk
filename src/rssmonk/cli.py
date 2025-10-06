@@ -38,7 +38,7 @@ def add_feed(
         with RSSMonk() as rss:
             feed = rss.add_feed(url, frequency, name)
             console.print(f"[SUCCESS] Created feed: {feed.name} (ID: {feed.id})", style="green")
-            console.print(f"   URL: {feed.url}")
+            console.print(f"   URL: {feed.feed_url}")
             console.print(f"   Frequency: {feed.frequencies.value}")
     except Exception as e:
         console.print(f"[ERROR] {e}", style="red")
@@ -65,7 +65,7 @@ def list_feeds():
             for feed in feeds:
                 table.add_row(
                     feed.name,
-                    feed.url[:50] + "..." if len(feed.url) > 50 else feed.url,
+                    feed.feed_url[:50] + "..." if len(feed.feed_url) > 50 else feed.feed_url,
                     feed.frequencies.value,
                     str(feed.id),
                 )

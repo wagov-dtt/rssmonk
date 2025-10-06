@@ -6,12 +6,14 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from rssmonk.utils import LIST_DESC_FEED_URL, SUB_BASE_URL, EmailType
+
 # Data Type Models
 
 # Feed frequency configurations
-def get_frequencies_settings() -> dict[str, dict[str, Any]]:
+def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
     return {
-        "freq:5min": {
+        "freq:instant": {
             "interval_minutes": 5,
             "check_time": None,
             "check_day": None,
@@ -33,14 +35,12 @@ def get_frequencies_settings() -> dict[str, dict[str, Any]]:
 
 class ListVisibilityType(str, Enum):
     """List visibility type."""
-
     PUBLIC = "public"
     PRIVATE = "private"
 
 class Frequency(str, Enum):
     """Polling frequencies."""
-
-    FIVE_MIN = "5min"
+    INSTANT = "instant"
     DAILY = "daily"
     WEEKLY = "weekly"
 
@@ -49,14 +49,16 @@ class Feed(BaseModel):
 
     id: Optional[int] = None
     name: str
-    url: str
+    feed_url: str
+    subscription_base_url: str
+    """Feed subscription base URL This may or may not be different to the link field in the RSS"""
     frequencies: list[Frequency]
     url_hash: str = ""
 
     def __init__(self, **data):
         super().__init__(**data)
-        if not self.url_hash:
-            self.url_hash = hashlib.sha256(self.url.encode()).hexdigest()
+        if not self.url_hash: # TODO - What is this doing?
+            self.url_hash = hashlib.sha256(self.feed_url.encode()).hexdigest()
 
     @property
     def tags(self) -> list[str]:
@@ -66,9 +68,10 @@ class Feed(BaseModel):
     @property
     def description(self) -> str:
         """Generate Listmonk description."""
-        return f"RSS Feed: {self.url}"
+        return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.subscription_base_url}"
 
 class ListmonkTemplate(BaseModel):
+    """Template data model for Listmonk"""
     id: Optional[int] = None
     name: str
     subject: Optional[str] = None
@@ -90,43 +93,33 @@ class Subscriber(BaseModel):
         if not self.name:
             self.name = self.email
 
-class EmailType(str, Enum):
-    """Email types."""
-
-    SUBSCRIBE = "subscribe" # Subscribe with filters
-    SUB_CONFIRM = "sub_confirm"
-
-    UNSUBSCRIBE = "unsubscribe"
-    UNSUB_CONFIRM = "unsub_confirm"
-
-    INSTANT_DIGEST = "instant_digest"
-    DAILY_DIGEST = "daily_digest"
-    WEEKLY_DIGEST = "weekly_digest"
+class EmailTemplate(BaseModel):
+    """Email template data store"""
+    name: str
+    subject: str
+    body: str
 
 
 # Request Models
 
 class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
-
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
+    subscription_base_url: HttpUrl = Field(..., description="Feed subscription base URL")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
 
 class FeedAccountConfigurationRequest(BaseModel):
     """Request model for obtaining the configuration from a RSS feed."""
-
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
 
 class FeedAccountRequest(BaseModel):
     """Request model for creating an account for a RSS feed."""
-    
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
 
 class FeedProcessRequest(BaseModel):
     """Request model for processing a specific feed."""
-    
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
     auto_send: bool = Field(False, description="Automatically send created campaigns")
 
@@ -141,13 +134,11 @@ class TemplateRequest(BaseModel):
 
 class PublicSubscribeRequest(BaseModel):
     """Request model for public subscription endpoint and no filter."""
-    
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
 class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
-    
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
     filter: Optional[dict[Frequency, list[str]]] = Field(..., description="The filter as JSON")
@@ -160,14 +151,12 @@ class SubscriptionPreferencesRequest(BaseModel):
 
 class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""
-    
     email: str = Field(..., description="Subscriber email address")
     uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
 class UnSubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
-
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
 
@@ -178,10 +167,10 @@ class EmptyResponse(BaseModel):
 
 class FeedResponse(BaseModel):
     """Response model for RSS feed information."""
-    
     id: int = Field(..., description="Listmonk list ID")
     name: str = Field(..., description="Feed name")
     feed_url: str = Field(..., description="RSS feed URL")
+    subscription_base_url: HttpUrl = Field(..., description="Feed subscription base URL")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
@@ -189,14 +178,12 @@ class FeedResponse(BaseModel):
 
 class FeedListResponse(BaseModel):
     """Response model for listing RSS feeds."""
-    
     feeds: list[FeedResponse] = Field(..., description="list of RSS feeds")
     total: int = Field(..., description="Total number of feeds")
 
 
 class FeedProcessResponse(BaseModel):
     """Response model for feed processing."""
-    
     feed_name: str = Field(..., description="Name of processed feed")
     campaigns_created: int = Field(..., description="Number of campaigns created")
     articles_processed: int = Field(..., description="Number of articles processed")
@@ -204,7 +191,6 @@ class FeedProcessResponse(BaseModel):
 
 class TemplateResponse(BaseModel):
     """Response model for a template RSS feed."""
-
     id: int = Field(..., description="ID of the template")
     name: str = Field(..., description="Name of the template")
     subject: Optional[str] = Field(..., description="The email template subject line")
@@ -216,7 +202,6 @@ class TemplateResponse(BaseModel):
 
 class ApiAccountResponse(BaseModel):
     """Response model for feed accounts."""
-
     id: int = Field(..., description="Account ID")
     name: str = Field(..., description="Account name")
     api_password: str = Field(..., description="Password that is generated for the API account and never revealed again")
@@ -224,7 +209,6 @@ class ApiAccountResponse(BaseModel):
 
 class BulkProcessResponse(BaseModel):
     """Response model for bulk feed processing."""
-    
     frequency: Frequency = Field(..., description="Processed frequency")
     feeds_processed: int = Field(..., description="Number of feeds processed")
     total_campaigns: int = Field(..., description="Total campaigns created")
@@ -237,7 +221,6 @@ class SubscriptionPreferencesResponse(BaseModel):
 
 class SubscriptionResponse(BaseModel):
     """Response model for subscription operations."""
-    
     message: str = Field(..., description="Success message")
     subscriber_id: Optional[int] = Field(None, description="Subscriber ID")
     feed_id: Optional[int] = Field(None, description="Feed list ID")
@@ -255,7 +238,6 @@ class HealthResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standard error response model."""
-    
     error: str = Field(..., description="Error message")
     detail: Optional[str] = Field(None, description="Detailed error information")
     code: Optional[str] = Field(None, description="Error code")
@@ -265,7 +247,6 @@ class ErrorResponse(BaseModel):
 
 class ListmonkList(BaseModel):
     """Listmonk list model for passthrough."""
-    
     id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -280,7 +261,6 @@ class ListmonkList(BaseModel):
 
 class ListmonkSubscriber(BaseModel):
     """Listmonk subscriber model for passthrough."""
-    
     id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -295,7 +275,6 @@ class ListmonkSubscriber(BaseModel):
 
 class ListmonkCampaign(BaseModel):
     """Listmonk campaign model for passthrough."""
-    
     id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -329,14 +308,12 @@ class ListmonkSubscriberResponse(BaseModel):
 
 class ApiResponse(BaseModel):
     """Generic API response wrapper."""
-    
     data: Any = Field(..., description="Response data")
     message: Optional[str] = Field(None, description="Response message")
 
 
 class PaginatedResponse(BaseModel):
     """Paginated response model."""
-    
     results: list[Any] = Field(..., description="Results list")
     query: Optional[str] = Field(None, description="Search query")
     total: int = Field(..., description="Total number of items")

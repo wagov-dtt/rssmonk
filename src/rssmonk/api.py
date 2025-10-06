@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 import hmac
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -11,6 +11,7 @@ import httpx
 
 import sys
 
+from rssmonk.temp_env import SUBSCRIBE_URL
 from rssmonk.utils import make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
@@ -286,16 +287,17 @@ async def create_feed(
 
     try:
         with rss_monk:
-            feed = rss_monk.add_feed(str(request.feed_url), request.frequency, request.name)
+            feed = rss_monk.add_feed(str(request.feed_url), str(request.subscription_base_url), request.frequency, request.name)
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
-                feed_url=feed.url,
+                feed_url=feed.feed_url,
+                subscription_base_url=feed.subscription_base_url,
                 frequency=feed.frequencies,
                 url_hash=feed.url_hash
             )
-    except ValueError as e:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    #except ValueError as e:
+    #    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except httpx.HTTPError as e:
         logger.error(f"HTTP create_feed: {e}")
         raise
@@ -321,11 +323,12 @@ async def create_feed(
         try:
             # Insert the feed template
             template_name = make_template_name(str(request.feed_url), request.phase_type)
+            new_subject = request.subject if request.subject is not None else "{{ .Tx.Data.subject }}"
             template_response = rss_monk.add_update_template(str(request.feed_url), request.phase_type,
-                                                         ListmonkTemplate(name=template_name,
-                                                                          body=request.body,
-                                                                          body_source=request.body_source,
-                                                                          subject=request.subject))
+                                                             ListmonkTemplate(name=template_name,
+                                                                              body=request.body,
+                                                                              body_source=request.body_source,
+                                                                              subject=new_subject))
             return TemplateResponse(
                 id = template_response["id"],
                 name = template_name,
@@ -333,8 +336,7 @@ async def create_feed(
                 type = "tx",
                 body = request.body,
                 body_source = request.body_source,
-                is_default = False,
-            )
+                is_default = False)
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
         except httpx.HTTPError as e:
@@ -411,7 +413,7 @@ async def list_feeds(
                     FeedResponse(
                         id=feed.id,
                         name=feed.name,
-                        url=feed.url,
+                        url=feed.feed_url,
                         frequency=feed.frequencies,
                         url_hash=feed.url_hash
                     )
@@ -446,7 +448,7 @@ async def get_feed_by_url(
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
-                url=feed.url,
+                url=feed.feed_url,
                 frequency=feed.frequencies,
                 url_hash=feed.url_hash
             )
@@ -466,6 +468,7 @@ async def get_feed_by_url(
 )
 async def delete_feed_by_url(
     feed_url: str,
+    notify: Optional[bool],
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
@@ -481,11 +484,15 @@ async def delete_feed_by_url(
                 # Invalidate cache for this URL
                 feed_cache.invalidate_url(feed_url)
 
+                # TODO - Remove hash url from all users attributes
+                # TODO - Questions. This one.. could be a campaign email
+
                 # Delete list role associated with the feed. The user account will be automatically deleted
                 rss_monk.delete_list_role(feed_url)
 
                 # Delete templates associated with the url
                 rss_monk.delete_templates(feed_url)
+
                 return {"message": "Feed, associated roles and account have been deleted successfully"}
             else:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
@@ -668,18 +675,14 @@ async def feed_subscribe(
                 # Add filter to the subscriber
                 uuid = rss_monk.update_subscriber_filter(request.email, feed_url, request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
+                    base_url = SUBSCRIBE_URL
                     url_hash = make_url_hash(request.feed_url.encoded_string())
-                    base_url = "http://subscribe.dpc.wa.gov.au/confirm" # TODO - Fetch url .... environment variable??
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
                     reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
                     
-                    # TODO - Listmonk put it in as urlencoded, need to try and fix this for better...
-                    #template = rss_monk.email_templates.get_subscribe_email(feed_url) # TODO - Need to push into the 
-                    template = rss_monk.get_template(feed_url, EmailType.SUBSCRIBE)
-                    print(template)
-
                     # TODO - How to make generic?
+                    template = rss_monk.get_template(feed_url, EmailType.SUBSCRIBE)
                     transaction = {
                         "subscriber_emails": [request.email],
                         "subject": template["subject"],
@@ -801,6 +804,26 @@ async def feed_unsubscribe(
 
             # Update the subscriber
             rss_monk._client.update_subscriber(subs["id"], subs)
+            
+            # TODO - Email the unsubscribe email
+            base_url = SUBSCRIBE_URL
+            confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
+            reply_email = "noreply@noreply (No reply location)"
+            subject = "Media Statement Registration"
+            
+            # TODO - How to make generic?
+            template = rss_monk.get_template(feed_url, EmailType.SUBSCRIBE)
+            transaction = {
+                "subscriber_emails": [request.email],
+                "subject": template["subject"],
+                "subscription_link": "",
+                "confirmation_link": confirmation_link
+            }
+            # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
+            print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
+            # Send email out for the user - # TODO - Use proper values
+            rss_monk._client.send_transactional(reply_email, template["id"], "html", subject, transaction)
+
             return EmptyResponse()
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))

@@ -72,7 +72,7 @@ class FeedConfigManager:
     def _find_feeds_by_url(self, url: str) -> list[Feed]:
         """Find all feeds with the given URL."""
         all_feeds = self.rss_monk.list_feeds()
-        return [feed for feed in all_feeds if feed.url == url]
+        return [feed for feed in all_feeds if feed.feed_url == url]
     
     def _migrate_subscribers(self, from_feed: Feed, to_feed: Feed) -> int:
         """Migrate subscribers from one feed to another."""
@@ -115,7 +115,7 @@ class FeedConfigManager:
         return {
             "id": feed.id,
             "name": feed.name,
-            "url": feed.url,
+            "url": feed.feed_url,
             "frequency": feed.frequencies.value,
             "url_hash": feed.url_hash
         }

@@ -1,9 +1,26 @@
+from enum import Enum
 import hashlib
 
-from rssmonk.models import EmailType
+from pydantic import BaseModel
 
 FEED_ACCOUNT_PREFIX = "user_"
 ROLE_PREFIX = "list_role_"
+LIST_DESC_FEED_URL = "RSS Feed:"
+SUB_BASE_URL = "Subscription URL: "
+
+class EmailType(str, Enum):
+    """Email template types."""
+    SUBSCRIBE = "subscribe"
+    SUBSCRIBE_CONFIRM = "sub_confirm"
+
+    EDIT_PREFERENCES = "edit_preferences"
+
+    UNSUBSCRIBE = "unsubscribe"
+    UNSUBSCRIBE_CONFIRM = "unsub_confirm"
+
+    INSTANT_DIGEST = "instant_digest"
+    DAILY_DIGEST = "daily_digest"
+    WEEKLY_DIGEST = "weekly_digest"
 
 class ErrorMessages:
     NO_AUTH_FEED = "Not authorised to interact with this feed"

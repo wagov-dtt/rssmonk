@@ -8,9 +8,8 @@ import httpx
 import feedparser
 import requests
 
-from rssmonk.email_store import EmailTemplate
-from rssmonk.models import ListmonkTemplate, EmailType
-from rssmonk.utils import make_template_name
+from rssmonk.models import EmailTemplate, ListmonkTemplate
+from rssmonk.utils import EmailType, make_template_name
 
 from .logging_config import get_logger
 
@@ -235,7 +234,6 @@ class ListmonkClient:
     def find_email_template(self, feed_url: str, template_type: EmailType) -> ListmonkTemplate | None:
         """Find a single email template."""
         template_name = make_template_name(feed_url, template_type)
-        print(template_name)
         templates = self.get_templates()
         for template in templates:
             if template["name"] == template_name:

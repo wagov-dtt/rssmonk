@@ -14,9 +14,8 @@ from fastapi.security import HTTPBasicCredentials
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from rssmonk.email_store import EmailTemplate, EmailTemplateStore
-from rssmonk.models import EmailType, Feed, Frequency, ListVisibilityType, Subscriber, get_frequencies_settings
-from rssmonk.utils import make_feed_role_name, make_url_hash, make_url_tag, numberfy_subbed_lists
+from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber, AVAILABLE_FREQUENCY_SETTINGS
+from rssmonk.utils import SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -126,7 +125,6 @@ class RSSMonk:
         self.local_creds: Optional[HTTPBasicCredentials] = local_creds
         self.settings = settings or Settings()
         self.settings.validate_required()
-        self.email_templates = EmailTemplateStore()
 
     # Create two clients, local creds for access control and admin creds for use if required
     def __enter__(self):
@@ -297,17 +295,17 @@ class RSSMonk:
 
     # Feed operations
 
-    def add_feed(self, url: str, new_frequency: list[Frequency], name: Optional[str] = None,
+    def add_feed(self, feed_url: str, subscription_base_url: str, new_frequency: list[Frequency], name: Optional[str] = None,
                  visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
         """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
-            name = self._get_feed_name(url)
+            name = self._get_feed_name(feed_url)
 
         # Create return
-        feed = Feed(name=name, url=url, frequencies=new_frequency)
+        feed = Feed(name=name, feed_url=feed_url, frequencies=new_frequency, subscription_base_url=subscription_base_url)
 
         # Check for existing feed with same URL
-        existing_feed = self.get_feed_by_url(url)
+        existing_feed = self.get_feed_by_url(feed_url)
 
         if existing_feed is None:
             # Create in Listmonk
@@ -315,12 +313,12 @@ class RSSMonk:
             feed.id = result["id"]
             
             # Invalidate cache for this URL to ensure fresh fetch
-            feed_cache.invalidate_url(url)
+            feed_cache.invalidate_url(feed_url)
             return feed
         else:
             # No update required if the URL and frequencies are already covered
             if set(new_frequency) <= set(existing_feed.frequencies):
-                raise ValueError(f"Feed with same URL and frequency combination already exists: {url}")
+                raise ValueError(f"Feed with same URL and frequency combination already exists: {feed_url}")
 
             # Add new freq tags to end of the list and update
             for new_freq in new_frequency:
@@ -329,8 +327,8 @@ class RSSMonk:
                     existing_feed.tags.append(f"freq:{new_freq.value}")
 
             payload = {
-                "name": existing_feed.name,
-                "description": existing_feed.description,
+                "name": existing_feed.name, # TODO - Could update from the feed??
+                "description": existing_feed.description, # TODO - change
                 "tags": existing_feed.tags,
             }
             self._client.update_list_data(existing_feed.id, payload)
@@ -367,6 +365,7 @@ class RSSMonk:
 
 
     # Template operations
+    # TODO - Set up map, name to template id, if there are high numbers.
 
     def get_template(self, feed_url: str, template_type: EmailType):
         """Get a template associated with a feed and template type"""
@@ -488,7 +487,7 @@ class RSSMonk:
         try:
             # Fetch articles using cache
             articles, feed_title = await feed_cache.get_feed(
-                url=feed.url,
+                url=feed.feed_url,
                 user_agent=self.settings.rss_user_agent,
                 timeout=self.settings.rss_timeout
             )
@@ -557,15 +556,20 @@ class RSSMonk:
         # Extract URL from description
         desc = lst.get("description", "")
         url = None
+        sub_url = None
+
         for line in desc.split("\n"):
-            if line.startswith("RSS Feed: "):
-                url = line.replace("RSS Feed: ", "").strip()
+            if line.startswith(LIST_DESC_FEED_URL):
+                url = line.replace(LIST_DESC_FEED_URL, "").strip()
+                break
+            if line.startswith(SUB_BASE_URL):
+                sub_url = line.replace(SUB_BASE_URL, "").strip()
                 break
 
         if not url:
             raise ValueError("No URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], url=url, frequencies=frequency_list)
+        return Feed(id=lst["id"], name=lst["name"], feed_url=url, frequencies=frequency_list, subscription_base_url=sub_url)
 
     def _find_new_articles(self, feed: Feed, articles: list) -> list:
         """Find new articles since last poll."""
@@ -596,7 +600,7 @@ class RSSMonk:
     def _should_poll(self, feed: Feed) -> bool:
         """Check if feed should be polled."""
         # TODO - Figure out what this is for 
-        config = get_frequencies_settings().get(f"freq:{feed.frequencies.value}")
+        config = AVAILABLE_FREQUENCY_SETTINGS().get(f"freq:{feed.frequencies.value}")
         if not config:
             return False
 
