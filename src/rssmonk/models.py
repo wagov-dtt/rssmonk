@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from rssmonk.utils import LIST_DESC_FEED_URL, SUB_BASE_URL, EmailType
+from rssmonk.utils import LIST_DESC_FEED_URL, MULTIPLE_FREQ, SUB_BASE_URL, EmailType
 
 # Data Type Models
 
@@ -54,6 +54,7 @@ class Feed(BaseModel):
     """Feed subscription base URL This may or may not be different to the link field in the RSS"""
     frequencies: list[Frequency]
     url_hash: str = ""
+    mult_freq: bool = False
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -69,6 +70,8 @@ class Feed(BaseModel):
     def description(self) -> str:
         """Generate Listmonk description."""
         return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.subscription_base_url}"
+        # TODO - Need to determine how multiple frequency filters are stored. It may never be used. Default to false
+        #return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.subscription_base_url}\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
 
 class ListmonkTemplate(BaseModel):
     """Template data model for Listmonk"""
@@ -141,7 +144,7 @@ class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
-    filter: Optional[dict[Frequency, list[str]]] = Field(..., description="The filter as JSON")
+    filter: Optional[dict[Frequency, list[str] | dict]] = Field(..., description="The filter as JSON")
     need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
 
 class SubscriptionPreferencesRequest(BaseModel):

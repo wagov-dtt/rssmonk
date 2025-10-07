@@ -15,7 +15,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber, AVAILABLE_FREQUENCY_SETTINGS
-from rssmonk.utils import SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag, numberfy_subbed_lists
+from rssmonk.utils import MULTIPLE_FREQ, SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -318,7 +318,7 @@ class RSSMonk:
         else:
             # No update required if the URL and frequencies are already covered
             if set(new_frequency) <= set(existing_feed.frequencies):
-                raise ValueError(f"Feed with same URL and frequency combination already exists: {feed_url}")
+                raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=f"Feed with same URL and frequency combination already exists: {feed_url}")
 
             # Add new freq tags to end of the list and update
             for new_freq in new_frequency:
@@ -549,27 +549,36 @@ class RSSMonk:
         frequency_list: list[Frequency] = []
         for tag in tags:
             if tag.startswith("freq:"):
-                frequency_list.append(Frequency(tag.replace("freq:", "")))
+                try:
+                    frequency_list.append(Frequency(tag.replace("freq:", "")))
+                except ValueError:
+                    logger.error(f"Invalid frequency in tag {tag} for list ID {lst.get("id"), "unknown"}")
         if len(frequency_list) == 0:
             raise ValueError(f"No frequency tag found in existing list")
 
         # Extract URL from description
         desc = lst.get("description", "")
+        mult_freq = False
         url = None
         sub_url = None
 
         for line in desc.split("\n"):
             if line.startswith(LIST_DESC_FEED_URL):
                 url = line.replace(LIST_DESC_FEED_URL, "").strip()
-                break
             if line.startswith(SUB_BASE_URL):
                 sub_url = line.replace(SUB_BASE_URL, "").strip()
+            if line.startswith(MULTIPLE_FREQ):
+                mult_freq = (line.replace(MULTIPLE_FREQ, "").strip() == str(True))
+            if url and sub_url:
                 break
 
+        # TODO - These should be raising error reports somewhere
         if not url:
             raise ValueError("No URL in description")
+        if not sub_url:
+            raise ValueError("No Subscription URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], feed_url=url, frequencies=frequency_list, subscription_base_url=sub_url)
+        return Feed(id=lst["id"], name=lst["name"], feed_url=url, frequencies=frequency_list, subscription_base_url=sub_url, mult_freq=mult_freq)
 
     def _find_new_articles(self, feed: Feed, articles: list) -> list:
         """Find new articles since last poll."""

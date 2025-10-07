@@ -11,8 +11,7 @@ import httpx
 
 import sys
 
-from rssmonk.temp_env import SUBSCRIBE_URL
-from rssmonk.utils import make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
+from rssmonk.utils import NOTIFICATIONS_SUBPAGE_SUFFIX, make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -144,7 +143,7 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
                 auth=httpx.BasicAuth(username=credentials.username, password=credentials.password),
                 timeout=10.0
             )
-            if response.status_code != 200:
+            if response.status_code != HTTPStatus.OK:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid credentials",
@@ -638,8 +637,7 @@ async def feed_get_subscription_preferences(
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
                 #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is fixed
-                feed_hash = make_url_hash(request.feed_url.encoded_string())
-                print(attribs)
+                feed_hash = make_url_hash(str(request.feed_url))
                 if feed_hash in attribs and "filter" in attribs[feed_hash]:
                     # TODO - Need to remove the other accounts that the credentials aren't meant to see
                     return SubscriptionPreferencesResponse(filter=attribs[feed_hash]["filter"])
@@ -669,30 +667,37 @@ async def feed_subscribe(
         feed_url = str(request.feed_url)
         rss_monk._validate_feed_visibility(feed_url=feed_url)
         try:
-            rss_monk.subscribe(request.email, str(request.feed_url)) # TODO = This does not appear to work?
+            rss_monk.subscribe(request.email, feed_url)
             if request.filter is not None:
+                if len(request.filter.keys()) > 1:
+                    raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Only one frequency is permitted per request")
+
                 # TODO - Verify the filter consists of filters and 
                 # Add filter to the subscriber
                 uuid = rss_monk.update_subscriber_filter(request.email, feed_url, request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
-                    base_url = SUBSCRIBE_URL
-                    url_hash = make_url_hash(request.feed_url.encoded_string())
+                    feed_data = rss_monk.get_feed_by_url(feed_url)
+                    base_url = feed_data.subscription_base_url
+                    url_hash = make_url_hash(feed_url)
                     confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
                     reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
                     
                     # TODO - How to make generic?
                     template = rss_monk.get_template(feed_url, EmailType.SUBSCRIBE)
+                    frequency = list(request.filter.keys())[0]
                     transaction = {
                         "subscriber_emails": [request.email],
                         "subject": template["subject"],
                         "subscription_link": "",
+                        "frequency": frequency,
+                        "filter": request.filter[frequency],
                         "confirmation_link": confirmation_link
                     }
-                    # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
+                    # TODO - Temporarily print out the uuid of the pending subscription to console until email is properly worked on
                     print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
-                    # Send email out for the user - # TODO - Use proper values
-                    rss_monk._client.send_transactional(reply_email, template["id"], "html", subject, transaction)
+                    # Send email out for the user
+                    rss_monk._client.send_transactional(reply_email, template["id"], "html", transaction, subject)
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -736,7 +741,6 @@ async def feed_subscribe_confirm(
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
             # Expired links are removed from the attributes for one feed
-            print(f'{feed_attribs[uuid]['expires']} < {datetime.now(timezone.utc).timestamp()}')
             if feed_attribs[uuid]['expires'] < datetime.now(timezone.utc).timestamp():
                 # No deletion will occur here, there will be a cronjob to remove expired pending filters
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
@@ -782,7 +786,7 @@ async def feed_unsubscribe(
 
             # Search for subscription for the user to delete
             #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is done
-            feed_hash = make_url_hash(request.feed_url.encoded_string())
+            feed_hash = make_url_hash(str(request.feed_url))
             feed_list = rss_monk._client.find_list_by_tag(f'url:{feed_hash}')
             if feed_list is None:
                 # Treat as if the subscriber has been removed from the list. 
@@ -806,23 +810,17 @@ async def feed_unsubscribe(
             rss_monk._client.update_subscriber(subs["id"], subs)
             
             # TODO - Email the unsubscribe email
-            base_url = SUBSCRIBE_URL
-            confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
+            base_url = feed_data.subscription_base_url
             reply_email = "noreply@noreply (No reply location)"
-            subject = "Media Statement Registration"
             
             # TODO - How to make generic?
-            template = rss_monk.get_template(feed_url, EmailType.SUBSCRIBE)
+            template = rss_monk.get_template(feed_data, EmailType.UNSUBSCRIBE)
             transaction = {
                 "subscriber_emails": [request.email],
-                "subject": template["subject"],
-                "subscription_link": "",
-                "confirmation_link": confirmation_link
+                "subscription_link": f"{base_url}/{NOTIFICATIONS_SUBPAGE_SUFFIX.SUBSCRIBE}",
             }
-            # Temporarily print out the uuid of the pending subscription to console until email is properly worked on
-            print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
             # Send email out for the user - # TODO - Use proper values
-            rss_monk._client.send_transactional(reply_email, template["id"], "html", subject, transaction)
+            rss_monk._client.send_transactional(reply_email, template["id"], "html", transaction)
 
             return EmptyResponse()
         except ValueError as e:

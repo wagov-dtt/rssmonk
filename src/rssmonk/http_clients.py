@@ -167,7 +167,7 @@ class ListmonkClient:
             "name": name or email,
             "status": status,
             "lists": lists or [],
-            "preconfirm_subscriptions": True,
+            "pre_subscriptions": True,
         }
         return self.post("/api/subscribers", payload)
 
@@ -179,7 +179,7 @@ class ListmonkClient:
             "status": body["status"],
             "lists": body["lists"], # Needs to be a list of numbers
             "attribs": body["attribs"],
-            "preconfirm_subscriptions": True,
+            "preconfirm_subscriptions": True, # This API will handle confirmations
         }
         response = self.put(f"/api/subscribers/{sub_id}", payload)
         return response
@@ -263,7 +263,7 @@ class ListmonkClient:
     def delete_email_template(self, template_id: int):
         return self.delete(f"/api/templates/{template_id}")
 
-    def send_transactional(self, reply_email: str, template_id: int, content_type: str, subject: str, data: dict):
+    def send_transactional(self, reply_email: str, template_id: int, content_type: str, data: dict, subject: str | None = None):
         """Send transactional email."""
         payload = {
             "subscriber_emails": data["subscriber_emails"],

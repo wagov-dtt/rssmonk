@@ -36,9 +36,9 @@ deploy-k3d:
   kubectl wait --for=condition=ready pod -l app=mailpit -n rssmonk --timeout=120s
   @echo "[SUCCESS] K3d deployment complete"
 
-# Test feed fetching (5min|daily|weekly)
+# Test feed fetching (instant|daily|weekly)
 test-fetch freq:
-  @case "{{freq}}" in 5min|daily|weekly) echo "Running rssmonk-cron for frequency: {{freq}}" ;; *) echo "Usage: just test-fetch [5min|daily|weekly]" && exit 1 ;; esac
+  @case "{{freq}}" in instant|daily|weekly) echo "Running rssmonk-cron for frequency: {{freq}}" ;; *) echo "Usage: just test-fetch [instant|daily|weekly]" && exit 1 ;; esac
   uv run rssmonk-cron {{freq}}
 
 # Manage RSS feeds

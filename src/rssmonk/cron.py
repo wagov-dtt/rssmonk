@@ -11,14 +11,14 @@ def main():
     """Main cron job entry point."""
     if len(sys.argv) != 2:
         print("Usage: python -m rssmonk.cron_simple <frequency>")
-        print("Frequencies: 5min, daily, weekly")
+        print("Frequencies: instant, daily, weekly")
         sys.exit(1)
 
     try:
         frequency = Frequency(sys.argv[1])
     except ValueError:
         print(f"Invalid frequency: {sys.argv[1]}")
-        print("Valid frequencies: 5min, daily, weekly")
+        print("Valid frequencies: instant, daily, weekly")
         sys.exit(1)
 
     # Create .env if missing

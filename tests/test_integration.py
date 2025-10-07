@@ -63,8 +63,8 @@ class IntegrationTestSuite:
             },
             {
                 "url": "https://www.abc.net.au/news/feed/10719986/rss.xml", 
-                "frequency": "5min",
-                "name": "ABC News 5min"
+                "frequency": "instant",
+                "name": "ABC News Instant"
             },
             {
                 "url": "https://feeds.reuters.com/reuters/topNews",

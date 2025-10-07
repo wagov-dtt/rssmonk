@@ -6,7 +6,10 @@ from pydantic import BaseModel
 FEED_ACCOUNT_PREFIX = "user_"
 ROLE_PREFIX = "list_role_"
 LIST_DESC_FEED_URL = "RSS Feed:"
-SUB_BASE_URL = "Subscription URL: "
+SUB_BASE_URL = "Subscription URL:"
+ 
+# Enables different filters per frequency. Default to false to only have one frequency type in the filter
+MULTIPLE_FREQ = "Multiple freq:"
 
 class EmailType(str, Enum):
     """Email template types."""
@@ -21,6 +24,12 @@ class EmailType(str, Enum):
     INSTANT_DIGEST = "instant_digest"
     DAILY_DIGEST = "daily_digest"
     WEEKLY_DIGEST = "weekly_digest"
+
+class NOTIFICATIONS_SUBPAGE_SUFFIX(str, Enum):
+    """Standardised URL patterns to append to base urls to perform actions"""
+    SUBSCRIBE = "subscribe"
+    UNSUBSCRIBE = "unsubscribe"
+    EDIT_PREFERENCES = "preferences" # This should be used sparingly
 
 class ErrorMessages:
     NO_AUTH_FEED = "Not authorised to interact with this feed"
