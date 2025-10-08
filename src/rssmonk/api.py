@@ -11,7 +11,7 @@ import httpx
 
 import sys
 
-from rssmonk.utils import NOTIFICATIONS_SUBPAGE_SUFFIX, make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
+from rssmonk.utils import NOTIFICATIONS_SUBPAGE_SUFFIX, email_filter_capitalise, make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -678,8 +678,6 @@ async def feed_subscribe(
                 if request.need_confirm is not None and request.need_confirm:
                     feed_data = rss_monk.get_feed_by_url(feed_url)
                     base_url = feed_data.subscription_base_url
-                    url_hash = make_url_hash(feed_url)
-                    confirmation_link = f"{base_url}?id={request.email}&guid={uuid}"
                     reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
                     
@@ -691,11 +689,10 @@ async def feed_subscribe(
                         "subject": template["subject"],
                         "subscription_link": "",
                         "frequency": frequency,
-                        "filter": request.filter[frequency],
-                        "confirmation_link": confirmation_link
+                        "filter": email_filter_capitalise(request.filter[frequency], True),
+                        "confirmation_link": f"{base_url}?id={request.email}&guid={uuid}"
                     }
-                    # TODO - Temporarily print out the uuid of the pending subscription to console until email is properly worked on
-                    print(f"{{ \"url\": {url_hash}, \"uuid\" {uuid} }} ")
+
                     # Send email out for the user
                     rss_monk._client.send_transactional(reply_email, template["id"], "html", transaction, subject)
             return SubscriptionResponse(message="Subscription successful")

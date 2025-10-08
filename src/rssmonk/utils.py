@@ -1,5 +1,6 @@
 from enum import Enum
 import hashlib
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -9,7 +10,7 @@ LIST_DESC_FEED_URL = "RSS Feed:"
 SUB_BASE_URL = "Subscription URL:"
  
 # Enables different filters per frequency. Default to false to only have one frequency type in the filter
-MULTIPLE_FREQ = "Multiple freq:"
+MULTIPLE_FREQ = "Multiple freq:" # TODO - Currently not in use
 
 class EmailType(str, Enum):
     """Email template types."""
@@ -63,3 +64,29 @@ def make_feed_role_name(url: str) -> str:
 
 def make_template_name(feed_url: str, type: EmailType) -> str:
     return f"{make_url_hash(feed_url)}-{type.value}"
+
+def email_filter_capitalise(data: Any, top_level: bool = False) -> Any:
+    """
+    Converts a filter into a flatter structure into a pre determined list of strings (to preserve order)
+    Only allow one layer of dictionary and convert to a flat string
+    TODO
+    """
+    # This can be unbound. Mitigated with API access only from known modules
+    data_type = type(data)
+    if data_type == str:
+        return str(data).capitalize()
+    elif data_type == list:
+        
+        return ", ".join(list(data))
+    elif data_type == dict:
+        new_dict = []
+        for key, value in dict(data).items():
+            new_dict[email_filter_capitalise(key)] = email_filter_capitalise(value)
+        return new_dict
+    elif data_type == set:
+        new_set = set()
+        for item in set(data):
+            new_set.add(item)
+        return new_set
+    else:
+        return data
