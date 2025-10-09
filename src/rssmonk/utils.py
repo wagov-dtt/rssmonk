@@ -2,12 +2,16 @@ from enum import Enum
 import hashlib
 from typing import Any
 
-from pydantic import BaseModel
+# TODO - This... should be changed at somepoint to an env var
+NO_REPLY = "noreply@noreply (No reply location)"
+
 
 FEED_ACCOUNT_PREFIX = "user_"
 ROLE_PREFIX = "list_role_"
 LIST_DESC_FEED_URL = "RSS Feed:"
 SUB_BASE_URL = "Subscription URL:"
+ALL_FILTER = "All"
+"""The keyword for every option in a filter"""
  
 # Enables different filters per frequency. Default to false to only have one frequency type in the filter
 MULTIPLE_FREQ = "Multiple freq:" # TODO - Currently not in use
@@ -65,23 +69,31 @@ def make_feed_role_name(url: str) -> str:
 def make_template_name(feed_url: str, type: EmailType) -> str:
     return f"{make_url_hash(feed_url)}-{type.value}"
 
-def email_filter_capitalise(data: Any, top_level: bool = False) -> Any:
+def map_id_to_name(mapping: dict[int, str], id: int) -> str:
+    return mapping[id] if id in mapping else f"Unknown ({id})"
+
+def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_level: bool = False) -> Any:
     """
     Converts a filter into a flatter structure into a pre determined list of strings (to preserve order)
     Only allow one layer of dictionary and convert to a flat string
+    Accept numbers in the list which will need to be mapped to a string.
     TODO
     """
-    # This can be unbound. Mitigated with API access only from known modules
+    # This can be unbound. Ensure API access is only from known modules
     data_type = type(data)
     if data_type == str:
         return str(data).capitalize()
     elif data_type == list:
-        
+        if type(data) == list[int]:
+            temp_data = []
+            for item in data:
+                temp_data.add(map_id_to_name(mapping, data))
+            data = temp_data
         return ", ".join(list(data))
     elif data_type == dict:
-        new_dict = []
+        new_dict = {}
         for key, value in dict(data).items():
-            new_dict[email_filter_capitalise(key)] = email_filter_capitalise(value)
+            new_dict[create_email_filter_list(key)] = create_email_filter_list(value)
         return new_dict
     elif data_type == set:
         new_set = set()

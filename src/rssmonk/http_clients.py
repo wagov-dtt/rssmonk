@@ -91,6 +91,7 @@ class ListmonkClient:
             return True
         except httpx.HTTPError as e:
             logger.error(f"HTTP {method} {path}: {e}")
+            print(e.with_traceback())
             raise e
 
     def get(self, path, params=None):
@@ -172,7 +173,7 @@ class ListmonkClient:
         return self.post("/api/subscribers", payload)
 
     def update_subscriber(self, sub_id: int, body: dict):
-        """Create a new subscriber."""
+        """Update a subscriber."""
         payload = {
             "email": body["email"],
             "name": body["name"],
@@ -182,6 +183,11 @@ class ListmonkClient:
             "preconfirm_subscriptions": True, # This API will handle confirmations
         }
         response = self.put(f"/api/subscribers/{sub_id}", payload)
+        return response
+    
+    def delete_subscriber(self, sub_id: int):
+        """Delete a subscriber."""
+        response = self.delete(f"/api/subscribers/{sub_id}")
         return response
 
     def subscribe_to_list(self, subscriber_ids: list[int], list_ids: list[int], status="confirmed"):

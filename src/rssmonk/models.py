@@ -58,7 +58,7 @@ class Feed(BaseModel):
 
     def __init__(self, **data):
         super().__init__(**data)
-        if not self.url_hash: # TODO - What is this doing?
+        if not self.url_hash:
             self.url_hash = hashlib.sha256(self.feed_url.encode()).hexdigest()
 
     @property

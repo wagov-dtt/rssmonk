@@ -11,7 +11,7 @@ import httpx
 
 import sys
 
-from rssmonk.utils import NOTIFICATIONS_SUBPAGE_SUFFIX, email_filter_capitalise, make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
+from rssmonk.utils import NO_REPLY, NOTIFICATIONS_SUBPAGE_SUFFIX, create_email_filter_list, make_api_username, make_template_name, make_url_hash, numberfy_subbed_lists
 print("In module products sys.path[0], __package__ ==", sys.path[0], __package__)
 
 from .cache import feed_cache
@@ -222,7 +222,7 @@ async def health_check():
             response = await client.get(f"{test_settings.listmonk_url}/api/health", timeout=10.0)
             listmonk_status = "healthy" if response.status_code == 200 else "unhealthy"
 
-        # TODO - Check postgres
+        # TODO - Check postgres connectivity
 
         # Get basic stats (without auth)
         return HealthResponse(
@@ -484,7 +484,7 @@ async def delete_feed_by_url(
                 feed_cache.invalidate_url(feed_url)
 
                 # TODO - Remove hash url from all users attributes
-                # TODO - Questions. This one.. could be a campaign email
+                # TODO - Questions. This one.. could be a campaign email to announce the closure of a mailing list
 
                 # Delete list role associated with the feed. The user account will be automatically deleted
                 rss_monk.delete_list_role(feed_url)
@@ -672,13 +672,11 @@ async def feed_subscribe(
                 if len(request.filter.keys()) > 1:
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Only one frequency is permitted per request")
 
-                # TODO - Verify the filter consists of filters and 
                 # Add filter to the subscriber
                 uuid = rss_monk.update_subscriber_filter(request.email, feed_url, request.need_confirm, request.filter)
                 if request.need_confirm is not None and request.need_confirm:
                     feed_data = rss_monk.get_feed_by_url(feed_url)
                     base_url = feed_data.subscription_base_url
-                    reply_email = "noreply@noreply (No reply location)"
                     subject = "Media Statement Registration"
                     
                     # TODO - How to make generic?
@@ -689,12 +687,13 @@ async def feed_subscribe(
                         "subject": template["subject"],
                         "subscription_link": "",
                         "frequency": frequency,
-                        "filter": email_filter_capitalise(request.filter[frequency], True),
+                        "filter": create_email_filter_list(request.filter[frequency], None, True),
                         "confirmation_link": f"{base_url}?id={request.email}&guid={uuid}"
                     }
+                    print(transaction)
 
                     # Send email out for the user
-                    rss_monk._client.send_transactional(reply_email, template["id"], "html", transaction, subject)
+                    rss_monk._client.send_transactional(NO_REPLY, template["id"], "html", transaction, subject)
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -797,6 +796,7 @@ async def feed_unsubscribe(
             subs_lists = numberfy_subbed_lists(subs["lists"])
             if feed_data.id in subs_lists:
                 subs_lists.remove(feed_data.id)
+
             subs["lists"] = subs_lists
 
             # Remove subscription filters from the subscriber
@@ -804,20 +804,17 @@ async def feed_unsubscribe(
                 del subs["attribs"][feed_hash]
 
             # Update the subscriber
+            # TODO - If lists is empty, should we delete the subscriber?
             rss_monk._client.update_subscriber(subs["id"], subs)
             
-            # TODO - Email the unsubscribe email
-            base_url = feed_data.subscription_base_url
-            reply_email = "noreply@noreply (No reply location)"
-            
-            # TODO - How to make generic?
+            # Email the unsubscribe email
             template = rss_monk.get_template(feed_data, EmailType.UNSUBSCRIBE)
             transaction = {
                 "subscriber_emails": [request.email],
-                "subscription_link": f"{base_url}/{NOTIFICATIONS_SUBPAGE_SUFFIX.SUBSCRIBE}",
+                "subscription_link": f"{feed_data.subscription_base_url}/{NOTIFICATIONS_SUBPAGE_SUFFIX.SUBSCRIBE}",
             }
             # Send email out for the user - # TODO - Use proper values
-            rss_monk._client.send_transactional(reply_email, template["id"], "html", transaction)
+            rss_monk._client.send_transactional(NO_REPLY, template["id"], "html", transaction)
 
             return EmptyResponse()
         except ValueError as e:

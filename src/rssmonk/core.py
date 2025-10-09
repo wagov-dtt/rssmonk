@@ -591,7 +591,6 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            # TODO - Figure out what this is for 
             if tag.startswith(f"last-seen:{feed.frequencies.value}:"):
                 last_guid = tag.split(":", 3)[3]
                 break
@@ -608,7 +607,6 @@ class RSSMonk:
 
     def _should_poll(self, feed: Feed) -> bool:
         """Check if feed should be polled."""
-        # TODO - Figure out what this is for 
         config = AVAILABLE_FREQUENCY_SETTINGS().get(f"freq:{feed.frequencies.value}")
         if not config:
             return False
@@ -619,7 +617,6 @@ class RSSMonk:
 
         last_poll = None
         for tag in tags:
-            # TODO - Figure out what this is for 
             if tag.startswith(f"last-poll:{feed.frequencies.value}:"):
                 try:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
@@ -673,7 +670,6 @@ class RSSMonk:
         tags = [
             t
             for t in tags
-            # TODO - Figure out what this is for 
             if not t.startswith(f"last-poll:{feed.frequencies.value}:")
             and not t.startswith(f"last-seen:{feed.frequencies.value}:")
         ]
@@ -686,7 +682,6 @@ class RSSMonk:
         # Add latest GUID if we have articles
         if articles:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
-            # TODO - Figure out what this is for 
             tags.append(f"last-seen:{feed.frequencies.value}:{latest_guid}")
 
         # Update list
