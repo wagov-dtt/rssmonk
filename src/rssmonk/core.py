@@ -15,7 +15,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber, AVAILABLE_FREQUENCY_SETTINGS
-from rssmonk.utils import MULTIPLE_FREQ, SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag, numberfy_subbed_lists
+from rssmonk.utils import MULTIPLE_FREQ, SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag_from_url, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -125,9 +125,6 @@ class RSSMonk:
         self.local_creds: Optional[HTTPBasicCredentials] = local_creds
         self.settings = settings or Settings()
         self.settings.validate_required()
-
-    # Create two clients, local creds for access control and admin creds for use if required
-    def __enter__(self):
         self._client = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.local_creds.username if self.local_creds is not None else "",
@@ -136,30 +133,38 @@ class RSSMonk:
                 self.local_creds.username if self.local_creds is not None else "",
                 self.local_creds.password if self.local_creds is not None else "") else AuthType.BASIC,
             timeout=self.settings.rss_timeout
-        ).__enter__()
+        )
         self._admin = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.settings.listmonk_username,
             password=self.settings.listmonk_password,
             auth_type=AuthType.SESSION,
             timeout=self.settings.rss_timeout
-        ).__enter__()
+        )
+
+    # Create two clients, local creds for access control and admin creds for use if required
+    def __enter__(self):
+        self._client.__enter__()
+        self._admin.__enter__()
         return self
 
     def __exit__(self, *args):
-        if hasattr(self, "_client"):
             self._client.__exit__(*args)
-        if hasattr(self, "_admin"):
             self._admin.__exit__(*args)
 
+    def getClient(self):
+        return self._client
+    
+    def getAdminClient(self):
+        return self._admin
 
-    def _validate_feed_visibility(self, feed_url: str | None = None, feed_hash: str | None = None):
+    def validate_feed_visibility(self, feed_url: str | None = None, feed_hash: str | None = None):
         '''Check if the active credentials can see the feed's mailing list. Requires either feed_url or feed_hash, which has priority'''
         if feed_url is None and feed_hash is None:
             raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
 
         # Hash is used as a higher priority than the url
-        found_feed = self._client.find_list_by_tag(tag=feed_hash if feed_hash is not None else make_url_tag(feed_url))
+        found_feed = self._client.find_list_by_tag(tag=f"url:{feed_hash}" if feed_hash is not None else make_url_tag_from_url(feed_url))
         if found_feed is None:
             raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
 
@@ -170,9 +175,9 @@ class RSSMonk:
     def get_user_by_name(self, api_name: str) -> dict | None:
         """Get user by name"""
         user_list = self._admin.get_users()
-        if user_list is not None and type(user_list) is list:
+        if user_list is not None and isinstance(user_list, list):
             for user in user_list:
-                if type(user) is dict and user["username"] == api_name:
+                if isinstance(user, dict) and user["username"] == api_name:
                     return user
         return None
 
@@ -192,7 +197,7 @@ class RSSMonk:
 
         try:
             response = self._admin.post("/api/users", data)
-            if type(response) is not dict:
+            if not isinstance(response, dict):
                 raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
             
             return response
@@ -201,7 +206,7 @@ class RSSMonk:
                 # Already exists, return error so they can recreate account, or bail
                 raise HTTPException(status_code=HTTPStatus.CONFLICT)
             else:
-                raise
+                raise e
 
 
     def delete_api_user(self, api_name: str) -> bool: # TODO - User id and password
@@ -218,6 +223,7 @@ class RSSMonk:
         # Currently we delete and recreate the user here.
         # In the future, Listmonk may have a reset api password functionality
         self.delete_api_user(username)
+        # TODO - Fix
         return self.create_api_user(username)
     
 
@@ -244,7 +250,7 @@ class RSSMonk:
             # User role already exists. Find the user role with the same name
             user_roles = self._client.get("api/roles/users")
             for role in user_roles:
-                if type(role) is dict and role["name"] == role_name:
+                if isinstance(role, dict) and role["name"] == role_name:
                     return role["id"]
 
 
@@ -252,7 +258,7 @@ class RSSMonk:
         list_role_name = make_feed_role_name(url)
 
         # Get the list to get the ID to make the role.
-        list_data = self._admin.find_list_by_tag(make_url_tag(url))
+        list_data = self._admin.find_list_by_tag(make_url_tag_from_url(url))
         if list_data is None:
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="List does not exist")
 
@@ -264,7 +270,7 @@ class RSSMonk:
 
         try:
             response = self._admin.post("/api/roles/lists", payload)
-            if type(response) is dict:
+            if isinstance(response, dict):
                 return response["id"]
         except httpx.HTTPStatusError as e:
             if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
@@ -280,7 +286,7 @@ class RSSMonk:
 
         list_roles = self._client.get("api/roles/lists")
         for list_role in list_roles:
-            if type(list_role) is dict and list_role["name"] == list_role_name:
+            if isinstance(list_role, dict) and list_role["name"] == list_role_name:
                 return list_role["id"]
         return -1
 
@@ -351,7 +357,10 @@ class RSSMonk:
 
     def get_feed_by_url(self, url: str) -> Optional[Feed]:
         """Get feed by URL."""
-        url_hash = make_url_hash(url)
+        return self.get_feed_by_hash(make_url_hash(url))
+
+    def get_feed_by_hash(self, url_hash: str) -> Optional[Feed]:
+        """Get feed by URL."""
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 
@@ -367,13 +376,13 @@ class RSSMonk:
     # Template operations
     # TODO - Set up map, name to template id, if there are high numbers.
 
-    def get_template(self, feed_url: str, template_type: EmailType):
+    def get_template(self, feed_hash: str, template_type: EmailType):
         """Get a template associated with a feed and template type"""
-        return self._admin.find_email_template(feed_url, template_type)
+        return self._admin.find_email_template(feed_hash, template_type)
 
-    def add_update_template(self, feed_url: str, template_type: EmailType, new_template: EmailTemplate):
+    def add_update_template(self, feed_hash: str, template_type: EmailType, new_template: EmailTemplate):
         """Insert or update an email template for a feed"""
-        template = self._admin.find_email_template(feed_url, template_type)
+        template = self._admin.find_email_template(feed_hash, template_type)
         if template is None:
             return self._admin.create_email_template(new_template)
         else:
@@ -416,38 +425,40 @@ class RSSMonk:
         subs = self._client.get_subscribers()
         return [Subscriber(id=s["id"], email=s["email"], name=s["name"]) for s in subs]
 
-    def subscribe(self, email: str, feed_url: str) -> bool:
+    def subscribe(self, email: str, feed_url: Optional[str] = None, feed_hash: Optional[str] = None) -> bool:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
-        feed = self.get_feed_by_url(feed_url)
+        feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_url}")
+            raise ValueError(f"Feed not found: {feed_hash if feed_hash is not None else feed_url}")
 
         self._client.subscribe_to_list([subscriber.id], [feed.id])
         return True
 
-    def unsubscribe(self, email: str, feed_url: str) -> bool:
+    def unsubscribe(self, email: str, feed_url: Optional[str], feed_hash: Optional[str]) -> bool:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
-        feed = self.get_feed_by_url(feed_url)
+        feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_url}")
+            raise ValueError(f"Feed not found: {feed_hash if feed_hash is not None else feed_url}")
 
-        self._client.unsubscribe_to_list([subscriber.id], [feed.id])
+        self._client.unsubscribe_from_list([subscriber.id], [feed.id])
         return True
     
-    def update_subscriber_filter(self, email: str, feed_url: str, need_confirmation: bool, filter: dict) -> Optional[str]:
+    def update_subscriber_filter(self, email: str, sub_filter: dict, feed_url: Optional[str] = None, feed_hash: Optional[str] = None,
+                                 need_confirmation: bool = True) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
-        feed = self.get_feed_by_url(feed_url)
+        feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         subs: dict  = sub_list[0] if sub_list is not None else None
 
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_url}")
+            raise ValueError(f"Feed not found: {feed_hash if feed_hash is not None else feed_url}")
         if not subs or "id" not in subs:
             raise ValueError(f"Subscriber not found: {email}")
 
-        url_hash = make_url_hash(feed_url) # Used to access the subscription in the attributes
+        if feed_hash is None:
+            feed_hash =  make_url_hash(feed_url) # Used to access the subscription in the attributes
         # Attribs format - url-hash and uuids are permitted to be many
         # attribs: {
         #   url_hash: {
@@ -459,15 +470,15 @@ class RSSMonk:
         #   }
         # }
         attribs = subs['attribs']
-        url_dict = attribs[url_hash] if url_hash in attribs else {}
-        filter_uuid = str(uuid.uuid4())
+        url_dict = attribs[feed_hash] if feed_hash in attribs else {}
+        filter_uuid = uuid.uuid4().hex
         if need_confirmation:
             # Add filter with 24 hours expiry
             timestamp = int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp())
-            url_dict[filter_uuid] = {'filter': filter, 'expires': timestamp}
+            url_dict[filter_uuid] = {'filter': sub_filter, 'expires': timestamp}
         else:
-            url_dict = {'active': filter}
-        attribs[url_hash] = url_dict
+            url_dict = {'active': sub_filter}
+        attribs[feed_hash] = url_dict
 
         # Have to covert the extracted lists to be a plain list of numbers to retain subscriptions
         subs["lists"] = numberfy_subbed_lists(subs["lists"])

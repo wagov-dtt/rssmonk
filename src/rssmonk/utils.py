@@ -1,6 +1,6 @@
 from enum import Enum
 import hashlib
-from typing import Any
+from typing import Any, Optional
 
 # TODO - This... should be changed at somepoint to an env var
 NO_REPLY = "noreply@noreply (No reply location)"
@@ -30,7 +30,7 @@ class EmailType(str, Enum):
     DAILY_DIGEST = "daily_digest"
     WEEKLY_DIGEST = "weekly_digest"
 
-class NOTIFICATIONS_SUBPAGE_SUFFIX(str, Enum):
+class NotificationsSubpageSuffix(str, Enum):
     """Standardised URL patterns to append to base urls to perform actions"""
     SUBSCRIBE = "subscribe"
     UNSUBSCRIBE = "unsubscribe"
@@ -51,8 +51,11 @@ def numberfy_subbed_lists(subs : list[dict]):
         subbed_lists.append(sub_list["id"])
     return subbed_lists
 
-def make_url_tag(url: str) -> str:
-    return f"url:{make_url_hash(url)}"
+def make_url_tag_from_url(url: str) -> str:
+    return make_url_tag_from_hash(make_url_hash(url))
+
+def make_url_tag_from_hash(hash_str: str) -> str:
+    return f"url:{hash_str}"
 
 def make_url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
@@ -60,17 +63,17 @@ def make_url_hash(url: str) -> str:
 def make_api_username(feed_url :str) -> str:
     return FEED_ACCOUNT_PREFIX + make_url_hash(feed_url)
 
-def get_feed_hash_from_username(username :str) -> str:
-    return username.replace(FEED_ACCOUNT_PREFIX, "").strip()
+def get_feed_hash_from_username(username :str) -> Optional[str]:
+    return username.replace(FEED_ACCOUNT_PREFIX, "").strip() if FEED_ACCOUNT_PREFIX in username else None
 
 def make_feed_role_name(url: str) -> str:
     return ROLE_PREFIX + make_url_hash(url)
 
-def make_template_name(feed_url: str, type: EmailType) -> str:
-    return f"{make_url_hash(feed_url)}-{type.value}"
+def make_template_name(feed_hash: str, email_type: EmailType) -> str:
+    return f"{feed_hash}-{email_type.value}"
 
-def map_id_to_name(mapping: dict[int, str], id: int) -> str:
-    return mapping[id] if id in mapping else f"Unknown ({id})"
+def map_id_to_name(mapping: dict[int, str], ident: int) -> str:
+    return mapping[ident] if ident in mapping else f"Unknown ({ident})"
 
 def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_level: bool = False) -> Any:
     """
@@ -79,16 +82,18 @@ def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_leve
     Accept numbers in the list which will need to be mapped to a string.
     TODO
     """
-    # This can be unbound. Ensure API access is only from known modules
+    # This can be unbounded. Ensure API access is from trusted modules
     data_type = type(data)
     if data_type == str:
         return str(data).capitalize()
     elif data_type == list:
-        if type(data) == list[int]:
-            temp_data = []
-            for item in data:
-                temp_data.add(map_id_to_name(mapping, data))
-            data = temp_data
+        temp_data = []
+        for item in data:
+            if isinstance(item, int):
+                temp_data.append(map_id_to_name(mapping, item))
+            else: # Assume str
+                temp_data.append(item)
+        data = temp_data
         return ", ".join(list(data))
     elif data_type == dict:
         new_dict = {}
@@ -102,3 +107,10 @@ def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_leve
         return new_set
     else:
         return data
+
+# Should be called after validation of feed visibility
+def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
+    value = get_feed_hash_from_username(username)
+    if value is None:
+        value = make_url_hash(feed_url) if feed_url is not None else ""
+    return value

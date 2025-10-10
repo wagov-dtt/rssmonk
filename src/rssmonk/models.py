@@ -143,6 +143,11 @@ class PublicSubscribeRequest(BaseModel):
 class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
+    filter: Optional[dict[Frequency, list[str] | dict]] = Field(..., description="The filter as JSON")
+
+class SubscribeAdminRequest(BaseModel):
+    """Request model for a subscription endpoint with a filter and email confirmation."""
+    email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
     filter: Optional[dict[Frequency, list[str] | dict]] = Field(..., description="The filter as JSON")
     need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
@@ -156,12 +161,16 @@ class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""
     email: str = Field(..., description="Subscriber email address")
     uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
-    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
 class UnSubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
-    email: str = Field(..., description="Subscriber email address")
+    token: str = Field(..., description="The token to match against the subscriber's filter to remove")
+
+class UnSubscribeAdminRequest(BaseModel):
+    """Response model for a subscription preferences (filter)."""
+    email: str = Field(..., description="Subscriber email address ")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
+    need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
 
 # Response Models
 

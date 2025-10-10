@@ -2,6 +2,7 @@
 
 from enum import Enum
 from typing import Optional
+from warnings import deprecated
 from fastapi import HTTPException
 from http import HTTPMethod, HTTPStatus
 import httpx
@@ -75,7 +76,7 @@ class ListmonkClient:
                 'session': session.cookies['session'],
             }
         else:
-            raise HTTPException(status_code=HTTPStatus.IM_A_TEAPOT)
+            raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     def _make_request(self, method, path, **kwargs):
         """Make HTTP request with error handling."""
@@ -90,8 +91,8 @@ class ListmonkClient:
                 return data.get("data", data)
             return True
         except httpx.HTTPError as e:
-            logger.error(f"HTTP {method} {path}: {e}")
-            print(e.with_traceback())
+            logger.error("HTTP %s %s: %s", method, path, e)
+            print(e.with_traceback(None))
             raise e
 
     def get(self, path, params=None):
@@ -100,6 +101,7 @@ class ListmonkClient:
 
     def post(self, path, json_data):
         """POST request."""
+        print(json_data)
         return self._make_request(HTTPMethod.POST, path, json=json_data)
 
     def put(self, path, json_data):
@@ -151,9 +153,9 @@ class ListmonkClient:
         }
         return self.post("/api/lists", payload)
 
-    def update_list_data(self, id: str, data):
+    def update_list_data(self, ident: str, data):
         """Update a new list."""
-        return self.put(f"/api/lists/{id}", data)
+        return self.put(f"/api/lists/{ident}", data)
 
     def get_subscribers(self, query=None):
         """Get subscribers, optionally filtered by query. Filters are not applied here"""
@@ -201,7 +203,7 @@ class ListmonkClient:
         self.put("/api/subscribers/lists", payload)        
         return True
 
-    def unsubscribe_to_list(self, subscriber_ids: list[int], list_ids: list[int], status="unsubscribed"):
+    def unsubscribe_from_list(self, subscriber_ids: list[int], list_ids: list[int], status="unsubscribed"):
         """Subscribe users to lists."""
         payload = {
             "ids": subscriber_ids,
@@ -237,9 +239,9 @@ class ListmonkClient:
         data = self.get("/api/templates")
         return self._normalize_results(data)
 
-    def find_email_template(self, feed_url: str, template_type: EmailType) -> ListmonkTemplate | None:
+    def find_email_template(self, feed_hash: str, template_type: EmailType) -> ListmonkTemplate | None:
         """Find a single email template."""
-        template_name = make_template_name(feed_url, template_type)
+        template_name = make_template_name(feed_hash, template_type)
         templates = self.get_templates()
         for template in templates:
             if template["name"] == template_name:
@@ -275,11 +277,11 @@ class ListmonkClient:
             "subscriber_emails": data["subscriber_emails"],
             "from_email": reply_email,
             "template_id": template_id,
-            "data": data,
             "subject": subject,
+            "data": data,
             "content_type": content_type
         }
-        return self.post(f"/api/tx", payload)
+        return self.post("/api/tx", payload)
 
     def get_users(self) -> list | None:
         """Get the user list."""
@@ -291,17 +293,18 @@ def create_client():
     """Create a Listmonk client with environment config."""
     return ListmonkClient()
 
-
+@deprecated("Should not be used.")
+# TODO - Why is this here?
 def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk/2.0"):
-    """Fetch and parse RSS feed."""
+    """Deprecarted - Fetch and parse RSS feed. """
     try:
-        logger.info(f"Fetching feed: {feed_url}")
+        logger.info("Fetching feed: %s", feed_url)
 
         with httpx.Client(timeout=timeout, headers={"User-Agent": user_agent}) as client:
             response = client.get(feed_url)
 
             if response.status_code == 304:
-                logger.info(f"Feed unchanged (304): {feed_url}")
+                logger.info("Feed unchanged (304): %s", feed_url)
                 return [], None
 
             response.raise_for_status()

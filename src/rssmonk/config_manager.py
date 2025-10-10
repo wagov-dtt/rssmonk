@@ -80,11 +80,11 @@ class FeedConfigManager:
         # TODO - Attributes are lost in this, since feed ids and urls have changed. Might be worth doing SQL here
         try:
             # Get subscriber IDs from the source list
-            source_list = self.rss_monk._client.get(f"/api/lists/{from_feed.id}")
+            source_list = self.rss_monk.getClient().get(f"/api/lists/{from_feed.id}")
             subscriber_ids = []
             
             # Get subscribers for this list
-            subscribers_response = self.rss_monk._client.get("/api/subscribers", params={
+            subscribers_response = self.rss_monk.getClient().get("/api/subscribers", params={
                 "list_id": from_feed.id,
                 "per_page": "all"
             })
@@ -100,7 +100,7 @@ class FeedConfigManager:
             
             if subscriber_ids:
                 # Add subscribers to new list
-                self.rss_monk._client.subscribe_to_list([subscriber_ids], [to_feed.id])
+                self.rss_monk.getClient().subscribe_to_list([subscriber_ids], [to_feed.id])
                 logger.info(f"Migrated {len(subscriber_ids)} subscribers from {from_feed.name} to {to_feed.name}")
                 return len(subscriber_ids)
             
@@ -135,7 +135,7 @@ class FeedConfigManager:
         for feed in existing_feeds:
             # Get subscriber count
             try:
-                subscribers_response = self.rss_monk._client.get("/api/subscribers", params={
+                subscribers_response = self.rss_monk.getClient().get("/api/subscribers", params={
                     "list_id": feed.id,
                     "per_page": "1"
                 })
