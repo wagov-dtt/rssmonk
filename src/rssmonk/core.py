@@ -535,7 +535,8 @@ class RSSMonk:
         results = {}
 
         for feed in feeds:
-            if self._should_poll(feed):
+            if self._should_poll(frequency, feed):
+                # TODO - Consider spawning process to handle if it is a large 
                 results[feed.name] = self.process_feed(feed)
 
         return results
@@ -616,9 +617,9 @@ class RSSMonk:
 
         return articles
 
-    def _should_poll(self, feed: Feed) -> bool:
+    def _should_poll(self, current_frequency: Frequency, feed: Feed) -> bool:
         """Check if feed should be polled."""
-        config = AVAILABLE_FREQUENCY_SETTINGS().get(f"freq:{feed.frequencies.value}")
+        config = AVAILABLE_FREQUENCY_SETTINGS().get(f"freq:{current_frequency.value}")
         if not config:
             return False
 
@@ -628,7 +629,7 @@ class RSSMonk:
 
         last_poll = None
         for tag in tags:
-            if tag.startswith(f"last-poll:{feed.frequencies.value}:"):
+            if tag.startswith(f"last-poll:{current_frequency.value}:"):
                 try:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
                 except (ValueError, IndexError):
@@ -640,27 +641,22 @@ class RSSMonk:
         if config.get("interval_minutes"):
             if not last_poll:
                 return True
-            from datetime import timedelta
-
             return now - last_poll > timedelta(minutes=config["interval_minutes"])
 
         # Time-based check (daily/weekly)
         if config.get("check_time"):
             target_hour, target_minute = config["check_time"]
 
+            # Increased tolerance for negative drift
             if config.get("check_day") is not None:  # Weekly
                 if now.weekday() != config["check_day"]:
                     return False
                 if last_poll:
-                    from datetime import timedelta
-
-                    if last_poll > now - timedelta(weeks=1):
+                    if last_poll > now - timedelta(weeks=1, minutes=15):
                         return False
             else:  # Daily
                 if last_poll:
-                    from datetime import timedelta
-
-                    if last_poll > now - timedelta(days=1):
+                    if last_poll > now - timedelta(days=1, minutes=15):
                         return False
 
             target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)

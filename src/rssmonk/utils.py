@@ -75,7 +75,7 @@ def make_template_name(feed_hash: str, email_type: EmailType) -> str:
 def map_id_to_name(mapping: dict[int, str], ident: int) -> str:
     return mapping[ident] if ident in mapping else f"Unknown ({ident})"
 
-def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_level: bool = False) -> Any:
+def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_level: bool = True) -> Any:
     """
     Converts a filter into a flatter structure into a pre determined list of strings (to preserve order)
     Only allow one layer of dictionary and convert to a flat string
@@ -98,7 +98,7 @@ def create_email_filter_list(data: Any, mapping: dict[int, str] = None, top_leve
     elif data_type == dict:
         new_dict = {}
         for key, value in dict(data).items():
-            new_dict[create_email_filter_list(key)] = create_email_filter_list(value)
+            new_dict[create_email_filter_list(key, False)] = create_email_filter_list(value, False)
         return new_dict
     elif data_type == set:
         new_set = set()

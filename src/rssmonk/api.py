@@ -2,6 +2,7 @@
 import sys
 
 from datetime import datetime, timezone
+import traceback
 from typing import Annotated, Optional
 from http import HTTPStatus
 import uuid
@@ -588,7 +589,7 @@ async def process_feed(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to process feed: {e}")
+        logger.error("Failed to process feed: %s", e)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Feed processing failed")
 
 
@@ -620,7 +621,8 @@ async def process_feeds_bulk(
                 results=results
             )
     except Exception as e:
-        logger.error(f"Failed to process feeds bulk: {e}")
+        traceback.print_exc()
+        logger.error("Failed to process feeds bulk: %s", e)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Bulk processing failed")
 
 
@@ -701,7 +703,7 @@ async def feed_subscribe(
                     transaction = {
                         "subscriber_emails": [request.email],
                         "subject": template["subject"],
-                        "subscription_link": "",
+                        "subscription_link": "", # TODO , create with fillers
                         "frequency": frequency,
                         "filter": create_email_filter_list(request.filter[frequency], None, True),
                         "confirmation_link": f"{base_url}?id={request.email}&guid={uuid}"
@@ -749,7 +751,7 @@ async def feed_subscribe_confirm(
 
             feed_attribs = subs["attribs"][feed_hash]
             if req_uuid not in feed_attribs:
-                # Count as expired
+                # React as if it has expired
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
             # Expired links are removed from the attributes for one feed
@@ -773,7 +775,7 @@ async def feed_subscribe_confirm(
         except HTTPException as e:
             raise e # Deliberate reraise
         except Exception as e:
-            logger.error(f"Failed to confirm subscription: {e}")
+            logger.error("Failed to confirm subscription: %s", e)
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
 
 @app.post(
@@ -826,7 +828,9 @@ async def feed_unsubscribe(
             subs["lists"] = subs_lists
 
             # Remove subscription filters from the subscriber
+            previous_filter = None
             if feed_hash in subs["attribs"]:
+                previous_filter = subs["attribs"][feed_hash]
                 del subs["attribs"][feed_hash]
 
             # Update the subscriber
