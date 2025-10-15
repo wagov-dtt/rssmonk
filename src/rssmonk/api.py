@@ -12,7 +12,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
 
 from rssmonk.utils import NO_REPLY, NotificationsSubpageSuffix, create_email_filter_list, extract_feed_hash,\
-    get_feed_hash_from_username, make_api_username, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
+    get_feed_hash_from_username, make_api_username, make_filter_url, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .config_manager import FeedConfigManager
@@ -580,7 +580,7 @@ async def process_feed(
             if not feed:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
-            campaigns = rss_monk.process_feed(feed, request.auto_send)
+            campaigns = await rss_monk.process_feed(feed, request.auto_send)
             return FeedProcessResponse(
                 feed_name=feed.name,
                 campaigns_created=campaigns,
@@ -612,7 +612,7 @@ async def process_feeds_bulk(
     try:
         with rss_monk:
             results = rss_monk.process_feeds_by_frequency(frequency)
-            total_campaigns = sum(results.values())
+            total_campaigns = sum(results.values()) # TODO - This probably was never going to work if coroutines are stored
             
             return BulkProcessResponse(
                 frequency=frequency,
@@ -684,9 +684,16 @@ async def feed_subscribe(
 
         try:
             rss_monk.subscribe(email=request.email, feed_hash=feed_hash)
+            # TODO - Get subscriber UUID
             if request.filter is not None:
-                if len(request.filter.keys()) > 1:
+                if len(request.filter.keys()) > 1: # 
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Only one frequency is permitted per request")
+                frequency = list(request.filter.keys())[0]
+
+                # Create early to ensure structure is followed
+                filter_map_int_to_name = None
+                # Filters here is for display in the transactional email, give flat (sorted) list, or single level categories
+                flat_filter, deep_filter = create_email_filter_list(request.filter[frequency], filter_map_int_to_name)
 
                 # Add filter to the subscriber
                 uuid = rss_monk.update_subscriber_filter(request.email, request.filter, feed_hash=feed_hash, need_confirmation=need_confirmation)
@@ -699,13 +706,15 @@ async def feed_subscribe(
                     if template is None:
                         logger.error("No subscribe template found for %s", feed_hash)
 
-                    frequency = list(request.filter.keys())[0]
+                    # Make filter list, but no email (make user type it in again)
+                    subscription_link = f"{base_url}?filter={",".join(flat_filter)}",
                     transaction = {
                         "subscriber_emails": [request.email],
                         "subject": template["subject"],
-                        "subscription_link": "", # TODO , create with fillers
+                        "subscription_link":  subscription_link,
                         "frequency": frequency,
-                        "filter": create_email_filter_list(request.filter[frequency], None, True),
+                        "deep_filter": deep_filter,
+                        "flat_filter": flat_filter,
                         "confirmation_link": f"{base_url}?id={request.email}&guid={uuid}"
                     }
 

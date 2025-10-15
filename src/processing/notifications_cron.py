@@ -9,15 +9,15 @@ from requests.auth import HTTPBasicAuth
 
 from rssmonk.models import Frequency
 
-logger = logging.getLogger("rssmonk.cron")
+logger = logging.getLogger("rssmonk.cron.notifications")
 
+# Retrieve Listmonk credentials to use with the HTTP request
 RSSMONK_URL = os.environ.get('RSSMONK_URL', 'http://localhost:8000')
 RSSMONK_USER = os.environ.get('RSSMONK_USER', 'http://localhost:8000')
 RSSMONK_PASS = os.environ.get('RSSMONK_PASS', 'http://localhost:8000')
 
 
 if __name__ == "__main__":
-    """Main cron job entry point."""
     if len(sys.argv) != 2:
         print("Usage: python cron <frequency>")
         print("Frequencies: instant, daily, weekly")
@@ -30,17 +30,15 @@ if __name__ == "__main__":
         print("Valid frequencies: instant, daily, weekly")
         sys.exit(1)
 
-    # Retrieve Listmonk credentials to use with the HTTP request
+
 
     logger.info("Starting RSS Monk cron job for %s feeds", frequency.value)
     basic_auth = HTTPBasicAuth(RSSMONK_USER, RSSMONK_PASS)
 
     with requests.Session() as session:
         try:
-            # Collect the nonce from the login page to sati2sfy CSRF protection
+            # Trigger the bulk processing system
             response = session.post(f"{RSSMONK_URL}/api/feeds/process/bulk/{frequency}", basic=basic_auth)
-
-            print(response.text)
 
             if response.json is not None:
                 results = response.json

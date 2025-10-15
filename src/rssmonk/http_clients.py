@@ -101,7 +101,6 @@ class ListmonkClient:
 
     def post(self, path, json_data):
         """POST request."""
-        print(json_data)
         return self._make_request(HTTPMethod.POST, path, json=json_data)
 
     def put(self, path, json_data):

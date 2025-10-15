@@ -529,7 +529,7 @@ class RSSMonk:
             logger.error(f"Feed processing failed for {feed.name}: {e}")
             return 0
 
-    def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
+    async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
         """Process all feeds of given frequency that are due."""
         feeds = [f for f in self.list_feeds() if frequency in f.frequencies]
         results = {}

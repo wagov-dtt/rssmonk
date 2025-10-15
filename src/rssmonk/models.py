@@ -6,7 +6,13 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from rssmonk.utils import LIST_DESC_FEED_URL, MULTIPLE_FREQ, SUB_BASE_URL, EmailType
+from rssmonk.utils import LIST_DESC_FEED_URL, SUB_BASE_URL, EmailType
+
+
+# Data Types
+FilterLists = list[int] | list[str] # TODO - Empty FilterLists is getting pass Pydantic
+FrequencyFilterType = FilterLists | dict[str, FilterLists]
+"""This is to have the permitted filter data structure"""
 
 # Data Type Models
 
@@ -143,13 +149,13 @@ class PublicSubscribeRequest(BaseModel):
 class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
-    filter: Optional[dict[Frequency, list[str] | dict]] = Field(..., description="The filter as JSON")
+    filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
 
 class SubscribeAdminRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
-    filter: Optional[dict[Frequency, list[str] | dict]] = Field(..., description="The filter as JSON")
+    filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
     need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
 
 class SubscriptionPreferencesRequest(BaseModel):
