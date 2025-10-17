@@ -10,9 +10,8 @@ from rssmonk.utils import LIST_DESC_FEED_URL, SUB_BASE_URL, EmailType
 
 
 # Data Types
-FilterLists = list[int] | list[str] # TODO - Empty FilterLists is getting pass Pydantic
-FrequencyFilterType = FilterLists | dict[str, FilterLists]
-"""This is to have the permitted filter data structure"""
+FrequencyFilterType = list[int] | dict[str, list[int]]
+DisplayTextFilterType = list[str] | dict[str, list[str]]
 
 # Data Type Models
 
@@ -150,13 +149,15 @@ class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
+    display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The display text for the filter above")
 
 class SubscribeAdminRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
     filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
-    need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
+    display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The display text for the filter above")
+    bypass_confirmation: Optional[bool] = Field(False, description="Bypass the normal temporary filter and email for confirmation.")
 
 class SubscriptionPreferencesRequest(BaseModel):
     """Request model for a subscription endpoint with filters for the feed."""
@@ -176,7 +177,8 @@ class UnSubscribeAdminRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
     email: str = Field(..., description="Subscriber email address ")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
-    need_confirm: Optional[bool] = Field(True, description="Store filter in a temporary setting and email user")
+    # TODO - Is this required?
+    bypass_confirmation: Optional[bool] = Field(False, description="Bypass any second email that might be send out for unsubscribing")
 
 # Response Models
 

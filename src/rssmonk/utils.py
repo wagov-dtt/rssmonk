@@ -1,6 +1,8 @@
 from enum import Enum
 import hashlib
+import traceback
 from typing import Any, Optional, Tuple
+
 
 # TODO - This... should be changed at somepoint to an env var
 NO_REPLY = "noreply@noreply (No reply location)"
@@ -72,37 +74,55 @@ def make_feed_role_name(url: str) -> str:
 def make_template_name(feed_hash: str, email_type: EmailType) -> str:
     return f"{feed_hash}-{email_type.value}"
 
-def map_id_to_name(mapping: dict, ident: int) -> str:
-    return mapping[ident] if ident in mapping else f"Unknown ({ident})"
+def map_id_to_name_category(ident: int, mapping: Optional[dict]) -> Tuple[str, Optional[str]]:
+    """Maps a singular number to a name and a category"""
+    category = None
+    mapped_value = f"Unknown ({ident})"
 
-def make_filter_url(data: Any) -> str:
-    """Creates a flat url """
-    return ""
+    if mapping is not None and ident in mapping:
+        mapped_value = mapping[ident]
+    return mapped_value, category
 
-def create_email_filter_list(data: Any, mapping: dict[int, str] = None) -> Tuple[list[str], dict]:
+def make_filter_url(data: list[str] | dict[str, list[int]]) -> str:
+    """Creates a flat url string"""
+    print(data)
+
+    if isinstance(data, list):
+        list_str = ",".join(value)
+        return f"filter={list_str}"
+    elif isinstance(data, dict):
+        value = ""
+        value_list = []
+        for key, value in data.items():
+            if isinstance(value, list):
+                list_str = ",".join(value) # TODO - This needs rework?
+                value_list.append(f"{key}={list_str}")
+        return "&".join(value_list)
+    else:
+        return ""
+
+def create_email_filter_list(data: Any, value_map: Optional[dict[int, str]] = None) -> Tuple[list[str], dict]:
     """
     Converts a filter into a flatter structure into a pre determined list of strings (to preserve order)
     Only allow one layer of dictionary and convert to a flat string
 
     Can accept numbers in the data which will need to be mapped to a string with the help of the map.
-    TODO
     """
-    # This can be unbounded. Ensure API access is from trusted modules
-    data_type = type(data)
     return_list = []
+    data_type = type(data)
     return_dict = {} # This will be filled if there is a mapping system
     if data_type == list:
         for item in data:
             if isinstance(item, int):
-                # Numbered filter requires a 
-                category, mapped_name = map_id_to_name(mapping, item)
+                # Numbered filter requires a mapping to determine 
+                category, mapped_name = map_id_to_name_category(item, value_map)
                 if category not in return_dict:
                     return_dict[category] = []
-
                 return_dict[category].append(mapped_name)
+
                 return_list.append(mapped_name)
             else:
-                # Assume str, but also, assume no translation possible, numbers for translation only
+                # Assume str, but also, assume no translation possible, numbers can only be translated
                 return_list.append(str(item))
     elif data_type == dict:
         for key, value in dict(data).items():
@@ -114,12 +134,14 @@ def create_email_filter_list(data: Any, mapping: dict[int, str] = None) -> Tuple
             if str(key) not in return_dict:
                 return_dict[str(key)] = []
             # Value here is a known list, attempt to map in case it is list[int]
-            temp_list, _ = create_email_filter_list(value, mapping)
-            return_dict[str(key)].append(temp_list)
+            temp_list, _ = create_email_filter_list(value, value_map)
+
+            return_list += temp_list
+            return_dict[str(key)] = temp_list
     else:
         raise ValueError("Data type must be either be an array or object")
-    return return_list, return_dict
 
+    return return_list, return_dict
 
 # Should be called after validation of feed visibility
 def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:

@@ -397,7 +397,7 @@ class RSSMonk:
                 self._admin.delete_email_template(template["id"])
 
 
-    # Subscriber operations
+    # Subscriber operations. Data from these functions should not leak attributes 
 
     def add_subscriber(self, email: str, name: Optional[str] = None) -> Subscriber:
         """Add subscriber."""
@@ -410,6 +410,22 @@ class RSSMonk:
         if subs:
             s = subs[0]
             return s["attribs"]
+        return None
+
+    def get_subscriber_by_uuid(self, uuid: str) -> Optional[dict]:
+        """Get existing subscriber's data block."""
+        subs = self._admin.get_subscribers(query=f"subscribers.uuid = '{uuid}'")
+        if subs:
+            s = subs[0]
+            return s["uuid"]
+        return None
+
+    def get_subscriber_uuid(self, email: str) -> str | None:
+        """Get existing subscriber's data block."""
+        subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        if subs:
+            s = subs[0]
+            return s["uuid"]
         return None
 
     def get_or_create_subscriber(self, email: str) -> Subscriber:
@@ -446,7 +462,7 @@ class RSSMonk:
         return True
     
     def update_subscriber_filter(self, email: str, sub_filter: dict, feed_url: Optional[str] = None, feed_hash: Optional[str] = None,
-                                 need_confirmation: bool = True) -> Optional[str]:
+                                 bypass_confirmation: bool = True) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
@@ -469,23 +485,25 @@ class RSSMonk:
         #     }
         #   }
         # }
-        attribs = subs['attribs']
+        attribs = subs["attribs"]
         url_dict = attribs[feed_hash] if feed_hash in attribs else {}
         filter_uuid = uuid.uuid4().hex
-        if need_confirmation:
+        if not bypass_confirmation:
             # Add filter with 24 hours expiry
             timestamp = int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp())
-            url_dict[filter_uuid] = {'filter': sub_filter, 'expires': timestamp}
+            url_dict[filter_uuid] = {"filter": sub_filter, "expires": timestamp}
         else:
-            url_dict = {'active': sub_filter}
+            url_dict = {"filter": sub_filter}
+            # Generate the token that will be used in email to help validate the removal of the subscription
+            url_dict["token"] = uuid.uuid4().hex
         attribs[feed_hash] = url_dict
 
-        # Have to covert the extracted lists to be a plain list of numbers to retain subscriptions
+        # Have to covert the extracted lists to be a list of numbers to retain subscriptions
         subs["lists"] = numberfy_subbed_lists(subs["lists"])
 
         # Update the subscriber
         self._client.update_subscriber(subs["id"], subs)
-        return filter_uuid if need_confirmation else None
+        return None if bypass_confirmation else filter_uuid
 
 
     # Feed processing
