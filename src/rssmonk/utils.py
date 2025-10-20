@@ -84,22 +84,26 @@ def map_id_to_name_category(ident: int, mapping: Optional[dict]) -> Tuple[str, O
     return mapped_value, category
 
 def make_filter_url(data: list[str] | dict[str, list[int]]) -> str:
-    """Creates a flat url string"""
-    print(data)
-
+    """Creates a flat url string that can be used"""
     if isinstance(data, list):
-        list_str = ",".join(value)
-        return f"filter={list_str}"
+        # A flat list not part of a dict needs a default keyword
+        return f"filter={",".join(str(x) for x in value)}"
     elif isinstance(data, dict):
-        value = ""
         value_list = []
         for key, value in data.items():
             if isinstance(value, list):
-                list_str = ",".join(value) # TODO - This needs rework?
-                value_list.append(f"{key}={list_str}")
+                # Make string list from variable list
+                value_list.append(f"{key}={",".join(str(x) for x in value)}")
         return "&".join(value_list)
     else:
         return ""
+
+# Should be called after validation of feed visibility
+def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
+    value = get_feed_hash_from_username(username)
+    if value is None:
+        value = make_url_hash(feed_url) if feed_url is not None else ""
+    return value
 
 def create_email_filter_list(data: Any, value_map: Optional[dict[int, str]] = None) -> Tuple[list[str], dict]:
     """
@@ -142,10 +146,3 @@ def create_email_filter_list(data: Any, value_map: Optional[dict[int, str]] = No
         raise ValueError("Data type must be either be an array or object")
 
     return return_list, return_dict
-
-# Should be called after validation of feed visibility
-def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
-    value = get_feed_hash_from_username(username)
-    if value is None:
-        value = make_url_hash(feed_url) if feed_url is not None else ""
-    return value

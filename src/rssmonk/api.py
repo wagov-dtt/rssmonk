@@ -703,32 +703,31 @@ async def feed_subscribe(
                 if not bypass_confirmation:
                     feed_data = rss_monk.get_feed_by_hash(feed_hash)
                     base_url = feed_data.subscription_base_url
-                    subject = "Media Statement Registration"
-                    
+                    subject = None # Accessed by {{ .Tx.Data.subject }} if used
+
                     template = rss_monk.get_template(feed_hash, EmailType.SUBSCRIBE)
                     if template is None:
                         logger.error("No subscribe template found for %s", feed_hash)
 
                     # Make filter list, for the subscribe link without email (make user type it in again)
-                    subscription_link = f"{base_url}/subscribe?{make_filter_url(request.filter[frequency])}"
-
-                    request.display_text[frequency]
+                    subscribe_link = f"{base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
                     transaction = {
                         "subscriber_emails": [request.email],
-                        "subject": template["subject"],
-                        "subscription_link":  subscription_link,
+                        "subject": subject,
+                        "subscription_link":  subscribe_link,
                         "frequency": frequency,
                         "filter": request.display_text[frequency],
                         "confirmation_link": f"{base_url}?id={subscriber_uuid}&guid={pending_uuid}"
                     }
 
                     # Send email out for the user
-                    rss_monk.getClient().send_transactional(NO_REPLY, template["id"], "html", transaction, subject)
+                    rss_monk.getClient().send_transactional(NO_REPLY, template["id"], "html", transaction)
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
         except Exception as e:
             logger.error("Failed to subscribe: %s", e)
+            traceback.print_exc()
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
 
 
@@ -808,7 +807,7 @@ async def feed_unsubscribe(
         feed_url = None
         bypass_confirmation = False
         if isinstance(request, UnSubscribeAdminRequest):
-            bypass_confirmation = request.need_confirm is not None and request.need_confirm
+            bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
             feed_url = str(request.feed_url)
         feed_hash = extract_feed_hash(credentials.username, feed_url)
         rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
@@ -841,7 +840,7 @@ async def feed_unsubscribe(
             subs["lists"] = subs_lists
 
             # Remove subscription filters from the subscriber
-            previous_filter = None
+            previous_filter = None # TODO = This is to make the resubscribe email
             if feed_hash in subs["attribs"]:
                 previous_filter = subs["attribs"][feed_hash]
                 del subs["attribs"][feed_hash]
@@ -850,16 +849,18 @@ async def feed_unsubscribe(
             # TODO - If lists is empty, should we delete the subscriber?
             rss_monk.getClient().update_subscriber(subs["id"], subs)
             
-            if bypass_confirmation:
+            if not bypass_confirmation:
                 # Email the unsubscribe email
                 template = rss_monk.get_template(feed_hash, EmailType.UNSUBSCRIBE)
                 if template is None:
                     logger.error("No unsubscribe template found for %s", feed_hash)
 
+                subscribe_link = f"{feed_data.subscription_base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
                 transaction = {
                     "subscriber_emails": [request.email],
-                    "subscription_link": f"{feed_data.subscription_base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}",
+                    "subscription_link": subscribe_link,
                 }
+                print(subscribe_link)
                 # Send email out for the user
                 rss_monk.getClient().send_transactional(NO_REPLY, template["id"], "html", transaction)
 

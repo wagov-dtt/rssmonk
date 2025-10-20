@@ -276,10 +276,13 @@ class ListmonkClient:
             "subscriber_emails": data["subscriber_emails"],
             "from_email": reply_email,
             "template_id": template_id,
-            "subject": subject,
             "data": data,
             "content_type": content_type
         }
+        if subject is not None:
+            # Over ride
+            payload["subject"] = subject
+
         return self.post("/api/tx", payload)
 
     def get_users(self) -> list | None:

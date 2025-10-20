@@ -433,7 +433,7 @@ class RSSMonk:
         subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         if subs:
             s = subs[0]
-            return Subscriber(id=s["id"], email=s["email"], name=s["name"])
+            return Subscriber(id=s["id"], email=s["email"]) # Listmonk will populate name from the email
         return self.add_subscriber(email)
 
     def list_subscribers(self) -> list[Subscriber]:

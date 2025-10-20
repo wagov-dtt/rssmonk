@@ -177,7 +177,6 @@ class UnSubscribeAdminRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
     email: str = Field(..., description="Subscriber email address ")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
-    # TODO - Is this required?
     bypass_confirmation: Optional[bool] = Field(False, description="Bypass any second email that might be send out for unsubscribing")
 
 # Response Models
