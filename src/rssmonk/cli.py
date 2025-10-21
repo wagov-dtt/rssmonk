@@ -20,7 +20,7 @@ def setup_app_logging():
     try:
         # Create .env if missing
         if Settings.ensure_env_file():
-            print("Created .env file with default settings. Please edit LISTMONK_APITOKEN.")
+            print("Created .env file with default settings. Please edit LISTMONK_ADMIN_PASSWORD.")
         
         settings = Settings()
         setup_logging(level=settings.log_level, format_str=settings.log_format)

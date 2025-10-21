@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 def test_root_endpoint():
     """Test root endpoint works without authentication."""
     # Set required env var for import
-    os.environ['LISTMONK_APITOKEN'] = 'test-token'
+    os.environ['LISTMONK_ADMIN_PASSWORD'] = 'test-token'
     
     from rssmonk.api import app
     client = TestClient(app)
@@ -22,7 +22,7 @@ def test_root_endpoint():
 
 def test_health_endpoint():
     """Test health endpoint works without authentication."""
-    os.environ['LISTMONK_APITOKEN'] = 'test-token' 
+    os.environ['LISTMONK_ADMIN_PASSWORD'] = 'test-token' 
     os.environ['LISTMONK_URL'] = 'http://localhost:9000'
     
     from rssmonk.api import app

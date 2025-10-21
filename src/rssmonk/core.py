@@ -15,7 +15,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber, AVAILABLE_FREQUENCY_SETTINGS
-from rssmonk.utils import MULTIPLE_FREQ, SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag_from_url, numberfy_subbed_lists
+from rssmonk.utils import MULTIPLE_FREQ, SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag_from_hash, make_url_tag_from_url, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -30,8 +30,8 @@ class Settings(BaseSettings):
 
     # Listmonk configuration
     listmonk_url: str = Field(default="http://localhost:9000", description="Listmonk API URL")
-    listmonk_username: str = Field(default="api", alias="LISTMONK_APIUSER", description="Listmonk API username")
-    listmonk_password: str = Field(alias="LISTMONK_APITOKEN", description="Listmonk API token/password")
+    listmonk_admin_username: str = Field(default="api", alias="LISTMONK_ADMIN_USER", description="Listmonk admin username")
+    listmonk_admin_password: str = Field(alias="LISTMONK_ADMIN_PASSWORD", description="Listmonk admin token/password")
 
     # RSS processing configuration
     rss_auto_send: bool = Field(
@@ -63,13 +63,13 @@ class Settings(BaseSettings):
 
     def validate_required(self):
         """Validate required settings."""
-        if not self.listmonk_password:
-            raise ValueError("LISTMONK_APITOKEN environment variable is required")
+        if not self.listmonk_admin_password:
+            raise ValueError("LISTMONK_ADMIN_PASSWORD environment variable is required")
 
 
     def validate_admin_auth(self, username: str, password: str) -> bool:
         # Only used as a quick check against settings (env vars) before going to work against Listmonk.
-        return hmac.compare_digest(password, self.listmonk_password) and username == self.listmonk_username
+        return hmac.compare_digest(password, self.listmonk_admin_password) and username == self.listmonk_admin_username
 
 
     @classmethod
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
         
         # Required fields
         env_content += "# Required - get from your Listmonk instance\n"
-        env_content += "LISTMONK_APITOKEN=your-token-here\n\n"
+        env_content += "LISTMONK_ADMIN_PASSWORD=your-token-here\n\n"
         
         # Optional fields with defaults
         env_content += "# Optional - uncomment and modify as needed\n"
@@ -136,8 +136,8 @@ class RSSMonk:
         )
         self._admin = ListmonkClient(
             base_url=self.settings.listmonk_url,
-            username=self.settings.listmonk_username,
-            password=self.settings.listmonk_password,
+            username=self.settings.listmonk_admin_username,
+            password=self.settings.listmonk_admin_password,
             auth_type=AuthType.SESSION,
             timeout=self.settings.rss_timeout
         )
@@ -164,7 +164,7 @@ class RSSMonk:
             raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
 
         # Hash is used as a higher priority than the url
-        found_feed = self._client.find_list_by_tag(tag=f"url:{feed_hash}" if feed_hash is not None else make_url_tag_from_url(feed_url))
+        found_feed = self._client.find_list_by_tag(tag=make_url_tag_from_hash(feed_hash) if feed_hash is not None else make_url_tag_from_url(feed_url))
         if found_feed is None:
             raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
 

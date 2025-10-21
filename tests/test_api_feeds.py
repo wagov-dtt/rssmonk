@@ -16,7 +16,7 @@ def test_create_feed():
     """
     # TODO - This will require a Listmonk to be run to be the endpoint
     # Set required env var for import
-    os.environ['LISTMONK_APITOKEN'] = 'test-token'
+    os.environ['LISTMONK_ADMIN_PASSWORD'] = 'test-token'
     
     from rssmonk.api import app
     client = TestClient(app)

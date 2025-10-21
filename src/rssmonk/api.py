@@ -52,7 +52,7 @@ logger = get_logger(__name__)
 
 # Initialize settings and create .env if missing
 if Settings.ensure_env_file():
-    print("Created .env file with default settings. Please edit LISTMONK_APITOKEN before starting.")
+    print("Created .env file with default settings. Please edit LISTMONK_ADMIN_PASSWORD before starting.")
 
 settings = Settings()
 security = HTTPBasic()
@@ -62,10 +62,10 @@ swagger_ui_params = {
     "defaultModelsExpandDepth": -1,
     "persistAuthorization": True,
     "preauthorizeBasic": {
-        "username": settings.listmonk_username,
-        "password": settings.listmonk_password
+        "username": settings.listmonk_admin_username,
+        "password": settings.listmonk_admin_password
     }
-} if settings.listmonk_password else {
+} if settings.listmonk_admin_password else {
     "defaultModelsExpandDepth": -1,
     "persistAuthorization": True,
 }
@@ -515,7 +515,6 @@ async def get_url_configurations(
     request: FeedAccountConfigurationRequest,
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
-    # TODO - Not sure what this is for??
     """Get all configurations for a URL."""
     try:
         with rss_monk:

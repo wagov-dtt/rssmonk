@@ -80,7 +80,7 @@ just check
 just start
 
 # Test CLI commands
-export LISTMONK_APITOKEN=test123
+export LISTMONK_ADMIN_PASSWORD=test123
 just feeds health
 
 # Test API server

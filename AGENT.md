@@ -35,7 +35,7 @@ just start    # Deploy RSS Monk on k3d cluster
 ## Code Style
 - Python scripts use uv/ruff
 - YAML uses 2-space indentation
-- Environment variables with `LISTMONK_APIUSER` and `LISTMONK_APITOKEN` prefix
+- Environment variables with `LISTMONK_ADMIN_USER` and `LISTMONK_ADMIN_PASSWORD` prefix
 - Container images use latest tags for development
 - **ASCII only**: Avoid Unicode/emoji characters in code files (difficult for some tools to parse)
   - Use simple text: "OK", "ERROR", "SUCCESS" instead of ✅❌🎉

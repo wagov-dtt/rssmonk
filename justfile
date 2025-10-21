@@ -105,7 +105,7 @@ setup: prereqs install check
   @echo "  just check             # Run all checks"
   @echo ""
   @echo "Environment variables (for real usage):"
-  @echo "  LISTMONK_APITOKEN=your-token"
+  @echo "  LISTMONK_ADMIN_PASSWORD=your-token"
   @echo "  LISTMONK_URL=http://localhost:9000"
 
 # Analyze code complexity

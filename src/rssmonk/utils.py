@@ -74,17 +74,8 @@ def make_feed_role_name(url: str) -> str:
 def make_template_name(feed_hash: str, email_type: EmailType) -> str:
     return f"{feed_hash}-{email_type.value}"
 
-def map_id_to_name_category(ident: int, mapping: Optional[dict]) -> Tuple[str, Optional[str]]:
-    """Maps a singular number to a name and a category"""
-    category = None
-    mapped_value = f"Unknown ({ident})"
-
-    if mapping is not None and ident in mapping:
-        mapped_value = mapping[ident]
-    return mapped_value, category
-
 def make_filter_url(data: list[str] | dict[str, list[int]]) -> str:
-    """Creates a flat url string that can be used"""
+    """Creates a flat URL query string from a list or dictionary of filters."""
     if isinstance(data, list):
         # A flat list not part of a dict needs a default keyword
         return f"filter={",".join(str(x) for x in value)}"
@@ -95,54 +86,17 @@ def make_filter_url(data: list[str] | dict[str, list[int]]) -> str:
                 # Make string list from variable list
                 value_list.append(f"{key}={",".join(str(x) for x in value)}")
         return "&".join(value_list)
-    else:
-        return ""
 
-# Should be called after validation of feed visibility
+    return ""
+
 def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
+    """
+    Returns a feed hash based on the username. If no hash is found,
+    it falls back to generating one from the feed URL.
+
+    Should be called after validation of feed visibility.
+    """
     value = get_feed_hash_from_username(username)
     if value is None:
         value = make_url_hash(feed_url) if feed_url is not None else ""
     return value
-
-def create_email_filter_list(data: Any, value_map: Optional[dict[int, str]] = None) -> Tuple[list[str], dict]:
-    """
-    Converts a filter into a flatter structure into a pre determined list of strings (to preserve order)
-    Only allow one layer of dictionary and convert to a flat string
-
-    Can accept numbers in the data which will need to be mapped to a string with the help of the map.
-    """
-    return_list = []
-    data_type = type(data)
-    return_dict = {} # This will be filled if there is a mapping system
-    if data_type == list:
-        for item in data:
-            if isinstance(item, int):
-                # Numbered filter requires a mapping to determine 
-                category, mapped_name = map_id_to_name_category(item, value_map)
-                if category not in return_dict:
-                    return_dict[category] = []
-                return_dict[category].append(mapped_name)
-
-                return_list.append(mapped_name)
-            else:
-                # Assume str, but also, assume no translation possible, numbers can only be translated
-                return_list.append(str(item))
-    elif data_type == dict:
-        for key, value in dict(data).items():
-            if type(value) == dict:
-                raise ValueError("Only one sublevel of dictionary is permitted")
-            elif type(value) != list:
-                raise ValueError("Sublevel data type for %s must be an array", str(key))
-
-            if str(key) not in return_dict:
-                return_dict[str(key)] = []
-            # Value here is a known list, attempt to map in case it is list[int]
-            temp_list, _ = create_email_filter_list(value, value_map)
-
-            return_list += temp_list
-            return_dict[str(key)] = temp_list
-    else:
-        raise ValueError("Data type must be either be an array or object")
-
-    return return_list, return_dict

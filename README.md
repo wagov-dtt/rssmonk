@@ -53,10 +53,10 @@ Create a `.env` file in the project root to configure RSS Monk:
 
 ```bash
 # Required
-LISTMONK_APITOKEN=your-token
+LISTMONK_ADMIN_PASSWORD=your-token
 
 # Optional - defaults shown
-LISTMONK_APIUSER=api
+LISTMONK_ADMIN_USER=api
 LISTMONK_URL=http://localhost:9000
 RSS_AUTO_SEND=false
 RSS_TIMEOUT=30.0
@@ -64,7 +64,7 @@ RSS_USER_AGENT="RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rss
 LOG_LEVEL=INFO
 ```
 
-RSS Monk uses pydantic-settings which automatically loads `.env` files. Only `LISTMONK_APITOKEN` is required.
+RSS Monk uses pydantic-settings which automatically loads `.env` files. Only `LISTMONK_ADMIN_PASSWORD` is required.
 
 ### API Authentication
 
