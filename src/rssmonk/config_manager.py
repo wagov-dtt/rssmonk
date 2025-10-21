@@ -116,7 +116,7 @@ class FeedConfigManager:
             "id": feed.id,
             "name": feed.name,
             "url": feed.feed_url,
-            "frequency": feed.frequencies.value,
+            "frequency": feed.frequencies,
             "url_hash": feed.url_hash
         }
     

@@ -73,7 +73,7 @@ swagger_ui_params = {
 # FastAPI app with comprehensive OpenAPI configuration
 app = FastAPI(
     title="RSS Monk API",
-    version="2.0.0",
+    version="0.0.1",
     description="""
 RSS Monk - RSS feed aggregator that turns RSS feeds into email newsletters using Listmonk.
 
@@ -84,7 +84,7 @@ This API provides three main functions:
    - `/api/feeds/process` - Process feeds (individual or bulk for cron jobs)
    - `/api/public/subscribe` - Public subscription without authentication
 
-2. **Listmonk Passthrough** - All other `/api/*` requests are passed through to Listmonk with authentication
+2. **Listmonk Passthrough** - All other `/api/*` requests are passed through to Listmonk with authentication (Requires admin privledges)
    
 3. **Public Passthrough** - All other `/api/public/*` requests are passed through to Listmonk without authentication
 
@@ -98,7 +98,7 @@ Uses your Listmonk API credentials (username: `api`, password: your API token).
 RSS Monk uses Listmonk lists as the source of truth:
 - Feed metadata stored in list descriptions
 - Processing state stored in list tags
-- GUID-based deduplication prevents duplicate campaigns
+- UUID-based deduplication prevents duplicate campaigns
 - No persistent state files required
     """,
     contact={
@@ -274,8 +274,8 @@ async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(secur
     response_model=FeedResponse,
     status_code=201,
     tags=["feeds"],
-    summary="Create RSS Feed (Requires admin privledges)",
-    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Requires admin privledges."
+    summary="Create RSS Feed (Requires admin privileges)",
+    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Requires admin privileges."
 )
 async def create_feed(
     request: FeedCreateRequest,
@@ -310,8 +310,8 @@ async def create_feed(
     response_model=TemplateResponse,
     status_code=201,
     tags=["feeds"],
-    summary="Create email templates for RSS Feed (Requires admin privledges)",
-    description="Creates or updates email templates for RSS feed for newsletter generation. Requires admin privledges."
+    summary="Create email templates for RSS Feed (Requires admin privileges)",
+    description="Creates or updates email templates for RSS feed for newsletter generation. Requires admin privileges."
 )
 async def create_template(
     request: TemplateRequest,
@@ -352,8 +352,8 @@ async def create_template(
     response_model=ApiAccountResponse,
     status_code=201,
     tags=["feeds"],
-    summary="Create account RSS Feed (Requires admin privledges)",
-    description="Create a new limited access account to operate on the feed. Requires admin privledges."
+    summary="Create account RSS Feed (Requires admin privileges)",
+    description="Create a new limited access account to operate on the feed. Requires admin privileges."
 )
 async def create_feed_account(
     request: FeedAccountRequest,
@@ -464,9 +464,9 @@ async def get_feed_by_url(
 @app.delete(
     "/api/feeds/by-url",
     tags=["feeds"],
-    summary="Delete Feed by URL (Requires admin privledges)",
+    summary="Delete Feed by URL (Requires admin privileges)",
     description="Remove an RSS feed by its URL and remove it from all subscribers." \
-    " It will also remove list roles, the account created and all associated email templates. Requires admin privledges."
+    " It will also remove list roles, the account created and all associated email templates. Requires admin privileges."
 )
 async def delete_feed_by_url(
     feed_url: str,
@@ -564,7 +564,7 @@ async def update_feed_configuration(
     response_model=FeedProcessResponse,
     tags=["processing"],
     summary="Process Single Feed",
-    description="Process a specific RSS feed and create email campaigns for new articles. Requires admin privledges."
+    description="Process a specific RSS feed and create email campaigns for new articles. Requires admin privileges."
 )
 async def process_feed(
     request: FeedProcessRequest,
@@ -599,7 +599,7 @@ async def process_feed(
     response_model=BulkProcessResponse,
     tags=["processing"],
     summary="Process Feeds by Frequency",
-    description="Process all RSS feeds of a specific frequency (used by cron jobs). Requires admin privledges."
+    description="Process all RSS feeds of a specific frequency (used by cron jobs). Requires admin privileges."
 )
 async def process_feeds_bulk(
     frequency: Frequency,
@@ -915,13 +915,16 @@ async def listmonk_passthrough(
 ):
     print(f"{path} at /api")
     """Passthrough authenticated requests to Listmonk API."""
-    # FastAPI doesn't need this code snippet, this should be handled with positioning of functions. Keeping because AI put it in here and may do so again
+    # FastAPI doesn't need this code snippet, this should be handled with positioning of functions.
+    # Keeping because AI put it in here and may do so again
     # Skip our own endpoints
     # if path in ["feeds", "feeds/process", "feeds/process/bulk", "public/subscribe"] or path.startswith("feeds/"):
     #    raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
     
     username, password = auth
-        
+    if not settings.validate_admin_auth(username, password):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
     try:
         async with httpx.AsyncClient() as client:
             # Forward the request to Listmonk

@@ -1,7 +1,9 @@
+import warnings
+warnings.warn("This module should not be imported for use. It is solely for mass api endpoint calls as a test", DeprecationWarning)
+
 # This script is a scrap to quickly populate items in Listmonk
 from typing import Optional
 import requests
-
 
 _URL = "http://localhost:9000"
 

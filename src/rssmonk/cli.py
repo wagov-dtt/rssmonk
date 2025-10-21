@@ -1,4 +1,6 @@
 """Simple Typer CLI for RSS Monk."""
+import warnings
+warnings.warn("This module will not be supported. Use the API endpoint instead", DeprecationWarning)
 
 from typing import Optional
 import typer
@@ -66,7 +68,7 @@ def list_feeds():
                 table.add_row(
                     feed.name,
                     feed.feed_url[:50] + "..." if len(feed.feed_url) > 50 else feed.feed_url,
-                    feed.frequencies.value,
+                    feed.frequencies,
                     str(feed.id),
                 )
 
