@@ -34,7 +34,7 @@ from .models import (
     Frequency,
     HealthResponse,
     PublicSubscribeRequest,
-    SubscribeAdminRequest,
+    SubscribeRequestAdmin,
     SubscribeConfirmRequest,
     SubscribeRequest,
     SubscriptionPreferencesRequest,
@@ -44,8 +44,8 @@ from .models import (
     ListmonkTemplate,
     TemplateRequest,
     TemplateResponse,
-    UnSubscribeAdminRequest,
-    UnSubscribeRequest,
+    UnsubscribeRequestAdmin,
+    UnsubscribeRequest,
 )
 
 logger = get_logger(__name__)
@@ -644,7 +644,7 @@ async def feed_get_subscription_preferences(
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
-                feed_url = str(request.feed_url) if isinstance(request, SubscribeAdminRequest) else None
+                feed_url = str(request.feed_url) if isinstance(request, SubscribeRequestAdmin) else None
                 rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
                 feed_hash = extract_feed_hash(credentials.username, feed_url)
                 del feed_url
@@ -668,7 +668,7 @@ async def feed_get_subscription_preferences(
     description="Subscribe an email address to an RSS feed. Authentication required"
 )
 async def feed_subscribe(
-    request: SubscribeRequest | SubscribeAdminRequest,
+    request: SubscribeRequest | SubscribeRequestAdmin,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> SubscriptionResponse:
@@ -676,10 +676,10 @@ async def feed_subscribe(
     # This can cover public or private feeds
     with rss_monk:
         bypass_confirmation = False
-        if isinstance(request, SubscribeAdminRequest):
+        if isinstance(request, SubscribeRequestAdmin):
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
 
-        feed_url = str(request.feed_url) if isinstance(request, SubscribeAdminRequest) else None
+        feed_url = str(request.feed_url) if isinstance(request, SubscribeRequestAdmin) else None
         rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
         feed_hash = extract_feed_hash(credentials.username, feed_url)
         del feed_url
@@ -797,7 +797,7 @@ async def feed_subscribe_confirm(
     description="Removes the email address from a RSS feed. Authentication required"
 )
 async def feed_unsubscribe(
-    request: UnSubscribeRequest | UnSubscribeAdminRequest,
+    request: UnsubscribeRequest | UnsubscribeRequestAdmin,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)   
 ):
@@ -805,7 +805,7 @@ async def feed_unsubscribe(
     with rss_monk:
         feed_url = None
         bypass_confirmation = False
-        if isinstance(request, UnSubscribeAdminRequest):
+        if isinstance(request, UnsubscribeRequestAdmin):
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
             feed_url = str(request.feed_url)
         feed_hash = extract_feed_hash(credentials.username, feed_url)

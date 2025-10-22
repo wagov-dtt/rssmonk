@@ -151,7 +151,7 @@ class SubscribeRequest(BaseModel):
     filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
     display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The display text for the filter above")
 
-class SubscribeAdminRequest(BaseModel):
+class SubscribeRequestAdmin(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
@@ -169,11 +169,11 @@ class SubscribeConfirmRequest(BaseModel):
     email: str = Field(..., description="Subscriber email address")
     uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
 
-class UnSubscribeRequest(BaseModel):
+class UnsubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
     token: str = Field(..., description="The token to match against the subscriber's filter to remove")
 
-class UnSubscribeAdminRequest(BaseModel):
+class UnsubscribeRequestAdmin(BaseModel):
     """Response model for a subscription preferences (filter)."""
     email: str = Field(..., description="Subscriber email address ")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
