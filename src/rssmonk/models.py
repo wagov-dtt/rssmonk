@@ -134,9 +134,9 @@ class FeedProcessRequest(BaseModel):
 class TemplateRequest(BaseModel):
     """Request model for creating a template for a RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
-    phase_type: EmailType = Field(..., description="The phase in the email subscribe cycle the template is for")
     template_type: str = Field(..., description="Type of the template (campaign, campaign_visual, or tx)")
-    subject: Optional[str] = Field(None, description="The email template subject line, required for tx templates")
+    phase_type: EmailType = Field(..., description="The phase in the email subscribe cycle the template is for")
+    subject: Optional[str] = Field(None, description="The email template subject line. Mandatory for tx templates")
     body_source: Optional[str] = Field(None, description="If type is campaign_visual, the JSON source for the email-builder tempalate")
     body: str = Field(..., description="HTML body of the template")
 
@@ -166,8 +166,8 @@ class SubscriptionPreferencesRequest(BaseModel):
 
 class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""
-    email: str = Field(..., description="Subscriber email address")
-    uuid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
+    id: str = Field(..., description="The id of the subscriber")
+    guid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
 
 class UnsubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""

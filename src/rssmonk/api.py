@@ -798,10 +798,10 @@ async def feed_subscribe_confirm(
 
 
         try:
-            email = request.email
-            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.email = '{email}'")
-            req_uuid = request.uuid
-            subs: dict  = sub_list[0] if sub_list  else None
+            subscriber_id = request.id
+            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid = '{subscriber_id}'")
+            req_uuid = request.guid
+            subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subs or "id" not in subs:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
 
