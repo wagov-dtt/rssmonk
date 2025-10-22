@@ -63,10 +63,10 @@ if __name__ == "__main__":
     This script handles the creation of all accounts required to run Listmonk and flows through rsssmonk
     """
     session = _authenticate_with_listmonk()
-    if session is not None:
+    if session:
         with session:
             # Make limited user role for feed accounts
-            for item in range(10000):
+            for item in range(2):
                 #_set_up_transactional_template(session)
                 #response = session.delete(f"{_URL}/api/templates/{(item + 7064)}")
                 _make_subscriber(f"daniel{item}@wagov.au")

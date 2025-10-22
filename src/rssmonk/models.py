@@ -149,15 +149,15 @@ class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
-    display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The display text for the filter above")
+    display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The text for the filter above for email")
 
 class SubscribeRequestAdmin(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
     filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
-    display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The display text for the filter above")
-    bypass_confirmation: Optional[bool] = Field(False, description="Bypass the normal temporary filter and email for confirmation.")
+    display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The text for the filter above for email")
+    bypass_confirmation: Optional[bool] = Field(False, description="Bypass the temporary filter and email for confirmation.")
 
 class SubscriptionPreferencesRequest(BaseModel):
     """Request model for a subscription endpoint with filters for the feed."""

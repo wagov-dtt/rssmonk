@@ -689,7 +689,7 @@ async def feed_get_subscription_preferences(
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
-                feed_url = str(request.feed_url) if isinstance(request, SubscribeRequestAdmin) else None
+                feed_url = str(request.feed_url)
                 rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
                 feed_hash = extract_feed_hash(credentials.username, feed_url)
                 del feed_url
@@ -723,6 +723,8 @@ async def feed_subscribe(
     with rss_monk:
         bypass_confirmation = False
         if isinstance(request, SubscribeRequestAdmin):
+            if not settings.validate_admin_auth(credentials.username, credentials.password):
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
 
         feed_url = str(request.feed_url) if isinstance(request, SubscribeRequestAdmin) else None
@@ -856,6 +858,8 @@ async def feed_unsubscribe(
         bypass_confirmation = False
         subscriber_query = ""
         if isinstance(request, UnsubscribeRequestAdmin):
+            if not settings.validate_admin_auth(credentials.username, credentials.password):
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
             feed_url = str(request.feed_url)
             subscriber_query = f"subscribers.email = '{request.email}'"
@@ -941,9 +945,7 @@ async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionRespo
         # Use default settings for public endpoint
         with RSSMonk() as rss_monk:
             rss_monk.subscribe(request.email, str(request.feed_url))
-            return SubscriptionResponse(
-                message="Subscription successful"
-            )
+            return SubscriptionResponse(message="Subscription successful")
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except Exception as e:

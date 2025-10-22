@@ -98,5 +98,5 @@ def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
     """
     value = get_feed_hash_from_username(username)
     if value is None:
-        value = make_url_hash(feed_url) if feed_url is not None else ""
+        value = make_url_hash(feed_url) if feed_url else ""
     return value
