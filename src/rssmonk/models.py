@@ -171,6 +171,7 @@ class SubscribeConfirmRequest(BaseModel):
 
 class UnsubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
+    id: str = Field(..., description="The id of the subscriber")
     token: str = Field(..., description="The token to match against the subscriber's filter to remove")
 
 class UnsubscribeRequestAdmin(BaseModel):

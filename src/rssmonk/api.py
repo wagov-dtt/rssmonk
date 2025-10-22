@@ -854,22 +854,24 @@ async def feed_unsubscribe(
     with rss_monk:
         feed_url = None
         bypass_confirmation = False
+        subscriber_query = ""
         if isinstance(request, UnsubscribeRequestAdmin):
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
             feed_url = str(request.feed_url)
+            subscriber_query = f"subscribers.email = '{request.email}'"
+        else:
+            subscriber_query = f"subscribers.uuid = '{request.id}'"
         feed_hash = extract_feed_hash(credentials.username, feed_url)
         rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
         del feed_url
 
         try:
-            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.email = '{request.email}'")
-            subs: dict  = sub_list[0] if sub_list is not None else None
-            if not subs or "id" not in subs:
+            sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
+            subscriber_details = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
+            if not subscriber_details or "id" not in subscriber_details:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
 
             # Search for subscription for the user to delete
-            #feed_hash = credentials.username.replace(FEED_ACCOUNT_PREFIX, "").strip() TODO - Fix when account creations is done
-            feed_hash = make_url_hash(str(request.feed_url))
             feed_list = rss_monk.getClient().find_list_by_tag(make_url_tag_from_hash(feed_hash))
             if feed_list is None:
                 # Treat as if the subscriber has been removed from the list. 
@@ -881,36 +883,39 @@ async def feed_unsubscribe(
             feed_data = rss_monk._parse_feed_from_list(feed_list)
 
             # Remove list from subscriber's list
-            subs_lists = numberfy_subbed_lists(subs["lists"])
+            subs_lists = numberfy_subbed_lists(subscriber_details["lists"])
             if feed_data.id in subs_lists:
                 subs_lists.remove(feed_data.id)
 
-            subs["lists"] = subs_lists
+            subscriber_details["lists"] = subs_lists
 
             # Remove subscription filters from the subscriber
-            previous_filter = None # TODO = This is to make the resubscribe email
-            if feed_hash in subs["attribs"]:
-                previous_filter = subs["attribs"][feed_hash]
-                del subs["attribs"][feed_hash]
+            previous_filter = {} # This is to make the resubscribe email
+            if feed_hash in subscriber_details["attribs"]:
+                previous_filter = subscriber_details["attribs"][feed_hash]
+                del subscriber_details["attribs"][feed_hash]
 
             # Update the subscriber
             # TODO - If lists is empty, should we delete the subscriber?
-            rss_monk.getClient().update_subscriber(subs["id"], subs)
+            rss_monk.getClient().update_subscriber(subscriber_details["id"], subscriber_details)
             
             if not bypass_confirmation:
+                # TODO - This segment may not be working yet
                 # Email the unsubscribe email
                 template = rss_monk.get_template(feed_hash, EmailType.UNSUBSCRIBE)
                 if template is None:
                     logger.error("No unsubscribe template found for %s", feed_hash)
+                    # TODO - Add option in list description for optional email
+                    return
 
                 subscribe_link = f"{feed_data.subscription_base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
                 transaction = {
-                    "subscriber_emails": [request.email],
+                    "subscriber_emails": subscriber_details["email"],
                     "subscription_link": subscribe_link,
                 }
                 print(subscribe_link)
                 # Send email out for the user
-                rss_monk.getClient().send_transactional(NO_REPLY, template["id"], "html", transaction)
+                rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
 
             return EmptyResponse()
         except ValueError as e:
