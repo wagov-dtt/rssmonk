@@ -11,29 +11,28 @@ just api
 
 Then visit http://localhost:8000/docs for the interactive API documentation.
 
-RSS Monk converts RSS feeds into email newsletters using [Listmonk](https://listmonk.app/), a high-performance bulk messaging system. Listmonk provides subscribers, lists, campaigns, and stores feed information as tags on lists and subscriber preferences as tags on subscribers.
+RSS Monk converts RSS feeds into email newsletters using [Listmonk](https://listmonk.app/), a high-performance bulk messaging system. Listmonk provides subscribers, lists, campaigns, and stores feed information as tags on lists and subscriber preferences as attributes on subscribers.
 
-## API Server
+## Running the API Server locally (DevContainer)
 
 ```bash
-# Start API server in development mode
+# Start API cluster in development mode
 just api
 
-# Or manually
+# Or manually (API only)
 uvicorn rssmonk.api:app --host 0.0.0.0 --port 8000
 ```
 
 ### API Architecture
 
-RSS Monk acts as a proxy to Listmonk with three endpoints:
+RSS Monk acts as a proxy to Listmonk with three areas of endpoints:
 
 **RSS Monk Endpoints:**
 - `POST /api/feeds` - Feed management with RSS Monk logic
 - `POST /api/feeds/process` - Feed processing (individual or bulk for cron)
-- `POST /api/public/subscribe` - Public subscription (no auth required)
-
-**Listmonk Non Passthrough:** - TODO
-- `GET|PATCH|POST|PUT|DELETE /api/subscriber*` - These requests will handle attributes to ensure only the segment attributes are updated correctly
+- `POST /api/feeds/subscribe` - Add pending subscription
+- `POST /api/feeds/subscribe-confirm` - Subscription
+- `POST /api/feeds/unsubscribe` - Unsubscribe from a feed
 
 **Listmonk Passthrough:**
 - `GET|POST|PUT|DELETE /api/*` - All other requests pass through to Listmonk with authentication

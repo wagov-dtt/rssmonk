@@ -394,6 +394,51 @@ async def create_feed_account(
         raise
 
 
+@app.post(
+    "/api/feeds/account-reset-password",
+    response_model=ApiAccountResponse,
+    status_code=201,
+    tags=["feeds"],
+    summary="Create account RSS Feed (Requires admin privileges)",
+    description="Create a new limited access account to operate on the feed. Requires admin privileges."
+)
+async def create_feed_account(
+    request: FeedAccountRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> ApiAccountResponse:
+    """Reset the password for a RSS feed."""
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
+    try:
+        with rss_monk:
+            feed_url = str(request.feed_url)
+            account_name = make_api_username(feed_url)
+
+            # Ensure limited user role has been created
+            user_role_id = rss_monk.ensure_limited_user_role_exists()
+
+            # Ensure list role to access the feed's list has been created
+            list_role_id = rss_monk.ensure_list_role(feed_url)
+
+            # Return if account has already been created. They should have the credentials stored.
+            rss_monk.delete_api_user(api_name=account_name)
+
+            # Create api user and return data to log in
+            api_user = rss_monk.create_api_user(account_name, user_role_id, list_role_id)
+            return ApiAccountResponse(
+                id=api_user["id"],
+                name=account_name,
+                api_password=api_user["password"]
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP create_feed: {e}")
+        raise
+
+
 @app.get(
     "/api/feeds",
     response_model=FeedListResponse,
@@ -674,6 +719,7 @@ async def feed_subscribe(
 ) -> SubscriptionResponse:
     """Feed subscription endpoint."""
     # This can cover public or private feeds
+    print("1")
     with rss_monk:
         bypass_confirmation = False
         if isinstance(request, SubscribeRequestAdmin):
@@ -707,6 +753,7 @@ async def feed_subscribe(
                     template = rss_monk.get_template(feed_hash, EmailType.SUBSCRIBE)
                     if template is None:
                         logger.error("No subscribe template found for %s", feed_hash)
+                        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"Template dependancy missing for {EmailType.SUBSCRIBE.value}")
 
                     # Make filter list, for the subscribe link without email (make user type it in again)
                     subscribe_link = f"{base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
@@ -715,7 +762,7 @@ async def feed_subscribe(
                         "subject": subject,
                         "subscription_link":  subscribe_link,
                         "frequency": frequency,
-                        "filter": request.display_text[frequency],
+                        "filter": request.display_text[frequency] if request.display_text else {},
                         "confirmation_link": f"{base_url}?id={subscriber_uuid}&guid={pending_uuid}"
                     }
 
@@ -724,6 +771,8 @@ async def feed_subscribe(
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except HTTPException as e:
+            raise e
         except Exception as e:
             logger.error("Failed to subscribe: %s", e)
             traceback.print_exc()
@@ -752,7 +801,7 @@ async def feed_subscribe_confirm(
             email = request.email
             sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.email = '{email}'")
             req_uuid = request.uuid
-            subs: dict  = sub_list[0] if sub_list is not None else None
+            subs: dict  = sub_list[0] if sub_list  else None
             if not subs or "id" not in subs:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
 

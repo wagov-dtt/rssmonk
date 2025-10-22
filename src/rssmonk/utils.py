@@ -74,11 +74,11 @@ def make_feed_role_name(url: str) -> str:
 def make_template_name(feed_hash: str, email_type: EmailType) -> str:
     return f"{feed_hash}-{email_type.value}"
 
-def make_filter_url(data: list[str] | dict[str, list[int]]) -> str:
+def make_filter_url(data: list | dict[str, list[int]]) -> str:
     """Creates a flat URL query string from a list or dictionary of filters."""
     if isinstance(data, list):
         # A flat list not part of a dict needs a default keyword
-        return f"filter={",".join(str(x) for x in value)}"
+        return f"filter={",".join(str(x) for x in data)}"
     elif isinstance(data, dict):
         value_list = []
         for key, value in data.items():

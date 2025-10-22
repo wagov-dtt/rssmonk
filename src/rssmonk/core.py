@@ -160,11 +160,13 @@ class RSSMonk:
 
     def validate_feed_visibility(self, feed_url: str | None = None, feed_hash: str | None = None):
         '''Check if the active credentials can see the feed's mailing list. Requires either feed_url or feed_hash, which has priority'''
-        if feed_url is None and feed_hash is None:
-            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
+        if not feed_hash:
+            if not feed_url:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
+            feed_hash = make_url_hash(feed_url)
 
         # Hash is used as a higher priority than the url
-        found_feed = self._client.find_list_by_tag(tag=make_url_tag_from_hash(feed_hash) if feed_hash is not None else make_url_tag_from_url(feed_url))
+        found_feed = self._client.find_list_by_tag(tag=make_url_tag_from_hash(feed_hash))
         if found_feed is None:
             raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
 
@@ -182,7 +184,7 @@ class RSSMonk:
         return None
 
 
-    def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> dict | None:
+    def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> dict:
         """Create API user."""
         # Pull password from secrets (would rather push up but TBD)
         data = {

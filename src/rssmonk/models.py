@@ -134,9 +134,9 @@ class FeedProcessRequest(BaseModel):
 class TemplateRequest(BaseModel):
     """Request model for creating a template for a RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
-    phase_type: EmailType = Field(..., description="The email template subject line")
-    type: str = Field(..., description="Type of the template (campaign, campaign_visual, or tx)")
-    subject: Optional[str] = Field(None, description="The email template subject line")
+    phase_type: EmailType = Field(..., description="The phase in the email subscribe cycle the template is for")
+    template_type: str = Field(..., description="Type of the template (campaign, campaign_visual, or tx)")
+    subject: Optional[str] = Field(None, description="The email template subject line, required for tx templates")
     body_source: Optional[str] = Field(None, description="If type is campaign_visual, the JSON source for the email-builder tempalate")
     body: str = Field(..., description="HTML body of the template")
 
