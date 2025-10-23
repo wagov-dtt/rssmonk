@@ -55,8 +55,8 @@ class Feed(BaseModel):
     id: Optional[int] = None
     name: str
     feed_url: str
-    subscription_base_url: str
-    """Feed subscription base URL This may or may not be different to the link field in the RSS"""
+    email_base_url: str
+    """Base URL that is used for link generation in emails"""
     frequencies: list[Frequency]
     url_hash: str = ""
     mult_freq: bool = False
@@ -74,9 +74,9 @@ class Feed(BaseModel):
     @property
     def description(self) -> str:
         """Generate Listmonk description."""
-        return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.subscription_base_url}"
+        return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}"
         # TODO - Need to determine how multiple frequency filters are stored. It may never be used. Default to false
-        #return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.subscription_base_url}\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
+        #return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
 
 class ListmonkTemplate(BaseModel):
     """Template data model for Listmonk"""
@@ -113,7 +113,7 @@ class EmailTemplate(BaseModel):
 class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
-    subscription_base_url: HttpUrl = Field(..., description="Feed subscription base URL")
+    email_base_url: HttpUrl = Field(..., description="Base URL that is used in emails")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
@@ -177,7 +177,7 @@ class UnsubscribeRequest(BaseModel):
 class UnsubscribeRequestAdmin(BaseModel):
     """Response model for a subscription preferences (filter)."""
     email: str = Field(..., description="Subscriber email address ")
-    feed_url: HttpUrl = Field(..., description="RSS feed URL to get filters for")
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to unsubscribe from")
     bypass_confirmation: Optional[bool] = Field(False, description="Bypass any second email that might be send out for unsubscribing")
 
 # Response Models
@@ -190,7 +190,7 @@ class FeedResponse(BaseModel):
     id: int = Field(..., description="Listmonk list ID")
     name: str = Field(..., description="Feed name")
     feed_url: str = Field(..., description="RSS feed URL")
-    subscription_base_url: HttpUrl = Field(..., description="Feed subscription base URL")
+    email_base_url: HttpUrl = Field(..., description="Base URL that is used in emails")
     frequency: list[Frequency] = Field(..., description="Polling frequency")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")

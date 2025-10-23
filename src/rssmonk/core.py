@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Listmonk configuration
     listmonk_url: str = Field(default="http://localhost:9000", description="Listmonk API URL")
-    listmonk_admin_username: str = Field(default="api", alias="LISTMONK_ADMIN_USER", description="Listmonk admin username")
+    listmonk_admin_username: str = Field(default="admin", alias="LISTMONK_ADMIN_USER", description="Listmonk admin username")
     listmonk_admin_password: str = Field(alias="LISTMONK_ADMIN_PASSWORD", description="Listmonk admin token/password")
 
     # RSS processing configuration
@@ -310,7 +310,7 @@ class RSSMonk:
             name = self._get_feed_name(feed_url)
 
         # Create return
-        feed = Feed(name=name, feed_url=feed_url, frequencies=new_frequency, subscription_base_url=subscription_base_url)
+        feed = Feed(name=name, feed_url=feed_url, frequencies=new_frequency, email_base_url=subscription_base_url)
 
         # Check for existing feed with same URL
         existing_feed = self.get_feed_by_url(feed_url)
@@ -610,7 +610,7 @@ class RSSMonk:
         if not sub_url:
             raise ValueError("No Subscription URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], feed_url=url, frequencies=frequency_list, subscription_base_url=sub_url, mult_freq=mult_freq)
+        return Feed(id=lst["id"], name=lst["name"], feed_url=url, frequencies=frequency_list, email_base_url=sub_url, mult_freq=mult_freq)
 
     def _find_new_articles(self, feed: Feed, articles: list) -> list:
         """Find new articles since last poll."""

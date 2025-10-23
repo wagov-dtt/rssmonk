@@ -289,12 +289,12 @@ async def create_feed(
 
     try:
         with rss_monk:
-            feed = rss_monk.add_feed(str(request.feed_url), str(request.subscription_base_url), request.frequency, request.name)
+            feed = rss_monk.add_feed(str(request.feed_url), str(request.email_base_url), request.frequency, request.name)
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
                 feed_url=feed.feed_url,
-                subscription_base_url=feed.subscription_base_url,
+                subscription_base_url=feed.email_base_url,
                 frequency=feed.frequencies,
                 url_hash=feed.url_hash
             )
@@ -749,7 +749,7 @@ async def feed_subscribe(
                 pending_uuid = rss_monk.update_subscriber_filter(request.email, request.filter, feed_hash=feed_hash, bypass_confirmation=bypass_confirmation)
                 if not bypass_confirmation:
                     feed_data = rss_monk.get_feed_by_hash(feed_hash)
-                    base_url = feed_data.subscription_base_url
+                    base_url = feed_data.email_base_url
                     subject = None # Accessed by {{ .Tx.Data.subject }} if used
 
                     template = rss_monk.get_template(feed_hash, EmailType.SUBSCRIBE)
@@ -912,7 +912,7 @@ async def feed_unsubscribe(
                     # TODO - Add option in list description for optional email
                     return
 
-                subscribe_link = f"{feed_data.subscription_base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
+                subscribe_link = f"{feed_data.email_base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
                 transaction = {
                     "subscriber_emails": subscriber_details["email"],
                     "subscription_link": subscribe_link,
