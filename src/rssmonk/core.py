@@ -303,14 +303,14 @@ class RSSMonk:
 
     # Feed operations
 
-    def add_feed(self, feed_url: str, subscription_base_url: str, new_frequency: list[Frequency], name: Optional[str] = None,
+    def add_feed(self, feed_url: str, email_base_url: str, new_frequency: list[Frequency], name: Optional[str] = None,
                  visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
         """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
             name = self._get_feed_name(feed_url)
 
         # Create return
-        feed = Feed(name=name, feed_url=feed_url, frequencies=new_frequency, email_base_url=subscription_base_url)
+        feed = Feed(name=name, feed_url=feed_url, frequencies=new_frequency, email_base_url=email_base_url)
 
         # Check for existing feed with same URL
         existing_feed = self.get_feed_by_url(feed_url)

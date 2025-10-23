@@ -73,7 +73,7 @@ swagger_ui_params = {
 # FastAPI app with comprehensive OpenAPI configuration
 app = FastAPI(
     title="RSS Monk API",
-    version="0.0.1",
+    version="0.0.2",
     description="""
 RSS Monk - RSS feed aggregator that turns RSS feeds into email newsletters using Listmonk.
 
@@ -294,7 +294,7 @@ async def create_feed(
                 id=feed.id,
                 name=feed.name,
                 feed_url=feed.feed_url,
-                subscription_base_url=feed.email_base_url,
+                email_base_url=feed.email_base_url,
                 frequency=feed.frequencies,
                 url_hash=feed.url_hash
             )
