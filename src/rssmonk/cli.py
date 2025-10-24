@@ -7,7 +7,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .core import RSSMonk, Settings, Frequency
+from .core import RSSMonk
+from .types import Frequency
 from .logging_config import setup_logging
 
 console = Console()

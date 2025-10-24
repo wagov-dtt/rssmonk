@@ -14,8 +14,9 @@ from fastapi.security import HTTPBasicCredentials
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber, AVAILABLE_FREQUENCY_SETTINGS
-from rssmonk.utils import MULTIPLE_FREQ, SUB_BASE_URL, EmailType, LIST_DESC_FEED_URL, make_feed_role_name, make_url_hash, make_url_tag_from_hash, make_url_tag_from_url, numberfy_subbed_lists
+from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
+from rssmonk.utils import make_list_role_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailType
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -158,12 +159,12 @@ class RSSMonk:
     def getAdminClient(self):
         return self._admin
 
-    def validate_feed_visibility(self, feed_url: str | None = None, feed_hash: str | None = None):
-        '''Check if the active credentials can see the feed's mailing list. Requires either feed_url or feed_hash, which has priority'''
+    def validate_feed_visibility(self, feed_hash: str | None = None):
+        '''
+        Check if the active credentials can see the feed's list, raises HTTP return codes otherwise.
+        '''
         if not feed_hash:
-            if not feed_url:
-                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
-            feed_hash = make_url_hash(feed_url)
+            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
 
         # Hash is used as a higher priority than the url
         found_feed = self._client.find_list_by_tag(tag=make_url_tag_from_hash(feed_hash))
@@ -256,15 +257,19 @@ class RSSMonk:
                     return role["id"]
 
 
-    def ensure_list_role(self, url: str) -> int:
-        list_role_name = make_feed_role_name(url)
+    def ensure_list_role_by_url(self, url: str) -> int:
+        return self.ensure_list_role_by_hash(make_url_hash(url))
 
-        # Get the list to get the ID to make the role.
-        list_data = self._admin.find_list_by_tag(make_url_tag_from_url(url))
+
+    def ensure_list_role_by_hash(self, hash: str) -> int:
+        list_role_name = make_list_role_name(hash)
+
+        # Retrieve the list to get its ID for role creation.
+        list_data = self._admin.find_list_by_tag(make_url_tag_from_hash(hash))
         if list_data is None:
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="List does not exist")
 
-        # Check for existance, by creating it, otherwise, retrieve id
+        # Attempt to create the role. If it exists retrieve the ID
         payload = {
             "name": list_role_name, # Name is unique
             "lists": [ {"id": list_data["id"], "permissions": ["list:get","list:manage"] } ]
@@ -278,12 +283,15 @@ class RSSMonk:
             if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
                 raise
 
-            # User role already exists. Fetch name in user roles, there should not be many
-            return self.get_list_role_id_by_url(url)
+            # User role already exists, fetch the ID
+            return self.get_list_role_id_by_hash(hash)
 
 
     def get_list_role_id_by_url(self, url: str) -> int:
-        feed_hash = make_url_hash(url)
+        return self.get_list_role_id_by_hash(make_url_hash(url))
+
+
+    def get_list_role_id_by_hash(self, feed_hash: str) -> int:
         list_role_name = f"{feed_hash}-role"
 
         list_roles = self._client.get("api/roles/lists")
@@ -393,7 +401,7 @@ class RSSMonk:
     def delete_templates(self, feed_url: str):
         """Delete all templates associated with the feed"""
         templates = self._admin.get_templates()
-        url_hash = make_url_hash(feed_url)
+        url_hash = make_url_hash(str(feed_url))
         for template in templates:
             if url_hash in template["name"]:
                 self._admin.delete_email_template(template["id"])
@@ -586,7 +594,7 @@ class RSSMonk:
                 except ValueError:
                     logger.error(f"Invalid frequency in tag {tag} for list ID {lst.get("id"), "unknown"}")
         if len(frequency_list) == 0:
-            raise ValueError(f"No frequency tag found in existing list")
+            raise ValueError("No frequency tag found in existing list")
 
         # Extract URL from description
         desc = lst.get("description", "")

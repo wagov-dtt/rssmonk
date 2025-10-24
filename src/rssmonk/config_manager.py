@@ -2,7 +2,8 @@
 
 from typing import Optional
 
-from .core import Feed, RSSMonk, Frequency
+from .core import Feed, RSSMonk
+from .types import Frequency
 from .logging_config import get_logger
 
 logger = get_logger(__name__)

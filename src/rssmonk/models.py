@@ -1,53 +1,10 @@
 """Pydantic models for RSS Monk API."""
-
-from enum import Enum
 import hashlib
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from rssmonk.utils import LIST_DESC_FEED_URL, SUB_BASE_URL, EmailType
-
-
-# Data Types
-FrequencyFilterType = list[int] | dict[str, list[int]]
-DisplayTextFilterType = list[str] | dict[str, list[str]]
-
-# Data Type Models
-
-# Feed frequency configurations
-def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
-    return {
-        "freq:instant": {
-            "interval_minutes": 5,
-            "check_time": None,
-            "check_day": None,
-            "description": "Every 5 minutes",
-        },
-        "freq:daily": {
-            "interval_minutes": None,
-            "check_time": (17, 0),  # 5pm
-            "check_day": None,
-            "description": "Daily at 5pm",
-        },
-        "freq:weekly": {
-            "interval_minutes": None,
-            "check_time": (17, 0),  # 5pm
-            "check_day": 4,  # Friday
-            "description": "Weekly on Friday at 5pm",
-        },
-    }
-
-class ListVisibilityType(str, Enum):
-    """List visibility type."""
-    PUBLIC = "public"
-    PRIVATE = "private"
-
-class Frequency(str, Enum):
-    """Polling frequencies."""
-    INSTANT = "instant"
-    DAILY = "daily"
-    WEEKLY = "weekly"
+from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, DisplayTextFilterType, FrequencyFilterType, EmailType, Frequency, ListVisibilityType
 
 class Feed(BaseModel):
     """RSS feed model."""
@@ -126,6 +83,10 @@ class FeedAccountRequest(BaseModel):
     """Request model for creating an account for a RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
 
+class FeedAccountPasswordResetRequest(BaseModel):
+    """Request model for restting the password of an account for a RSS feed."""
+    account_name: str = Field(..., description="RSS feed's account name")
+
 class FeedProcessRequest(BaseModel):
     """Request model for processing a specific feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
@@ -162,7 +123,7 @@ class SubscribeRequestAdmin(BaseModel):
 class SubscriptionPreferencesRequest(BaseModel):
     """Request model for a subscription endpoint with filters for the feed."""
     email: str = Field(..., description="Subscriber email address")
-    feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
+    feed_url: Optional[HttpUrl] = Field(..., description="RSS feed URL to subscribe to. If not supplied, attempt to obtain preferences of the account attached to the user")
 
 class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""

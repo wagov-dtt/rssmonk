@@ -10,7 +10,8 @@ import feedparser
 import requests
 
 from rssmonk.models import EmailTemplate, ListmonkTemplate
-from rssmonk.utils import EmailType, make_template_name
+from rssmonk.utils import make_template_name
+from rssmonk.types import EmailType
 
 from .logging_config import get_logger
 

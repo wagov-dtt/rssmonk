@@ -1,5 +1,4 @@
 """RSS Monk API - Authenticated proxy to Listmonk with RSS processing capabilities."""
-import sys
 
 from datetime import datetime, timezone
 import traceback
@@ -11,8 +10,9 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
 
-from rssmonk.utils import NO_REPLY, NotificationsSubpageSuffix, extract_feed_hash, get_feed_hash_from_username,\
-    make_api_username, make_filter_url, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
+from rssmonk.types import FEED_ACCOUNT_PREFIX, NO_REPLY, ActionsURLSuffix
+from rssmonk.utils import extract_feed_hash, get_feed_hash_from_username, make_api_username, \
+    make_filter_url, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
 
 from .cache import feed_cache
 from .config_manager import FeedConfigManager
@@ -25,6 +25,7 @@ from .models import (
     EmptyResponse,
     ErrorResponse,
     FeedAccountConfigurationRequest,
+    FeedAccountPasswordResetRequest,
     FeedAccountRequest,
     FeedCreateRequest,
     FeedListResponse,
@@ -322,7 +323,7 @@ async def create_template(
 
     with rss_monk:
         feed_hash = make_url_hash(str(request.feed_url))
-        rss_monk.validate_feed_visibility(feed_hash=feed_hash)
+        rss_monk.validate_feed_visibility(feed_hash)
         try:
             # Insert the feed template
             template_name = make_template_name(feed_hash, request.phase_type)
@@ -373,7 +374,7 @@ async def create_feed_account(
             user_role_id = rss_monk.ensure_limited_user_role_exists()
 
             # Ensure list role to access the feed's list has been created
-            list_role_id = rss_monk.ensure_list_role(feed_url)
+            list_role_id = rss_monk.ensure_list_role_by_url(feed_url)
 
             # Return if account has already been created. They should have the credentials stored.
             user_data = rss_monk.get_user_by_name(account_name)
@@ -399,11 +400,11 @@ async def create_feed_account(
     response_model=ApiAccountResponse,
     status_code=201,
     tags=["feeds"],
-    summary="Create account RSS Feed (Requires admin privileges)",
-    description="Create a new limited access account to operate on the feed. Requires admin privileges."
+    summary="Resets the password for a RSS Feed account (Requires admin privileges)",
+    description="Resets the password for a RSS Feed account. Requires admin privileges."
 )
 async def create_feed_account(
-    request: FeedAccountRequest,
+    request: FeedAccountPasswordResetRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> ApiAccountResponse:
@@ -413,23 +414,22 @@ async def create_feed_account(
 
     try:
         with rss_monk:
-            feed_url = str(request.feed_url)
-            account_name = make_api_username(feed_url)
+            # Check user exists
+            if rss_monk.get_user_by_name(request.account_name) is None:
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f"{request.account_name} not found.")
 
             # Ensure limited user role has been created
             user_role_id = rss_monk.ensure_limited_user_role_exists()
 
             # Ensure list role to access the feed's list has been created
-            list_role_id = rss_monk.ensure_list_role(feed_url)
+            list_role_id = rss_monk.ensure_list_role_by_hash(request.account_name.replace(FEED_ACCOUNT_PREFIX, ""))
 
-            # Return if account has already been created. They should have the credentials stored.
-            rss_monk.delete_api_user(api_name=account_name)
-
-            # Create api user and return data to log in
-            api_user = rss_monk.create_api_user(account_name, user_role_id, list_role_id)
+            # TODO - Update when listmonk provides and API token reset mechanism
+            rss_monk.delete_api_user(api_name=request.account_name)
+            api_user = rss_monk.create_api_user(request.account_name, user_role_id, list_role_id)
             return ApiAccountResponse(
                 id=api_user["id"],
-                name=account_name,
+                name=request.account_name,
                 api_password=api_user["password"]
             )
     except ValueError as e:
@@ -684,15 +684,15 @@ async def feed_get_subscription_preferences(
 ) -> SubscriptionPreferencesResponse:
     """Get feed subscription user's preferences endpoint."""
     with rss_monk:
-        rss_monk.validate_feed_visibility(feed_url=str(request.feed_url))
+        rss_monk.validate_feed_visibility(make_url_hash(str(request.feed_url)))
         try:
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
-                feed_url = str(request.feed_url)
-                rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
-                feed_hash = extract_feed_hash(credentials.username, feed_url)
-                del feed_url
+                feed_hash = get_feed_hash_from_username(credentials.username)
+                if request.feed_url is None:
+                    feed_hash = make_url_hash(str(request.feed_url))
+                rss_monk.validate_feed_visibility(feed_hash)
 
                 if feed_hash in attribs and "filter" in attribs[feed_hash]:
                     # TODO - Need to remove the other accounts that the credentials aren't meant to see
@@ -719,7 +719,6 @@ async def feed_subscribe(
 ) -> SubscriptionResponse:
     """Feed subscription endpoint."""
     # This can cover public or private feeds
-    print("1")
     with rss_monk:
         bypass_confirmation = False
         if isinstance(request, SubscribeRequestAdmin):
@@ -727,10 +726,12 @@ async def feed_subscribe(
                 raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
 
-        feed_url = str(request.feed_url) if isinstance(request, SubscribeRequestAdmin) else None
-        rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
-        feed_hash = extract_feed_hash(credentials.username, feed_url)
-        del feed_url
+        feed_hash = None
+        if isinstance(request, SubscribeRequestAdmin):
+            feed_hash = make_url_hash(str(request.feed_url))
+        else:
+            feed_hash = get_feed_hash_from_username(credentials.username)
+        rss_monk.validate_feed_visibility(feed_hash)
 
         try:
             rss_monk.subscribe(email=request.email, feed_hash=feed_hash)
@@ -758,7 +759,7 @@ async def feed_subscribe(
                         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"Template dependancy missing for {EmailType.SUBSCRIBE.value}")
 
                     # Make filter list, for the subscribe link without email (make user type it in again)
-                    subscribe_link = f"{base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
+                    subscribe_link = f"{base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
                     transaction = {
                         "subscriber_emails": [request.email],
                         "subject": subject,
@@ -795,7 +796,7 @@ async def feed_subscribe_confirm(
 ):
     """Feed subscription confirmation endpoint."""
     with rss_monk:
-        rss_monk.validate_feed_visibility(feed_hash=get_feed_hash_from_username(credentials.username))
+        rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
         feed_hash = extract_feed_hash(credentials.username)
 
 
@@ -854,20 +855,20 @@ async def feed_unsubscribe(
 ):
     """Feed subscription confirmation endpoint."""
     with rss_monk:
-        feed_url = None
+        feed_hash = None
         bypass_confirmation = False
         subscriber_query = ""
         if isinstance(request, UnsubscribeRequestAdmin):
             if not settings.validate_admin_auth(credentials.username, credentials.password):
                 raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
-            feed_url = str(request.feed_url)
+            feed_hash = make_url_hash(str(request.feed_url))
             subscriber_query = f"subscribers.email = '{request.email}'"
         else:
             subscriber_query = f"subscribers.uuid = '{request.id}'"
-        feed_hash = extract_feed_hash(credentials.username, feed_url)
-        rss_monk.validate_feed_visibility(feed_url=feed_url, feed_hash=get_feed_hash_from_username(credentials.username))
-        del feed_url
+            feed_hash = get_feed_hash_from_username(credentials.username)
+
+        rss_monk.validate_feed_visibility(feed_hash)
 
         try:
             sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
@@ -912,7 +913,7 @@ async def feed_unsubscribe(
                     # TODO - Add option in list description for optional email
                     return
 
-                subscribe_link = f"{feed_data.email_base_url}/{NotificationsSubpageSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
+                subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
                 transaction = {
                     "subscriber_emails": subscriber_details["email"],
                     "subscription_link": subscribe_link,
@@ -1070,16 +1071,6 @@ async def public_listmonk_passthrough(
             status_code=503,
             detail="Listmonk service unavailable"
         )
-
-
-def _human_readable_DisplayTextFilterType(data: DisplayTextFilterType) -> str | dict[str, str]:
-    if isinstance(data, list):
-        return ", ".join(data)
-    else:
-        returnVal = {}
-        for key, value in data.items():
-            returnVal[key] = ", ".join(value)
-        return returnVal
 
 
 if __name__ == "__main__":

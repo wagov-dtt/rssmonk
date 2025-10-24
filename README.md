@@ -96,4 +96,7 @@ just --list
 
 # Run all quality checks
 just check
+
+# Run all pytest
+just test
 ```
