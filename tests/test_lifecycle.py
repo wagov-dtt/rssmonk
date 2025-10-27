@@ -14,22 +14,23 @@ from requests.auth import HTTPBasicAuth
 
 admin_auth=HTTPBasicAuth("admin", "admin123") # Default k3d credentials
 
+
 def test_accounts_lifecycle():
     rssmonk_api_addr = "http://localhost:8000"
 
     # - Feed creation
-    create_feed_json = {
+    json_data = {
         "feed_url": "https://example.com/rss/example",
         "email_base_url": "https://example.com/media",
         "frequency": ["instant", "daily"],
         "name": "Example Media Statements"
     }
-    response = requests.post(rssmonk_api_addr+"/api/feeds", auth=admin_auth, json=create_feed_json)
+    response = requests.post(rssmonk_api_addr+"/api/feeds", auth=admin_auth, json=json_data)
     assert (response.status_code == HTTPStatus.CREATED), response.text
     response_json = response.json()
     assert isinstance(response_json, dict)
     # Check values reflected back
-    for key, item in create_feed_json.items():
+    for key, item in json_data.items():
         assert key in response_json, f"{key} not found in response"
         assert item == response_json[key], f"Non matching values for {key}; in: {item}, out:{response_json[key]}"
     assert "id" in response_json
@@ -51,9 +52,9 @@ def test_accounts_lifecycle():
     assert len(example_password) == 32 # Doesn't matter what the password is as long as it is usable
 
     # Change to using the local account
-    example_auth=HTTPBasicAuth(example_username, example_password)
+    account_auth=HTTPBasicAuth(example_username, example_password)
     # - Feed template insertions
-    subscribe_template = {
+    json_data = {
         "feed_url": "https://example.com/rss/example",
         "template_type": "tx",
         "phase_type": "subscribe",
@@ -71,11 +72,16 @@ def test_accounts_lifecycle():
                 + "</p>\r\n<p>If you did not make this request, please ignore this email.</p>\r\n<p>Thank you.</p>\r\n<p><b>WA Government Media "
                 + "Statement Team.</b></p>\r\n</body></html>"
     }
-    response = requests.post(rssmonk_api_addr+"/api/feeds/templates", auth=example_auth, json=subscribe_template)
+    response = requests.post(rssmonk_api_addr+"/api/feeds/templates", auth=account_auth, json=json_data)
     assert (response.status_code == HTTPStatus.CREATED), response.text
-    response_json = {}
-    # Check values reflected back
-    for key, item in create_feed_json.items():
+    response_json = response.json()
+    assert isinstance(response_json, dict)
+    # Check values reflected back, except for feed_url which has been turned into a hash
+    del json_data["feed_url"]
+    del json_data["phase_type"]
+    json_data["type"] = json_data["template_type"]
+    del json_data["template_type"]
+    for key, item in json_data.items():
         assert key in response_json, f"{key} not found in response"
         assert item == response_json[key], f"Non matching values for {key}; in: {item}, out:{response_json[key]}"
     assert "id" in response_json
@@ -83,7 +89,7 @@ def test_accounts_lifecycle():
     assert response_json["name"]  == "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180-subscribe"
 
     # - Subscribe to feed
-    subscription_request = {
+    json_data = {
         "email": "john@example.com",
         "filter": {
             "ministers": [1, 2],
@@ -100,22 +106,33 @@ def test_accounts_lifecycle():
     }
 
     # - Confirm subscription to feed
-    confirm_sub = {
+    json_data = {
         "id": "bedce6892e11403e8d755da2922413bf",
         "guid": "1133931c77fe43d7a0fde6f86c29222c"
     }
 
     # - Unsubscribe from feed
-    unsub_request = {
+    json_data = {
         "id": "bedce6892e11403e8d755da2922413bf",
         "token": "0a6f75c68b6f45bead43a1d11f0e40f4"
     }
 
     # - Delete feed
-    delete_feed_request = {
+    json_data = {
         "feed_url": "https://dev2.wagov.pipeline.development.digital.wa.gov.au/rss/media-statements",
         "notify": False
     }
     # Attempt self deletion
+    response = requests.delete(rssmonk_api_addr+"/api/feeds/by-url", auth=account_auth, json=json_data)
+    assert (response.status_code == HTTPStatus.UNAUTHORIZED), response.text
+
     # Delete with admin
+    response = requests.delete(rssmonk_api_addr+"/api/feeds/by-url", auth=admin_auth, json=json_data)
+    assert (response.status_code == HTTPStatus.OK), response.text
+    response_json = response.json()
+    assert isinstance(response_json, dict)
+    # TODO - Check the templates are removed
+    # TODO - Check the lists are removed
+    # TODO - Check the user and user role are removed
+    # TODO - Check the subscriber is no longer subscribed to the list (or has been deleted)
 

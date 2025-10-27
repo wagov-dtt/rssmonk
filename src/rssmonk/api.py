@@ -527,12 +527,11 @@ async def delete_feed_by_url(
     try:
         with rss_monk:
             # Deleting the feed will automatically remove it from all subscribers
+            # TODO - Remove hash url from all users attributes
+            # TODO - Should be a campaign email to announce the closure of a mailing list?
             if rss_monk.delete_feed(feed_url):
                 # Invalidate cache for this URL
                 feed_cache.invalidate_url(feed_url)
-
-                # TODO - Remove hash url from all users attributes
-                # TODO - Questions. This one.. could be a campaign email to announce the closure of a mailing list
 
                 # Delete list role associated with the feed. The user account will be automatically deleted
                 rss_monk.delete_list_role(feed_url)

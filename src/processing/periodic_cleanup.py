@@ -17,6 +17,7 @@ RSSMONK_PASS = os.environ.get('RSSMONK_PASS', 'http://localhost:8000')
 def _get_subscribe_url(page: int, per_page: int = 1000) -> str:
     return f"subscribers?list_id=&search=&query=&page={page}&per_page={per_page}&subscription_status=&order_by=id&order=desc"
 
+
 def clean_expiry():
     logger.info("Cleaning expired filter")
     basic_auth = HTTPBasicAuth(RSSMONK_USER, RSSMONK_PASS)
