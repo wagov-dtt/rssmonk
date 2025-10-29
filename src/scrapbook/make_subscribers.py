@@ -68,7 +68,7 @@ if __name__ == "__main__":
             # Make limited user role for feed accounts
             for item in range(2):
                 #_set_up_transactional_template(session)
-                #response = session.delete(f"{_URL}/api/templates/{(item + 7064)}")
+                #response = session.delete(f"{_URL}/api/templates/{item}")
                 _make_subscriber(f"daniel{item}@wagov.au")
 
         print("Done")

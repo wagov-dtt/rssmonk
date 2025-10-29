@@ -21,7 +21,6 @@ from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
     BulkProcessResponse,
-    DisplayTextFilterType,
     EmptyResponse,
     ErrorResponse,
     FeedAccountConfigurationRequest,
@@ -34,6 +33,7 @@ from .models import (
     FeedResponse,
     Frequency,
     HealthResponse,
+    MetricsResponse,
     PublicSubscribeRequest,
     SubscribeRequestAdmin,
     SubscribeConfirmRequest,
@@ -134,11 +134,11 @@ RSS Monk uses Listmonk lists as the source of truth:
 # Dependencies
 security = HTTPBasic()
 
+
 async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -> tuple[str, str]:
     """Validate credentials against Listmonk API."""
     if settings.validate_admin_auth(credentials.username, credentials.password):
         return credentials.username, credentials.password
-
     try:
         # Test credentials against Listmonk
         async with httpx.AsyncClient() as client:
@@ -214,7 +214,7 @@ async def root():
     summary="Health Check",
     description="Check the health status of RSS Monk and Listmonk services"
 )
-async def health_check():
+async def health_check() -> HealthResponse:
     """Health check endpoint."""
     try:
         # Validate settings without credentials
@@ -232,6 +232,31 @@ async def health_check():
         return HealthResponse(
             status="healthy",
             listmonk_status=listmonk_status
+        )
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return HealthResponse(
+            status="unhealthy",
+            error=str(e)
+        )
+
+
+@app.get(
+    "/metrics",
+    response_model=MetricsResponse,
+    tags=["health"],
+    summary="Obtain metrics (Requires admin privileges)",
+    description="Obtain metrics about RSSMonk (Requires admin privileges)"
+)
+async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> MetricsResponse:
+    """Metrics endpoint."""
+    if settings.validate_admin_auth(credentials.username, credentials.password):
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
+
+    try:
+        # Return metrics collected
+        return MetricsResponse(
+            response="", # TODO
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -520,18 +545,19 @@ async def delete_feed_by_url(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
     """Delete feed by URL."""
-
     if not settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
         with rss_monk:
             # Deleting the feed will automatically remove it from all subscribers
-            # TODO - Remove hash url from all users attributes
             # TODO - Should be a campaign email to announce the closure of a mailing list?
             if rss_monk.delete_feed(feed_url):
                 # Invalidate cache for this URL
                 feed_cache.invalidate_url(feed_url)
+
+                # TODO - Remove hash url from all users attributes?
+                feed_hash = make_url_hash(feed_url)
 
                 # Delete list role associated with the feed. The user account will be automatically deleted
                 rss_monk.delete_list_role(feed_url)

@@ -206,16 +206,17 @@ class SubscriptionResponse(BaseModel):
     subscriber_id: Optional[int] = Field(None, description="Subscriber ID")
     feed_id: Optional[int] = Field(None, description="Feed list ID")
 
-
 class HealthResponse(BaseModel):
-    """Response model for health check."""
-    
+    """Response model for health check."""    
     status: str = Field(..., description="Service status")
     feeds_count: Optional[int] = Field(None, description="Total number of feeds")
     subscribers_count: Optional[int] = Field(None, description="Total number of subscribers")
     listmonk_status: Optional[str] = Field(None, description="Listmonk connection status")
     error: Optional[str] = Field(None, description="Error message if unhealthy")
 
+class MetricsResponse(BaseModel):
+    """Metrics response that will be scraped"""
+    response: str = Field(..., description="Metrics response")
 
 class ErrorResponse(BaseModel):
     """Standard error response model."""

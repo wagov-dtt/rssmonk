@@ -70,6 +70,7 @@ class Settings(BaseSettings):
 
     def validate_admin_auth(self, username: str, password: str) -> bool:
         # Only used as a quick check against settings (env vars) before going to work against Listmonk.
+        # No real check against Listmonk, yet.
         return hmac.compare_digest(password, self.listmonk_admin_password) and username == self.listmonk_admin_username
 
 
