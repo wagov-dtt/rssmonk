@@ -2,6 +2,7 @@
 
 import os
 import hmac
+from warnings import deprecated
 import httpx
 import uuid
 
@@ -455,9 +456,11 @@ class RSSMonk:
     def subscribe(self, email: str, feed_url: Optional[str] = None, feed_hash: Optional[str] = None) -> bool:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
-        feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
+        if feed_hash is not None:
+            feed_hash = make_url_hash(feed_url)
+        feed = self.get_feed_by_hash(feed_hash)
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_hash if feed_hash is not None else feed_url}")
+            raise ValueError(f"Feed not found: {feed_url if feed_url is not None else feed_hash}")
 
         self._client.subscribe_to_list([subscriber.id], [feed.id])
         return True
@@ -465,27 +468,31 @@ class RSSMonk:
     def unsubscribe(self, email: str, feed_url: Optional[str], feed_hash: Optional[str]) -> bool:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
-        feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
+        if feed_hash is not None:
+            feed_hash = make_url_hash(feed_url)
+        feed = self.get_feed_by_hash(feed_hash)
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_hash if feed_hash is not None else feed_url}")
+            raise ValueError(f"Feed not found: {feed_url if feed_url is not None else feed_hash}")
 
         self._client.unsubscribe_from_list([subscriber.id], [feed.id])
+
+        # TODO - Remove attributes from the user
         return True
     
     def update_subscriber_filter(self, email: str, sub_filter: dict, feed_url: Optional[str] = None, feed_hash: Optional[str] = None,
                                  bypass_confirmation: bool = True) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
-        feed = self.get_feed_by_hash(feed_hash) if feed_hash is not None else self.get_feed_by_url(feed_url)
+        if feed_hash is not None:
+            feed_hash = make_url_hash(feed_url) # Hash is stored as the key in the attributes
+        feed = self.get_feed_by_hash(feed_hash)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
-        subs: dict  = sub_list[0] if sub_list is not None else None
+        subs: dict = sub_list[0] if sub_list is not None else None
 
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_hash if feed_hash is not None else feed_url}")
+            raise ValueError(f"Feed not found: {feed_url if feed_url is not None else feed_hash}")
         if not subs or "id" not in subs:
             raise ValueError(f"Subscriber not found: {email}")
 
-        if feed_hash is None:
-            feed_hash =  make_url_hash(feed_url) # Used to access the subscription in the attributes
         # Attribs format - url-hash and uuids are permitted to be many
         # attribs: {
         #   url_hash: {

@@ -18,7 +18,7 @@ def _get_subscribe_url(page: int, per_page: int = 1000) -> str:
     return f"subscribers?list_id=&search=&query=&page={page}&per_page={per_page}&subscription_status=&order_by=id&order=desc"
 
 
-def clean_expiry():
+def clean_expired_filters():
     logger.info("Cleaning expired filter")
     basic_auth = HTTPBasicAuth(RSSMONK_USER, RSSMONK_PASS)
 
@@ -49,4 +49,4 @@ def clean_expiry():
 
 # TODO - This should be called daily.
 if __name__ == "__main__":
-    clean_expiry()
+    clean_expired_filters()

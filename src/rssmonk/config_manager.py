@@ -1,6 +1,7 @@
 """Configuration management for RSS feed updates and migrations."""
 
 from typing import Optional
+from warnings import deprecated
 
 from .core import Feed, RSSMonk
 from .types import Frequency
@@ -75,6 +76,7 @@ class FeedConfigManager:
         all_feeds = self.rss_monk.list_feeds()
         return [feed for feed in all_feeds if feed.feed_url == url]
     
+    @deprecated("Migration between feeds is not desired as it is error prone. Method likely to be removed")
     def _migrate_subscribers(self, from_feed: Feed, to_feed: Feed) -> int:
         """Migrate subscribers from one feed to another."""
         # TODO = This one should be renamed copy and not migrate as they're left in the old one

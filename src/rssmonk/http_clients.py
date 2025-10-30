@@ -179,7 +179,7 @@ class ListmonkClient:
         payload = {
             "email": body["email"],
             "name": body["name"],
-            "status": body["status"],
+            "status": body["status"] if "status" in body else "enabled",
             "lists": body["lists"], # Needs to be a list of numbers
             "attribs": body["attribs"],
             "preconfirm_subscriptions": True, # This API will handle confirmations
@@ -304,6 +304,7 @@ def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk
         logger.info("Fetching feed: %s", feed_url)
 
         with httpx.Client(timeout=timeout, headers={"User-Agent": user_agent}) as client:
+            response = client.get(feed_url + "?rssmonk=true")
             response = client.get(feed_url)
 
             if response.status_code == 304:
@@ -330,10 +331,12 @@ def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk
                     "title": entry.get("title", ""),
                     "link": entry.get("link", ""),
                     "description": entry.get("description", ""),
-                    "published": entry.get("published", ""),
-                    "author": entry.get("author", ""),
+                    "published": entry.get("pubDate", ""),
                     "guid": guid,
+                    "dc:creator": entry.get("dc:creator", ""),
+                    "wa:identifiers": entry.get("wa:identifiers", ""),
                 }
+                # TODO - RSS feed may, or may not supply old articles, this must be cleaned out to ensure duplication does not occur
                 articles.append(article)
 
             logger.info(f"Found {len(articles)} articles from {feed_url}")

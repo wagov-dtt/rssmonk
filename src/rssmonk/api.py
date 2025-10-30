@@ -243,27 +243,22 @@ async def health_check() -> HealthResponse:
 
 @app.get(
     "/metrics",
-    response_model=MetricsResponse,
+    response_model=str,
     tags=["health"],
     summary="Obtain metrics (Requires admin privileges)",
     description="Obtain metrics about RSSMonk (Requires admin privileges)"
 )
-async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> MetricsResponse:
+async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> str:
     """Metrics endpoint."""
     if settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
-        # Return metrics collected
-        return MetricsResponse(
-            response="", # TODO
-        )
+        # Return metrics page
+        pass # TODO
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return HealthResponse(
-            status="unhealthy",
-            error=str(e)
-        )
+        logger.error(f"Metric check failed: {e}")
+    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED) # TODO - Remove with metric implementation
 
 
 @app.get(
@@ -556,8 +551,10 @@ async def delete_feed_by_url(
                 # Invalidate cache for this URL
                 feed_cache.invalidate_url(feed_url)
 
-                # TODO - Remove hash url from all users attributes?
+                # Remove hash url from all users attributes?
                 feed_hash = make_url_hash(feed_url)
+                subscriber_list = rss_monk.unsubscribe
+                # TODO
 
                 # Delete list role associated with the feed. The user account will be automatically deleted
                 rss_monk.delete_list_role(feed_url)
@@ -930,12 +927,10 @@ async def feed_unsubscribe(
             rss_monk.getClient().update_subscriber(subscriber_details["id"], subscriber_details)
             
             if not bypass_confirmation:
-                # TODO - This segment may not be working yet
-                # Email the unsubscribe email
                 template = rss_monk.get_template(feed_hash, EmailType.UNSUBSCRIBE)
                 if template is None:
-                    logger.error("No unsubscribe template found for %s", feed_hash)
-                    # TODO - Add option in list description for optional email
+                    logger.error("No unsubscribe template found for %s. Defaulting ", feed_hash)
+                    # TODO - Add option in list description for optional email, or for confirm unsubscribe link(?), when feature is requrested
                     return
 
                 subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"

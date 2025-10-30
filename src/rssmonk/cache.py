@@ -105,7 +105,7 @@ class FeedCache:
                 # Parse new content
                 feed = feedparser.parse(content)
                 
-                if feed.bozo:
+                if feed.bozo: # From feedparser.FeedParserDict
                     logger.warning(f"Feed has issues: {feed.bozo_exception}")
                 
                 articles = []
@@ -114,9 +114,11 @@ class FeedCache:
                         "title": entry.get("title", ""),
                         "link": entry.get("link", ""),
                         "description": entry.get("description", ""),
-                        "published": entry.get("published", ""),
-                        "author": entry.get("author", ""),
+                        "published": entry.get("pubDate", ""),
+                        "author": entry.get("author", ""), # There is no author
+                        "dc:creator": entry.get("dc:creator", ""),
                         "guid": entry.get("id", entry.get("link", "")),
+                        "wa:identifiers": entry.get("wa:identifiers", ""),
                     }
                     articles.append(article)
                 
