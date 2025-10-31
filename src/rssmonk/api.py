@@ -217,12 +217,13 @@ async def root():
 async def health_check() -> HealthResponse:
     """Health check endpoint."""
     try:
-        # Validate settings without credentials
+        # Validate settings without credentials to be able to access Listmonk
         test_settings = Settings()
         test_settings.validate_required()
         
         # Test Listmonk connection
         async with httpx.AsyncClient() as client:
+            # Note - /api/health and /health exist to do the same thing.
             response = await client.get(f"{test_settings.listmonk_url}/api/health", timeout=10.0)
             listmonk_status = "healthy" if response.status_code == 200 else "unhealthy"
 
@@ -678,13 +679,13 @@ async def process_feeds_bulk(
 
     try:
         with rss_monk:
-            results = rss_monk.process_feeds_by_frequency(frequency)
-            total_campaigns = sum(results.values()) # TODO - This probably was never going to work if coroutines are stored
+            results = await rss_monk.process_feeds_by_frequency(frequency)
+            total_emails_sent = sum(results.values())
             
             return BulkProcessResponse(
                 frequency=frequency,
                 feeds_processed=len(results),
-                total_campaigns=total_campaigns,
+                total_emails_sent=total_emails_sent,
                 results=results
             )
     except Exception as e:

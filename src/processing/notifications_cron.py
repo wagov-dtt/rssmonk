@@ -1,4 +1,6 @@
-"""Simple cron job script using Pydantic models."""
+"""
+Simple cron job script to send a call into the api to run the Feed processing
+"""
 
 import logging
 import os

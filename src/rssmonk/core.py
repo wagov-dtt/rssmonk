@@ -546,6 +546,12 @@ class RSSMonk:
                 self._update_poll_time(feed)
                 return 0
 
+            # TODO - This must be changed to be list of subscribers per.
+            # Extract list of subscribers, split into two groups.
+            # - All
+            # - Individual
+            # Populate - If multiple articles exist, ensure that one email per article is sent out
+            # Send out?
             # Create campaigns
             campaigns = 0
             for article in new_articles:
@@ -556,6 +562,7 @@ class RSSMonk:
                     campaigns += 1
                 except Exception as e:
                     logger.error(f"Campaign creation failed: {e}")
+            # TODO - Remove to here
 
             # Update state
             self._update_feed_state(feed, new_articles)
@@ -570,10 +577,14 @@ class RSSMonk:
         feeds = [f for f in self.list_feeds() if frequency in f.frequencies]
         results = {}
 
+        # TODO - Turn into an array of awaits??
+        #async with asyncio.TaskGroup() as tg:
+        #    task1 = tg.create_task(some_coro(...))
+        #    task2 = tg.create_task(another_coro(...))
         for feed in feeds:
             if self._should_poll(frequency, feed):
                 # TODO - Consider spawning process to handle if it is a large 
-                results[feed.name] = self.process_feed(feed)
+                results[feed.name] = await self.process_feed(feed)
 
         return results
 
@@ -711,8 +722,7 @@ class RSSMonk:
 
         # Remove old state tags
         tags = [
-            t
-            for t in tags
+            t for t in tags
             if not t.startswith(f"last-poll:{feed.frequencies.value}:")
             and not t.startswith(f"last-seen:{feed.frequencies.value}:")
         ]
@@ -738,7 +748,7 @@ class RSSMonk:
         title = article.get("title", "No title")
         link = article.get("link", "")
         description = article.get("description", "")
-        published = article.get("published", "")
+        published = article.get("pubDate", "")
         author = article.get("author", "")
 
         # Create simple HTML content

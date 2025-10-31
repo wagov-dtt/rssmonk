@@ -192,8 +192,8 @@ class BulkProcessResponse(BaseModel):
     """Response model for bulk feed processing."""
     frequency: Frequency = Field(..., description="Processed frequency")
     feeds_processed: int = Field(..., description="Number of feeds processed")
-    total_campaigns: int = Field(..., description="Total campaigns created")
-    results: dict[str, int] = Field(..., description="Per-feed campaign counts")
+    total_emails_sent: int = Field(..., description="Total emails sent")
+    results: dict[str, int] = Field(..., description="Per-feed email counts")
 
 
 class SubscriptionPreferencesResponse(BaseModel):

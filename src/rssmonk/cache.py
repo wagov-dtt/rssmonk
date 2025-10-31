@@ -115,9 +115,8 @@ class FeedCache:
                         "link": entry.get("link", ""),
                         "description": entry.get("description", ""),
                         "published": entry.get("pubDate", ""),
-                        "author": entry.get("author", ""), # There is no author
-                        "dc:creator": entry.get("dc:creator", ""),
                         "guid": entry.get("id", entry.get("link", "")),
+                        "dc:creator": entry.get("dc:creator", ""),
                         "wa:identifiers": entry.get("wa:identifiers", ""),
                     }
                     articles.append(article)
