@@ -17,7 +17,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import make_list_role_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailType
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, FEED_URL_RSSMONK_QUERY, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailType
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -453,43 +453,37 @@ class RSSMonk:
         subs = self._client.get_subscribers()
         return [Subscriber(id=s["id"], email=s["email"], name=s["name"]) for s in subs]
 
-    def subscribe(self, email: str, feed_url: Optional[str] = None, feed_hash: Optional[str] = None) -> bool:
+    def subscribe(self, email: str, feed_hash: str) -> bool:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
-        if feed_hash is not None:
-            feed_hash = make_url_hash(feed_url)
         feed = self.get_feed_by_hash(feed_hash)
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_url if feed_url is not None else feed_hash}")
+            raise ValueError(f"Feed not found: {feed_hash}")
 
         self._client.subscribe_to_list([subscriber.id], [feed.id])
         return True
 
-    def unsubscribe(self, email: str, feed_url: Optional[str], feed_hash: Optional[str]) -> bool:
+    def unsubscribe(self, email: str, feed_hash: Optional[str]) -> bool:
         """Subscribe email to feed."""
         subscriber = self.get_or_create_subscriber(email)
-        if feed_hash is not None:
-            feed_hash = make_url_hash(feed_url)
         feed = self.get_feed_by_hash(feed_hash)
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_url if feed_url is not None else feed_hash}")
+            raise ValueError(f"Feed not found: {feed_hash}")
 
         self._client.unsubscribe_from_list([subscriber.id], [feed.id])
 
         # TODO - Remove attributes from the user
         return True
     
-    def update_subscriber_filter(self, email: str, sub_filter: dict, feed_url: Optional[str] = None, feed_hash: Optional[str] = None,
+    def update_subscriber_filter(self, email: str, sub_filter: dict, feed_hash: str,
                                  bypass_confirmation: bool = True) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
-        if feed_hash is not None:
-            feed_hash = make_url_hash(feed_url) # Hash is stored as the key in the attributes
         feed = self.get_feed_by_hash(feed_hash)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         subs: dict = sub_list[0] if sub_list is not None else None
 
         if not feed or not feed.id:
-            raise ValueError(f"Feed not found: {feed_url if feed_url is not None else feed_hash}")
+            raise ValueError(f"Feed not found: {feed_hash}")
         if not subs or "id" not in subs:
             raise ValueError(f"Subscriber not found: {email}")
 
@@ -530,7 +524,7 @@ class RSSMonk:
         """Process single feed - fetch articles and create campaigns using cache."""
         if auto_send is None:
             auto_send = self.settings.rss_auto_send
-
+#{'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
         try:
             # Fetch articles using cache
             articles, feed_title = await feed_cache.get_feed(
@@ -548,7 +542,7 @@ class RSSMonk:
 
             # TODO - This must be changed to be list of subscribers per.
             # Extract list of subscribers, split into two groups.
-            # - All
+            # - All - This is likely to be the majority
             # - Individual
             # Populate - If multiple articles exist, ensure that one email per article is sent out
             # Send out?
@@ -577,14 +571,20 @@ class RSSMonk:
         feeds = [f for f in self.list_feeds() if frequency in f.frequencies]
         results = {}
 
-        # TODO - Turn into an array of awaits??
-        #async with asyncio.TaskGroup() as tg:
-        #    task1 = tg.create_task(some_coro(...))
-        #    task2 = tg.create_task(another_coro(...))
         for feed in feeds:
             if self._should_poll(frequency, feed):
-                # TODO - Consider spawning process to handle if it is a large 
                 results[feed.name] = await self.process_feed(feed)
+
+        # TODO - Consider using for loop below if required
+        # Form a list of independant processings
+        #tasks = {}
+        #async with asyncio.TaskGroup() as tg:
+        #    for feed in feeds:
+        #        if self._should_poll(frequency, feed):
+        #            tasks[feed.name] = tg.create_task(self.process_feed(feed))
+        # Extract the results
+        #for name, task in tasks.items():
+        #    results[name] = asyncio.Task(task).result()
 
         return results
 

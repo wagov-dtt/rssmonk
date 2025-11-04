@@ -1,5 +1,7 @@
 """Simple Typer CLI for RSS Monk."""
 import warnings
+
+from rssmonk.utils import make_url_hash
 warnings.warn("This module will not be supported. Use the API endpoint instead", DeprecationWarning)
 
 from typing import Optional
@@ -105,7 +107,8 @@ def subscribe(
     """Subscribe an email to a feed."""
     try:
         with RSSMonk() as rss:
-            rss.subscribe(email, feed_url)
+            feed_hash = make_url_hash(feed_url)
+            rss.subscribe(email, feed_hash)
             console.print(f"[SUCCESS] Subscribed {email} to feed", style="green")
     except Exception as e:
         console.print(f"[ERROR] {e}", style="red")
@@ -134,7 +137,8 @@ def quick_setup(
             success = 0
             for email in emails:
                 try:
-                    rss.subscribe(email, url)
+                    feed_hash = make_url_hash(url)
+                    rss.subscribe(email, feed_hash)
                     console.print(f"[SUCCESS] Subscribed {email}")
                     success += 1
                 except Exception as e:

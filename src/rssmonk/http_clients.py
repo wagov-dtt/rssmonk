@@ -281,7 +281,6 @@ class ListmonkClient:
             "content_type": content_type
         }
         if subject is not None:
-            # Over ride
             payload["subject"] = subject
 
         return self.post("/api/tx", payload)
@@ -292,10 +291,6 @@ class ListmonkClient:
         return self._normalize_results(data)
 
 
-def create_client():
-    """Create a Listmonk client with environment config."""
-    return ListmonkClient()
-
 @deprecated("Should not be used.")
 # TODO - Why is this here?
 def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk/2.0"):
@@ -304,7 +299,7 @@ def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk
         logger.info("Fetching feed: %s", feed_url)
 
         with httpx.Client(timeout=timeout, headers={"User-Agent": user_agent}) as client:
-            response = client.get(feed_url + "?rssmonk=true")
+            #response = client.get(feed_url + FEED_URL_RSSMONK_QUERY)
             response = client.get(feed_url)
 
             if response.status_code == 304:

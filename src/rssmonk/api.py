@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 import traceback
 from typing import Annotated, Optional
 from http import HTTPStatus
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 import uuid
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
@@ -33,7 +34,6 @@ from .models import (
     FeedResponse,
     Frequency,
     HealthResponse,
-    MetricsResponse,
     PublicSubscribeRequest,
     SubscribeRequestAdmin,
     SubscribeConfirmRequest,
@@ -70,6 +70,12 @@ swagger_ui_params = {
     "defaultModelsExpandDepth": -1,
     "persistAuthorization": True,
 }
+
+# Configure Prometheus counters
+emails_sent = Counter('emails_sent_total', 'Total number of emails sent')
+feeds_checked = Counter('feeds_checked_total', 'Total number of RSS feeds checked')
+subscribers_checked = Counter('subscribers_checked_total', 'Total number of subscribers checked')
+
 
 # FastAPI app with comprehensive OpenAPI configuration
 app = FastAPI(
@@ -133,7 +139,6 @@ RSS Monk uses Listmonk lists as the source of truth:
 
 # Dependencies
 security = HTTPBasic()
-
 
 async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -> tuple[str, str]:
     """Validate credentials against Listmonk API."""
@@ -251,12 +256,13 @@ async def health_check() -> HealthResponse:
 )
 async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> str:
     """Metrics endpoint."""
-    if settings.validate_admin_auth(credentials.username, credentials.password):
+    if not settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
         # Return metrics page
-        pass # TODO
+        data = generate_latest()
+        return Response(content=data, media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
         logger.error(f"Metric check failed: {e}")
     raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED) # TODO - Remove with metric implementation
@@ -757,7 +763,7 @@ async def feed_subscribe(
         rss_monk.validate_feed_visibility(feed_hash)
 
         try:
-            rss_monk.subscribe(email=request.email, feed_hash=feed_hash)
+            rss_monk.subscribe(request.email, feed_hash)
             # Get subscriber UUID
             subscriber_uuid = rss_monk.get_subscriber_uuid(request.email)
             if subscriber_uuid is None:
@@ -770,7 +776,7 @@ async def feed_subscribe(
                 frequency = list(request.filter.keys())[0]
 
                 # Add filter to the subscriber
-                pending_uuid = rss_monk.update_subscriber_filter(request.email, request.filter, feed_hash=feed_hash, bypass_confirmation=bypass_confirmation)
+                pending_uuid = rss_monk.update_subscriber_filter(request.email, request.filter, feed_hash, bypass_confirmation=bypass_confirmation)
                 if not bypass_confirmation:
                     feed_data = rss_monk.get_feed_by_hash(feed_hash)
                     base_url = feed_data.email_base_url
@@ -796,6 +802,7 @@ async def feed_subscribe(
                     rss_monk.getClient().send_transactional(NO_REPLY, template["id"], "html", transaction)
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
+            logger.error(e)
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
         except HTTPException as e:
             raise e
@@ -966,7 +973,8 @@ async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionRespo
     try:
         # Use default settings for public endpoint
         with RSSMonk() as rss_monk:
-            rss_monk.subscribe(request.email, str(request.feed_url))
+            feed_hash = make_url_hash(request.feed_url)
+            rss_monk.subscribe(request.email, feed_hash)
             return SubscriptionResponse(message="Subscription successful")
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))

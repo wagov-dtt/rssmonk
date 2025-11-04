@@ -27,6 +27,7 @@ dependencies = [
     "pydantic-settings>=2.1.0",
     "fastapi[all]>=0.104.0",
     "requests>=2.32.5",
+    "prometheus-client>=0.23.1",
 ]
 
 requires-python = ">=3.13"

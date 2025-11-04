@@ -75,7 +75,8 @@ prereqs:
 check: lint type-check test
 
 # Run tests
-test:
+test: clean start
+  sleep 15
   uv run --extra test pytest
 
 # Run integration tests (requires k3d cluster)
