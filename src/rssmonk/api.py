@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
 
+from rssmonk.http_clients import ListmonkClient
 from rssmonk.types import FEED_ACCOUNT_PREFIX, NO_REPLY, ActionsURLSuffix
 from rssmonk.utils import extract_feed_hash, get_feed_hash_from_username, make_api_username, \
     make_filter_url, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
@@ -28,6 +29,7 @@ from .models import (
     FeedAccountPasswordResetRequest,
     FeedAccountRequest,
     FeedCreateRequest,
+    FeedDeleteRequest,
     FeedListResponse,
     FeedProcessRequest,
     FeedProcessResponse,
@@ -72,9 +74,9 @@ swagger_ui_params = {
 }
 
 # Configure Prometheus counters
-emails_sent = Counter('emails_sent_total', 'Total number of emails sent')
-feeds_checked = Counter('feeds_checked_total', 'Total number of RSS feeds checked')
-subscribers_checked = Counter('subscribers_checked_total', 'Total number of subscribers checked')
+transactions_created = Counter('transactions_created', 'Total number of transactions created')
+feeds_processed = Counter('feeds_processed', 'Total number of RSS feeds checked')
+subscribers_processed = Counter('subscribers_processed', 'Total number of subscribers checked')
 
 
 # FastAPI app with comprehensive OpenAPI configuration
@@ -261,7 +263,7 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
 
     try:
         # Return metrics page
-        data = generate_latest()
+        data = generate_latest() # TODO - This appears to also generates extra metrics (such as _created)
         return Response(content=data, media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
         logger.error(f"Metric check failed: {e}")
@@ -541,8 +543,7 @@ async def get_feed_by_url(
     " It will also remove list roles, the account created and all associated email templates. Requires admin privileges."
 )
 async def delete_feed_by_url(
-    feed_url: str,
-    notify: Optional[bool],
+    request: FeedDeleteRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ):
@@ -552,22 +553,36 @@ async def delete_feed_by_url(
 
     try:
         with rss_monk:
-            # Deleting the feed will automatically remove it from all subscribers
-            # TODO - Should be a campaign email to announce the closure of a mailing list?
-            if rss_monk.delete_feed(feed_url):
-                # Invalidate cache for this URL
-                feed_cache.invalidate_url(feed_url)
+            # Find all subscribers that are subscribed to the feed
+            feed_hash = make_url_hash(str(request.feed_url))
+            feed_data = rss_monk.get_feed_by_hash(feed_hash)
+            subscriber_list = []
 
-                # Remove hash url from all users attributes?
-                feed_hash = make_url_hash(feed_url)
-                subscriber_list = rss_monk.unsubscribe
-                # TODO
+            if feed_data is not None:
+                # If feed_data is none, ignore
+                # http://localhost:9000/api/subscribers?list_id=1&page=1&per_page=100
+                subscriber_list = _get_all_feed_subscribers(rss_monk, feed_data, subscriber_list)
+
+
+                if request.notify:
+                    # Send campaign email to announce the closure of a mailing list
+                    # TODO
+                    pass
+
+            # Deleting the feed will automatically remove it from all subscribers
+            if rss_monk.delete_feed(str(request.feed_url)):
+                # Invalidate cache for this URL
+                feed_cache.invalidate_url(str(request.feed_url))
+
+                # Remove hash url from all users attributes
+                for subscriber in subscriber_list:
+                    rss_monk.remove_subscriber_filter(subscriber["email"], feed_hash)
 
                 # Delete list role associated with the feed. The user account will be automatically deleted
-                rss_monk.delete_list_role(feed_url)
+                rss_monk.delete_list_role(str(request.feed_url))
 
                 # Delete templates associated with the url
-                rss_monk.delete_templates(feed_url)
+                rss_monk.delete_templates(str(request.feed_url))
 
                 return {"message": "Feed, associated roles and account have been deleted successfully"}
             else:
@@ -1100,6 +1115,23 @@ async def public_listmonk_passthrough(
             status_code=503,
             detail="Listmonk service unavailable"
         )
+
+
+
+def _get_all_feed_subscribers(client: ListmonkClient, feed_data, subscriber_list):
+    """Fetch all pages and put into a list"""
+    subscriber_list = []
+
+    total_pages = 10
+    page = 1
+    while page <= total_pages:
+        data = client.get(f"/api/subscribers?list_id={feed_data.id}&page={page}&per_page=1000")
+        data = client._normalize_results(data)
+        subscriber_list.append(data["results"])
+        total_pages = data["total"]
+        page += 1
+
+    return subscriber_list
 
 
 if __name__ == "__main__":

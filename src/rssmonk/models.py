@@ -75,6 +75,11 @@ class FeedCreateRequest(BaseModel):
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
 
+class FeedDeleteRequest(BaseModel):
+    """Request model for creating an RSS feed."""
+    feed_url: HttpUrl = Field(..., description="RSS feed URL")
+    notify: Optional[bool] = Field(False, description="Set to true to send a generic campaign to everyone in the list to notify the end of the campaign")
+
 class FeedAccountConfigurationRequest(BaseModel):
     """Request model for obtaining the configuration from a RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL")

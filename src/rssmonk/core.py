@@ -305,10 +305,14 @@ class RSSMonk:
 
     def delete_list_role(self, url: str):
         role_id = self.get_list_role_id_by_url(url)
-        if role_id:
-            self._client.delete(f"/api/roles/{role_id}")
-            return True
-        return False
+        if role_id > 0:
+            try:
+                self._client.delete(f"/api/roles/{role_id}")
+            except:
+                # Log on failure, will try to fix later
+                logger.error("Failed to delete list role {role_id}")
+                pass
+        return True
 
 
     # Feed operations
@@ -406,7 +410,11 @@ class RSSMonk:
         url_hash = make_url_hash(str(feed_url))
         for template in templates:
             if url_hash in template["name"]:
-                self._admin.delete_email_template(template["id"])
+                try:
+                    self._admin.delete_email_template(template["id"])
+                except:
+                    # Ignore 404s and other expected errors. 
+                    pass
 
 
     # Subscriber operations. Data from these functions should not leak attributes 
@@ -516,6 +524,27 @@ class RSSMonk:
         # Update the subscriber
         self._client.update_subscriber(subs["id"], subs)
         return None if bypass_confirmation else filter_uuid
+
+    def remove_subscriber_filter(self, email: str, feed_hash: str):
+        """Removes the feed hash from the attribs"""
+        sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs: dict = sub_list[0] if sub_list is not None else None
+
+        if not subs or "id" not in subs:
+            return # Count as removed
+
+        # Attribs format
+        # attribs
+        # - url_hash
+        attribs = subs["attribs"]
+        del attribs[feed_hash]
+
+        # Have to covert the extracted lists to be a list of numbers to retain subscriptions
+        subs["lists"] = numberfy_subbed_lists(subs["lists"])
+
+        # Update the subscriber
+        self._client.update_subscriber(subs["id"], subs)
+        return
 
 
     # Feed processing

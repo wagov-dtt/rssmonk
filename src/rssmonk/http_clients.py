@@ -184,6 +184,7 @@ class ListmonkClient:
             "attribs": body["attribs"],
             "preconfirm_subscriptions": True, # This API will handle confirmations
         }
+        # TODO - May need to investigate if an etag system is required for attribs
         response = self.put(f"/api/subscribers/{sub_id}", payload)
         return response
     

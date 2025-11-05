@@ -75,8 +75,15 @@ prereqs:
 check: lint type-check test
 
 # Run tests
-test: clean start
-  sleep 15
+test quick="":
+  #!/usr/bin/env sh
+  if [ -e "{{quick}}" ]; then
+    echo "Just: Full restart"
+    just clean
+    just start
+    echo "Just: Waiting for pods to start"
+    sleep 30
+  fi
   uv run --extra test pytest
 
 # Run integration tests (requires k3d cluster)
