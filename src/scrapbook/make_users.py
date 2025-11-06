@@ -1,5 +1,7 @@
 
 import httpx
+import warnings
+warnings.warn("This module should not be imported for use.", DeprecationWarning)
 
 # Quick dirty item to test user creation limits get users is not paginated.
 # 1k so far

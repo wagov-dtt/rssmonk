@@ -263,11 +263,11 @@ class RSSMonk:
         return self.ensure_list_role_by_hash(make_url_hash(url))
 
 
-    def ensure_list_role_by_hash(self, hash: str) -> int:
-        list_role_name = make_list_role_name(hash)
+    def ensure_list_role_by_hash(self, feed_hash: str) -> int:
+        list_role_name = make_list_role_name(feed_hash)
 
         # Retrieve the list to get its ID for role creation.
-        list_data = self._admin.find_list_by_tag(make_url_tag_from_hash(hash))
+        list_data = self._admin.find_list_by_tag(make_url_tag_from_hash(feed_hash))
         if list_data is None:
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="List does not exist")
 
@@ -286,7 +286,7 @@ class RSSMonk:
                 raise
 
             # User role already exists, fetch the ID
-            return self.get_list_role_id_by_hash(hash)
+            return self.get_list_role_id_by_hash(feed_hash)
 
 
     def get_list_role_id_by_url(self, url: str) -> int:
@@ -294,10 +294,11 @@ class RSSMonk:
 
 
     def get_list_role_id_by_hash(self, feed_hash: str) -> int:
-        list_role_name = f"{feed_hash}-role"
+        list_role_name = make_list_role_name(feed_hash)
 
         list_roles = self._client.get("api/roles/lists")
         for list_role in list_roles:
+            print(list_role)
             if isinstance(list_role, dict) and list_role["name"] == list_role_name:
                 return list_role["id"]
         return -1

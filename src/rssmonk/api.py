@@ -561,8 +561,7 @@ async def delete_feed_by_url(
             if feed_data is not None:
                 # If feed_data is none, ignore
                 # http://localhost:9000/api/subscribers?list_id=1&page=1&per_page=100
-                subscriber_list = _get_all_feed_subscribers(rss_monk, feed_data, subscriber_list)
-
+                subscriber_list = _get_all_feed_subscribers(rss_monk._client, feed_data.id)
 
                 if request.notify:
                     # Send campaign email to announce the closure of a mailing list
@@ -588,6 +587,7 @@ async def delete_feed_by_url(
             else:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
     except HTTPException:
+        traceback.print_exc()
         raise
     except Exception as e:
         logger.error(f"Failed to delete feed: {e}")
@@ -809,7 +809,7 @@ async def feed_subscribe(
                         "subject": subject,
                         "subscription_link":  subscribe_link,
                         "frequency": frequency,
-                        "filter": request.display_text[frequency] if request.display_text else {},
+                        "filter": request.display_text[frequency] if request.display_text and (frequency in request.display_text) else {},
                         "confirmation_link": f"{base_url}?id={subscriber_uuid}&guid={pending_uuid}"
                     }
 
@@ -1118,18 +1118,23 @@ async def public_listmonk_passthrough(
 
 
 
-def _get_all_feed_subscribers(client: ListmonkClient, feed_data, subscriber_list):
+def _get_all_feed_subscribers(client: ListmonkClient, feed_ident: int):
     """Fetch all pages and put into a list"""
-    subscriber_list = []
+    try:
+        subscriber_list = []
 
-    total_pages = 10
-    page = 1
-    while page <= total_pages:
-        data = client.get(f"/api/subscribers?list_id={feed_data.id}&page={page}&per_page=1000")
-        data = client._normalize_results(data)
-        subscriber_list.append(data["results"])
-        total_pages = data["total"]
-        page += 1
+        total_pages = 10
+        page = 1
+        while page <= total_pages:
+            print(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
+            data = client.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
+            norm_data = client._normalize_results(data)
+            subscriber_list += norm_data
+            total_pages = data["total"]
+            page += 1
+    except Exception as e:
+        traceback.print_exc()
+        raise
 
     return subscriber_list
 
