@@ -194,12 +194,14 @@ class TestLifeCycleMethods(unittest.TestCase):
         response = admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'test@test.com'"})
         subscriber = response.json()["data"]["results"][0]
         subscriber_uuid = str(subscriber["uuid"])
+        assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" in subscriber["attribs"]
         feed_attribs = subscriber["attribs"]["091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180"]
         # Should only be a single item in here, the key is the guid.
-        assert "filter" not in dict(feed_attribs)
-        assert "token" not in dict(feed_attribs)
-        assert 1 == len(dict(feed_attribs).keys())
-        subscriber_guid = (list(dict(feed_attribs).keys()))[0]
+        assert isinstance(feed_attribs, dict)
+        assert "filter" not in feed_attribs
+        assert "token" not in feed_attribs
+        assert 1 == len(feed_attribs.keys())
+        subscriber_guid = (list(feed_attribs.keys()))[0]
 
         # TODO - Check mailpit for any email
 
@@ -213,11 +215,13 @@ class TestLifeCycleMethods(unittest.TestCase):
         # Check the feed attribs in the subscriber to ensure the filter has been set
         response = admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'test@test.com'"})
         subscriber = response.json()["data"]["results"][0]
+        assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" in subscriber["attribs"]
         feed_attribs = subscriber["attribs"]["091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180"]
-        # Should only be a single item in here, the key is the guid.
-        assert "filter" in dict(feed_attribs)
-        assert "token" in dict(feed_attribs)
-        assert 2 == len(dict(feed_attribs).keys())
+        # Filter and token would have been set here
+        assert isinstance(feed_attribs, dict)
+        assert "filter" in feed_attribs
+        assert "token" in feed_attribs
+        assert 2 == len(feed_attribs.keys())
 
         # Extract the token from the filter
         filter_token = feed_attribs["token"]
