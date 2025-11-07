@@ -395,6 +395,7 @@ class RSSMonk:
 
     def get_template(self, feed_hash: str, template_type: EmailType):
         """Get a template associated with a feed and template type"""
+        # TODO - Future cache here
         return self._admin.find_email_template(feed_hash, template_type)
 
     def add_update_template(self, feed_hash: str, template_type: EmailType, new_template: EmailTemplate):
@@ -441,13 +442,15 @@ class RSSMonk:
             return s["uuid"]
         return None
 
-    def get_subscriber_uuid(self, email: str) -> str | None:
+    def get_subscriber_uuid(self, email: str) -> str:
         """Get existing subscriber's data block."""
         subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
         if subs:
             s = subs[0]
             return s["uuid"]
-        return None
+        
+        logger.error("Subscriber (%s) is missing uuid", email)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="")
 
     def get_or_create_subscriber(self, email: str) -> Subscriber:
         """Get existing or create new subscriber."""
@@ -485,7 +488,7 @@ class RSSMonk:
         return True
     
     def update_subscriber_filter(self, email: str, sub_filter: dict, feed_hash: str,
-                                 bypass_confirmation: bool = True) -> Optional[str]:
+                                 bypass_confirmation: bool = False) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_hash(feed_hash)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")

@@ -75,14 +75,14 @@ prereqs:
 check: lint type-check test
 
 # Run tests
-test quick="":
+test full_restart="":
   #!/usr/bin/env sh
-  if [ -e "{{quick}}" ]; then
+  if [ "{{full_restart}}" != "" ]; then
     echo "Just: Full restart"
     just clean
     just start
     echo "Just: Waiting for pods to start"
-    sleep 30
+    sleep 60
   fi
   uv run --extra test pytest
 
