@@ -56,10 +56,8 @@ just start    # Deploy RSS Monk on k3d cluster
   - `/api/feeds` - Feed management with RSS Monk logic
   - `/api/feeds/process` - Feed processing (individual or bulk for cron)
   - `/api/feeds/configurations/{url}` - URL configuration management
-  - `/api/public/subscribe` - Public subscription without authentication
   - `/api/cache/stats` - RSS feed cache statistics
 - **Listmonk Passthrough**: All other `/api/*` requests pass through to Listmonk with auth validation
-- **Public Passthrough**: All other `/api/public/*` requests pass through to Listmonk without auth
 - **OpenAPI Documentation**: Comprehensive OpenAPI spec with all endpoints documented
 - **Dynamic Content**: Pydantic models provide validation and documentation
 

@@ -2,9 +2,9 @@
 
 from datetime import datetime, timezone
 import traceback
-from typing import Annotated, Optional
+from typing import Annotated
 from http import HTTPStatus
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 import uuid
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -75,6 +75,7 @@ swagger_ui_params = {
 
 # Configure Prometheus counters
 transactions_created = Counter('transactions_created', 'Total number of transactions created')
+#subscribers_total = Gauge('subscribers_processed', 'Total number of subscribers')
 feeds_processed = Counter('feeds_processed', 'Total number of RSS feeds checked')
 subscribers_processed = Counter('subscribers_processed', 'Total number of subscribers checked')
 
@@ -264,6 +265,9 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
     try:
         # Return metrics page
         data = generate_latest() # TODO - This appears to also generates extra metrics (such as _created)
+
+        # TODO - Append subsciber_count from /api/lists for each list
+
         return Response(content=data, media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
         logger.error(f"Metric check failed: {e}")
@@ -738,10 +742,9 @@ async def feed_get_subscription_preferences(
                     feed_hash = make_url_hash(str(request.feed_url))
                 rss_monk.validate_feed_visibility(feed_hash)
 
-                if feed_hash in attribs and "filter" in attribs[feed_hash]:
-                    # Remove the other accounts that the credentials aren't meant to see
-                    return_filter = { feed_hash : attribs[feed_hash]["filter"][feed_hash] }
-                    return SubscriptionPreferencesResponse(filter = return_filter)
+                # Remove the other accounts that the credentials aren't meant to see
+                return_filter = { feed_hash : attribs.get(feed_hash, {}).get("filter", {}). get(feed_hash, {}) }
+                return SubscriptionPreferencesResponse(filter = return_filter)
             return SubscriptionPreferencesResponse(filter={})
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -993,6 +996,7 @@ async def feed_unsubscribe(
 async def public_subscribe(request: PublicSubscribeRequest) -> SubscriptionResponse:
     """Public subscription endpoint."""
     # No filters enabled.
+    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED)
     try:
         # Use default settings for public endpoint
         with RSSMonk() as rss_monk:
@@ -1021,8 +1025,8 @@ async def listmonk_passthrough(
     path: str,
     auth: tuple[str, str] = Depends(validate_auth)
 ):
-    print(f"{path} at /api")
     """Passthrough authenticated requests to Listmonk API."""
+    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED)
     # FastAPI doesn't need this code snippet, this should be handled with positioning of functions.
     # Keeping because AI put it in here and may do so again
     # Skip our own endpoints
@@ -1084,6 +1088,7 @@ async def public_listmonk_passthrough(
     path: str
 ):
     """Passthrough public requests to Listmonk API without authentication."""
+    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED)
     # Skip our own endpoint
     if path == "subscribe":
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Not found")
@@ -1134,7 +1139,6 @@ def _get_all_feed_subscribers(client: ListmonkClient, feed_ident: int):
         total_pages = 10
         page = 1
         while page <= total_pages:
-            print(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
             data = client.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
             norm_data = client._normalize_results(data)
             subscriber_list += norm_data

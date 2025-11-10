@@ -7,6 +7,8 @@
 # - Unsubscribe from feed
 # - Delete feed
 # Requires k3s to be running with a freshly created RSSMonk, Listmonk and Postgres running
+import json
+import time
 import unittest
 
 from http import HTTPStatus
@@ -18,7 +20,7 @@ admin_session = requests.Session()
 admin_auth=HTTPBasicAuth("admin", "admin123") # Default k3d credentials
 RSSMONK_URL = "http://localhost:8000"
 LISTMONK_URL = "http://localhost:9000"
-MAILPIT_URL = "http://127.0.0.1:8025"
+MAILPIT_URL = "http://localhost:8025"
 
 class TestLifeCycleMethods(unittest.TestCase):
     def setUp(self):
@@ -41,7 +43,7 @@ class TestLifeCycleMethods(unittest.TestCase):
 
         # Empty lists, subscribers, templates and list roles.
         # Testing purposes assume low counts
-        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=true&per_page=all")
+        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=True&per_page=all")
         data = dict(response.json()).get("data", {})
         lists_data = data.get("results", []) if isinstance(data, dict) else []
         for list_data in lists_data:
@@ -59,12 +61,132 @@ class TestLifeCycleMethods(unittest.TestCase):
             admin_session.delete(f"{LISTMONK_URL}/api/templates/{list_data['id']}")
 
         response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
-        print(response.json()["data"])
         lists_data = response.json()["data"]
         for list_data in lists_data:
             admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
 
-        # TODO - Modify settings
+        # Modify settings to ensure mailpit is accessible
+        response = admin_session.put(LISTMONK_URL+"/api/settings", json={
+            "app.site_name": "Media Statements",
+            "app.root_url": "http://localhost:9000",
+            "app.logo_url": "",
+            "app.favicon_url": "",
+            "app.from_email": "listmonk <noreply@listmonk.yoursite.com>",
+            "app.notify_emails": [],
+            "app.enable_public_subscription_page": True,
+            "app.enable_public_archive": True,
+            "app.enable_public_archive_rss_content": True,
+            "app.send_optin_confirmation": True,
+            "app.check_updates": True,
+            "app.lang": "en",
+            "app.batch_size": 1000,
+            "app.concurrency": 10,
+            "app.max_send_errors": 1000,
+            "app.message_rate": 10,
+            "app.cache_slow_queries": False,
+            "app.cache_slow_queries_interval": "0 3 * * *",
+            "app.message_sliding_window": False,
+            "app.message_sliding_window_duration": "1h",
+            "app.message_sliding_window_rate": 10000,
+            "privacy.individual_tracking": False,
+            "privacy.unsubscribe_header": True,
+            "privacy.allow_blocklist": True,
+            "privacy.allow_preferences": True,
+            "privacy.allow_export": True,
+            "privacy.allow_wipe": True,
+            "privacy.exportable": ["profile","subscriptions","campaign_views","link_clicks"],
+            "privacy.record_optin_ip": False,
+            "privacy.domain_blocklist": [],
+            "privacy.domain_allowlist": [],
+            "security.captcha": {
+                "altcha": {"enabled": False,"complexity": 300000},
+                "hcaptcha": {"enabled": False,"key": "","secret": ""}
+            },
+            "security.oidc": {
+                "enabled": False,
+                "provider_url": "",
+                "provider_name": "",
+                "client_id": "",
+                "client_secret": "",
+                "auto_create_users": False,
+                "default_user_role_id": None,
+                "default_list_role_id": None
+            },
+            "upload.provider": "filesystem",
+            "upload.extensions": ["jpg", "jpeg", "png", "gif", "svg", "*"],
+            "upload.filesystem.upload_path": "uploads",
+            "upload.filesystem.upload_uri": "/uploads",
+            "upload.s3.url": "",
+            "upload.s3.public_url": "",
+            "upload.s3.aws_access_key_id": "",
+            "upload.s3.aws_default_region": "ap-south-1",
+            "upload.s3.bucket": "",
+            "upload.s3.bucket_domain": "",
+            "upload.s3.bucket_path": "/",
+            "upload.s3.bucket_type": "public",
+            "upload.s3.expiry": "167h",
+            "smtp": [
+                {
+                    "name": "",
+                    "uuid": "585c1139-ec96-4279-8be0-ba918db272f0",
+                    "enabled": True,
+                    "host": "mailpit.rssmonk.svc.cluster.local",
+                    "hello_hostname": "",
+                    "port": 1025,
+                    "auth_protocol": "none",
+                    "username": "username",
+                    "password": "",
+                    "email_headers": [],
+                    "max_conns": 10,
+                    "max_msg_retries": 2,
+                    "idle_timeout": "15s",
+                    "wait_timeout": "5s",
+                    "tls_type": "none",
+                    "tls_skip_verify": False,
+                    "strEmailHeaders": "[]"
+                }
+            ],
+            "messengers": [],
+            "bounce.enabled": False,
+            "bounce.webhooks_enabled": False,
+            "bounce.actions": {
+                "complaint": {"count": 1, "action": "blocklist"},
+                "hard": {"count": 1,"action": "blocklist"},
+                "soft": {"count": 2,"action": "none"}
+            },
+            "bounce.ses_enabled": False,
+            "bounce.sendgrid_enabled": False,
+            "bounce.sendgrid_key": "",
+            "bounce.postmark": {"enabled": False,"username": "","password": ""},
+            "bounce.forwardemail": {"enabled": False,"key": ""},
+            "bounce.mailboxes": [
+                {
+                    "uuid": "855bd4a1-8224-425d-a6ac-0901e34fa835",
+                    "enabled": False,
+                    "type": "pop",
+                    "host": "pop.yoursite.com",
+                    "port": 995,
+                    "auth_protocol": "userpass",
+                    "return_path": "bounce@listmonk.yoursite.com",
+                    "username": "username",
+                    "password": "",
+                    "tls_enabled": True,
+                    "tls_skip_verify": False,
+                    "scan_interval": "15m"
+                }
+            ],
+            "appearance.admin.custom_css": "",
+            "appearance.admin.custom_js": "",
+            "appearance.public.custom_css": "",
+            "appearance.public.custom_js": "",
+            "upload.s3.aws_secret_access_key": ""
+        })
+        time.sleep(5)
+
+        # Clean up mailpit
+        sessions = requests.Session()
+        response = sessions.get(MAILPIT_URL)
+        response = sessions.delete(MAILPIT_URL+"/api/v1/messages")
 
 
     def test_accounts_lifecycle(self):
@@ -203,7 +325,10 @@ class TestLifeCycleMethods(unittest.TestCase):
         assert 1 == len(feed_attribs.keys())
         subscriber_guid = (list(feed_attribs.keys()))[0]
 
-        # TODO - Check mailpit for any email
+        # Sanity check mailpit for an email which looks like it will match what was sent out
+        response = requests.get(MAILPIT_URL+"/api/v1/messages?limit=50")
+        assert 1 == response.json()["unread"]
+        assert "Please confirm email preferences for WA media statements" == response.json()["messages"][0]["Subject"]
 
         # - Confirm subscription to feed, successfully
         confirm_sub_data = {
@@ -250,26 +375,29 @@ class TestLifeCycleMethods(unittest.TestCase):
         response_json = response.json()
         assert isinstance(response_json, dict)
 
-        # TODO - Check the lists are removed
-        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=true&per_page=all")
+        # - Check the lists are removed
+        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=True&per_page=all")
         lists_data = response.json()["data"]["results"] if "results" in response.json()["data"] else []
         assert 0 == len(lists_data)
 
-        # TODO - Check the subscriber is no longer subscribed to the list (or has been deleted)
+        # - Check the subscriber is no longer subscribed to the list (or has been deleted)
         response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
-        lists_data = response.json()["data"]["results"] if "results" in response.json()["data"] else []
-        for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{list_data['id']}")
+        lists_data = response.json().get("data", {}).get("results", [])
+        print(lists_data)
 
-        # TODO - Check the templates are removed
+
+        # - Check the templates are removed
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")
         lists_data = response.json()["data"]
         for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/templates/{list_data['id']}")
+            assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" not in list_data["name"]
 
-        # TODO - Check the user and user role are removed
+        # - Check the user role are removed
         response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
-        print(response.json()["data"])
         lists_data = response.json()["data"]
-        for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
+        assert 0 == len(lists_data)
+
+        # - Check the users if left with only admin (only role left)
+        response = admin_session.get(f"{LISTMONK_URL}/api/users")
+        lists_data = response.json()["data"]
+        assert 1 == len(lists_data)

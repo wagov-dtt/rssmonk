@@ -249,6 +249,7 @@ class RSSMonk:
             response = self._client.post("api/roles/users", payload)
             return response["id"]
         except httpx.HTTPStatusError as e:
+            # Should be 409, but quickest way
             if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
                 raise
             
@@ -298,7 +299,6 @@ class RSSMonk:
 
         list_roles = self._client.get("api/roles/lists")
         for list_role in list_roles:
-            print(list_role)
             if isinstance(list_role, dict) and list_role["name"] == list_role_name:
                 return list_role["id"]
         return -1
@@ -350,8 +350,8 @@ class RSSMonk:
                     existing_feed.tags.append(f"freq:{new_freq.value}")
 
             payload = {
-                "name": existing_feed.name, # TODO - Could update from the feed??
-                "description": existing_feed.description, # TODO - change
+                "name": existing_feed.name,
+                "description": existing_feed.description,
                 "tags": existing_feed.tags,
             }
             self._client.update_list_data(existing_feed.id, payload)
@@ -391,7 +391,7 @@ class RSSMonk:
 
 
     # Template operations
-    # TODO - Set up map, name to template id, if there are high numbers.
+    # TODO - Set up map, name to template id, if there are many, for caching
 
     def get_template(self, feed_hash: str, template_type: EmailType):
         """Get a template associated with a feed and template type"""
@@ -484,7 +484,6 @@ class RSSMonk:
 
         self._client.unsubscribe_from_list([subscriber.id], [feed.id])
 
-        # TODO - Remove attributes from the user
         return True
     
     def update_subscriber_filter(self, email: str, sub_filter: dict, feed_hash: str,

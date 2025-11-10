@@ -179,7 +179,7 @@ class ListmonkClient:
         payload = {
             "email": body["email"],
             "name": body["name"],
-            "status": body["status"] if "status" in body else "enabled",
+            "status": body.get("status","enabled"),
             "lists": body["lists"], # Needs to be a list of numbers
             "attribs": body["attribs"],
             "preconfirm_subscriptions": True, # This API will handle confirmations

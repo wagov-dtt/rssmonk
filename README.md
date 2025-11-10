@@ -34,10 +34,6 @@ RSS Monk acts as a proxy to Listmonk with three areas of endpoints:
 - `POST /api/feeds/subscribe-confirm` - Subscription
 - `POST /api/feeds/unsubscribe` - Unsubscribe from a feed
 
-**Listmonk Passthrough:**
-- `GET|POST|PUT|DELETE /api/*` - All other requests pass through to Listmonk with authentication
-- `GET|POST|PUT|DELETE /api/public/*` - Public Listmonk endpoints (no auth required)
-
 **Utility Endpoints:**
 - `GET /health` - Combined RSS Monk + Listmonk health check
 - `GET /docs` - Interactive API documentation with passthrough info
@@ -69,7 +65,6 @@ RSS Monk uses pydantic-settings which automatically loads `.env` files. Only `LI
 
 The RSS Monk API validates all credentials against Listmonk directly:
 - **Authenticated routes** (`/api/*`): Require HTTP Basic Auth validated against Listmonk
-- **Public routes** (`/api/public/*`): No authentication required
 - **RSS Monk routes**: Use same Listmonk credentials for backend operations
 
 ## Frequencies
