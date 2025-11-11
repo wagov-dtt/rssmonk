@@ -228,7 +228,6 @@ class RSSMonk:
         # Currently we delete and recreate the user here.
         # In the future, Listmonk may have a reset api password functionality
         self.delete_api_user(username)
-        # TODO - Fix
         return self.create_api_user(username)
     
 
