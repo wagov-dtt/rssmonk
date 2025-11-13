@@ -44,7 +44,7 @@ def add_feed(
             feed = rss.add_feed(url, frequency, name)
             console.print(f"[SUCCESS] Created feed: {feed.name} (ID: {feed.id})", style="green")
             console.print(f"   URL: {feed.feed_url}")
-            console.print(f"   Frequency: {feed.frequencies.value}")
+            console.print(f"   Frequency: {feed.poll_frequencies.value}")
     except Exception as e:
         console.print(f"[ERROR] {e}", style="red")
         raise typer.Exit(1)
@@ -71,7 +71,7 @@ def list_feeds():
                 table.add_row(
                     feed.name,
                     feed.feed_url[:50] + "..." if len(feed.feed_url) > 50 else feed.feed_url,
-                    feed.frequencies,
+                    feed.poll_frequencies,
                     str(feed.id),
                 )
 

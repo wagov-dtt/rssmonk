@@ -6,7 +6,7 @@ import uuid
 
 # Only need to make a few items over a few minutes, or days for testing purposes
 # Edited from CoPilot output for feed generation
-def make_feed(items: int) -> str:
+def make_media_statements_feed(items: int) -> str:
     if items > 4: # Only support 4 items that can be created for the return feed
         items = 4
 
@@ -18,6 +18,7 @@ def make_feed(items: int) -> str:
         "xmlns:atom": "http://www.w3.org/2005/Atom"
     })
 
+    # Randomised lists to generate different categories
     minister_list = ["Hon. Premier MLA", "Hon. Senior Minister MLA", "Hon. Minister MLA"]
     minister_code = ["minister 0", "minister 1", "minster 2"]
     portfolio_list = ["Treasurer", "Health", "Transport, Planning and Lands"]
@@ -77,4 +78,4 @@ def prettify(elem):
 
 
 if __name__ == "__main__":
-    print(make_feed(random.randint(1, 4)))
+    print(make_media_statements_feed(random.randint(1, 4)))

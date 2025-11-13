@@ -15,8 +15,6 @@ from tests.listmonk_testbase import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, List
 
 
 class TestLifeCycleMethods(ListmonkClientTestBase):
-    admin_auth = HTTPBasicAuth("admin", "admin123") # Default k3d credentials
-
     def test_accounts_lifecycle(self):
         """Singular test for an account from creation to destruction"""
         admin_session = make_admin_session()
@@ -25,10 +23,10 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         create_feed_data = {
             "feed_url": "https://example.com/rss/example",
             "email_base_url": "https://example.com/media",
-            "frequency": ["instant", "daily"],
+            "poll_frequencies": ["instant", "daily"],
             "name": "Example Media Statements"
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.admin_auth, json=create_feed_data)
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
         assert (response.status_code == HTTPStatus.CREATED), response.text
         response_json = response.json()
         assert isinstance(response_json, dict)
@@ -43,7 +41,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         create_account = {
             "feed_url": "https://example.com/rss/example"
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds/account", auth=self.admin_auth, json=create_account)
+        response = requests.post(RSSMONK_URL+"/api/feeds/account", auth=self.ADMIN_AUTH, json=create_account)
         assert (response.status_code == HTTPStatus.CREATED), response.text
         response_json = response.json()
         assert isinstance(response_json, dict)
@@ -155,8 +153,8 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
 
         # Sanity check mailpit for an email which looks like it will match what was sent out
         response = requests.get(MAILPIT_URL+"/api/v1/messages?limit=50")
-        assert 1 == response.json()["unread"]
-        assert "Please confirm email preferences for WA media statements" == response.json()["messages"][0]["Subject"]
+        assert response.json()["unread"] == 1
+        assert response.json()["messages"][0]["Subject"] == "Please confirm email preferences for WA media statements"
 
         # - Confirm subscription to feed, successfully
         confirm_sub_data = {
@@ -198,7 +196,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.UNAUTHORIZED), response.text
 
         # Delete with admin, successfully
-        response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=self.admin_auth, json=delete_feed_data)
+        response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=self.ADMIN_AUTH, json=delete_feed_data)
         assert (response.status_code == HTTPStatus.OK), response.text
         response_json = response.json()
         assert isinstance(response_json, dict)
@@ -211,8 +209,6 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         # - Check the subscriber is no longer subscribed to the list (or has been deleted)
         response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
         lists_data = response.json().get("data", {}).get("results", [])
-        print(lists_data)
-
 
         # - Check the templates are removed
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")

@@ -14,7 +14,7 @@ class Feed(BaseModel):
     feed_url: str
     email_base_url: str
     """Base URL that is used for link generation in emails"""
-    frequencies: list[Frequency]
+    poll_frequencies: list[Frequency]
     url_hash: str = ""
     mult_freq: bool = False
 
@@ -26,7 +26,7 @@ class Feed(BaseModel):
     @property
     def tags(self) -> list[str]:
         """Generate Listmonk tags."""
-        return [f'freq:{x.value}' for x in self.frequencies] + [f"url:{self.url_hash}"]
+        return [f'freq:{x.value}' for x in self.poll_frequencies] + [f"url:{self.url_hash}"]
 
     @property
     def description(self) -> str:
@@ -71,7 +71,7 @@ class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
     email_base_url: HttpUrl = Field(..., description="Base URL that is used in emails")
-    frequency: list[Frequency] = Field(..., description="Polling frequency")
+    poll_frequencies: list[Frequency] = Field(..., description="Polling frequency")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
 
@@ -157,7 +157,7 @@ class FeedResponse(BaseModel):
     name: str = Field(..., description="Feed name")
     feed_url: str = Field(..., description="RSS feed URL")
     email_base_url: HttpUrl = Field(..., description="Base URL that is used in emails")
-    frequency: list[Frequency] = Field(..., description="Polling frequency")
+    poll_frequencies: list[Frequency] = Field(..., description="How often the feed should be polled for new feed items")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
 

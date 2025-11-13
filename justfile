@@ -75,9 +75,9 @@ prereqs:
 check: lint type-check test
 
 # Run tests
-test full_restart="":
+test quick="":
   #!/usr/bin/env sh
-  if [ "{{full_restart}}" != "" ]; then
+  if [ "{{quick}}" == "" ]; then
     echo "Just: Full restart"
     just clean
     just start

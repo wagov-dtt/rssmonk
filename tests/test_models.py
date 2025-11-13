@@ -12,11 +12,11 @@ def test_feed_create_request_valid():
     request = FeedCreateRequest(
         feed_url="https://example.com/feed.rss",
         email_base_url="https://example.com/subscribe",
-        frequency=[Frequency.DAILY.value],
+        poll_frequencies=[Frequency.DAILY.value],
         name="Test Feed"
     )
     assert str(request.feed_url) == "https://example.com/feed.rss"
-    assert request.frequency == [Frequency.DAILY.value]
+    assert request.poll_frequencies == [Frequency.DAILY.value]
     assert request.name == "Test Feed"
 
 
@@ -25,7 +25,7 @@ def test_feed_create_request_invalid_url():
     with pytest.raises(ValidationError):
         FeedCreateRequest(
             feed_url="not-a-valid-url",
-            frequency=[Frequency.DAILY.value]
+            poll_frequencies=[Frequency.DAILY.value]
         )
 
 

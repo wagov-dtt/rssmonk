@@ -121,15 +121,16 @@ class ListmonkClient:
         else:
             return [data] if data else []
 
-    def get_lists(self, name : Optional[str] = None, tag=None, per_page="all"):
+    def get_lists(self, name: Optional[str] = None, tag: str = None, per_page: str = "all"):
         """Get all lists, optionally filtered by tag."""
-        params = {"per_page": per_page, "": name}
+        params = {"per_page": per_page}
         if name:
-            params["name"] = name
+            params["query"] = name
 
         if tag:
             params["tag"] = tag
         data = self.get("/api/lists", params=params)
+        print(params)
         return self._normalize_results(data)
 
     def find_list_by_name(self, name):

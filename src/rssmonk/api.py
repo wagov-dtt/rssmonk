@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import traceback
 from typing import Annotated
 from http import HTTPStatus
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 import uuid
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -323,17 +323,17 @@ async def create_feed(
 
     try:
         with rss_monk:
-            feed = rss_monk.add_feed(str(request.feed_url), str(request.email_base_url), request.frequency, request.name)
+            feed = rss_monk.add_feed(str(request.feed_url), str(request.email_base_url), request.poll_frequencies, request.name, request.visibility)
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
                 feed_url=feed.feed_url,
                 email_base_url=feed.email_base_url,
-                frequency=feed.frequencies,
+                poll_frequencies=feed.poll_frequencies,
                 url_hash=feed.url_hash
             )
-    #except ValueError as e:
-    #    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except httpx.HTTPError as e:
         logger.error(f"HTTP create_feed: {e}")
         raise
@@ -477,7 +477,7 @@ async def create_feed_account(
     response_model=FeedListResponse,
     tags=["feeds"],
     summary="List RSS Feeds",
-    description="Retrieve all configured RSS feeds with their details"
+    description="Retrieve all configured RSS feeds with their details. In order of frequency"
 )
 async def list_feeds(
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
@@ -493,8 +493,9 @@ async def list_feeds(
                     FeedResponse(
                         id=feed.id,
                         name=feed.name,
-                        url=feed.feed_url,
-                        frequency=feed.frequencies,
+                        feed_url=feed.feed_url,
+                        email_base_url=feed.email_base_url,
+                        poll_frequencies=feed.poll_frequencies,
                         url_hash=feed.url_hash
                     )
                     for feed in feeds
@@ -502,7 +503,7 @@ async def list_feeds(
                 total=len(feeds)
             )
     except Exception as e:
-        logger.error(f"Failed to list feeds: {e}")
+        logger.error(f"Failed to list feeds. {type(e).__name__}: {e}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve feeds")
 
 
@@ -528,8 +529,9 @@ async def get_feed_by_url(
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
-                url=feed.feed_url,
-                frequency=feed.frequencies,
+                feed_url=feed.feed_url,
+                email_base_url=feed.email_base_url,
+                poll_frequencies=feed.poll_frequencies,
                 url_hash=feed.url_hash
             )
     except HTTPException:
@@ -636,7 +638,7 @@ async def update_feed_configuration(
             
             result = config_manager.update_feed_config(
                 url=request.feed_url,
-                new_frequency=request.frequency,
+                new_frequency=request.poll_frequencies,
                 new_name=request.name
             )
             
@@ -964,7 +966,7 @@ async def feed_unsubscribe(
             if not bypass_confirmation:
                 template = rss_monk.get_template(feed_hash, EmailType.UNSUBSCRIBE)
                 if template is None:
-                    logger.error("No unsubscribe template found for feed %s. Using default", feed_hash)
+                    logger.error("No unsubscribe template found for feed %s. Skipping", feed_hash)
                     # TODO - Add option in list description for optional email, or for confirm unsubscribe link(?), when feature is requrested
                     # Currently okay to return empty. User is unsubscribed, the notification is a courtesy
                     return EmptyResponse()

@@ -324,7 +324,7 @@ class RSSMonk:
             name = self._get_feed_name(feed_url)
 
         # Create return
-        feed = Feed(name=name, feed_url=feed_url, frequencies=new_frequency, email_base_url=email_base_url)
+        feed = Feed(name=name, feed_url=feed_url, poll_frequencies=new_frequency, email_base_url=email_base_url)
 
         # Check for existing feed with same URL
         existing_feed = self.get_feed_by_url(feed_url)
@@ -339,13 +339,13 @@ class RSSMonk:
             return feed
         else:
             # No update required if the URL and frequencies are already covered
-            if set(new_frequency) <= set(existing_feed.frequencies):
+            if set(new_frequency) <= set(existing_feed.poll_frequencies):
                 raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=f"Feed with same URL and frequency combination already exists: {feed_url}")
 
             # Add new freq tags to end of the list and update
             for new_freq in new_frequency:
                 if f"freq:{new_freq.value}" not in existing_feed.tags:
-                    existing_feed.frequencies.append(new_freq)
+                    existing_feed.poll_frequencies.append(new_freq)
                     existing_feed.tags.append(f"freq:{new_freq.value}")
 
             payload = {
@@ -356,17 +356,16 @@ class RSSMonk:
             self._client.update_list_data(existing_feed.id, payload)
             return existing_feed
 
-    def list_feeds(self) -> list[Feed]:
-        """list all feeds."""
+    def list_feeds(self, freq: Optional[Frequency] = None) -> list[Feed]:
+        """list all feeds. Optional freq to list all feeds by freq type"""
         feeds = []
-        for freq in Frequency:
-            lists = self._client.get_lists(tag=f"freq:{freq.value}")
-            for lst in lists:
-                try:
-                    feed = self._parse_feed_from_list(lst)
-                    feeds.append(feed)
-                except Exception as e:
-                    logger.warning(f"Skipping invalid feed {lst.get('name')}: {e}")
+        lists = self._client.get_lists(tag=f"freq:{freq.value}" if freq is not None else None)
+        for lst in lists:
+            try:
+                feed = self._parse_feed_from_list(lst)
+                feeds.append(feed)
+            except Exception as e:
+                logger.warning(f"Could not parse feed. Skipping {lst.get('name')}: {e}")
 
         # Deduplicate by ID
         return list({f.id: f for f in feeds if f.id}.values())
@@ -599,7 +598,7 @@ class RSSMonk:
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
         """Process all feeds of given frequency that are due."""
-        feeds = [f for f in self.list_feeds() if frequency in f.frequencies]
+        feeds = [f for f in self.list_feeds() if frequency in f.poll_frequencies]
         results = {}
 
         for feed in feeds:
@@ -668,7 +667,7 @@ class RSSMonk:
         if not sub_url:
             raise ValueError("No Subscription URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], feed_url=url, frequencies=frequency_list, email_base_url=sub_url, mult_freq=mult_freq)
+        return Feed(id=lst["id"], name=lst["name"], feed_url=url, poll_frequencies=frequency_list, email_base_url=sub_url, mult_freq=mult_freq)
 
     def _find_new_articles(self, feed: Feed, articles: list) -> list:
         """Find new articles since last poll."""
@@ -681,7 +680,7 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            if tag.startswith(f"last-seen:{feed.frequencies.value}:"):
+            if tag.startswith(f"last-seen:{feed.poll_frequencies.value}:"):
                 last_guid = tag.split(":", 3)[3]
                 break
 
@@ -754,19 +753,19 @@ class RSSMonk:
         # Remove old state tags
         tags = [
             t for t in tags
-            if not t.startswith(f"last-poll:{feed.frequencies.value}:")
-            and not t.startswith(f"last-seen:{feed.frequencies.value}:")
+            if not t.startswith(f"last-poll:{feed.poll_frequencies.value}:")
+            and not t.startswith(f"last-seen:{feed.poll_frequencies.value}:")
         ]
 
         # Add new poll time
         now = datetime.now()
         # TODO - Figure out what this is for 
-        tags.append(f"last-poll:{feed.frequencies.value}:{now.isoformat()}")
+        tags.append(f"last-poll:{feed.poll_frequencies.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
         if articles:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
-            tags.append(f"last-seen:{feed.frequencies.value}:{latest_guid}")
+            tags.append(f"last-seen:{feed.poll_frequencies.value}:{latest_guid}")
 
         # Update list
         self._client.put(
@@ -818,7 +817,7 @@ class RSSMonk:
             body=content,
             list_ids=[feed.id],
             # TODO - Figure out what this is for 
-            tags=["rss", "automated", feed.frequencies.value],
+            tags=["rss", "automated", feed.poll_frequencies.value],
         )
 
         return result["id"]

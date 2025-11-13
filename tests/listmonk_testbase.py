@@ -1,5 +1,6 @@
 import time
 import unittest
+from requests.auth import HTTPBasicAuth
 
 import requests
 
@@ -28,14 +29,16 @@ def make_admin_session() -> requests.Session:
 
 class ListmonkClientTestBase(unittest.TestCase):
     """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down. This should """
+    ADMIN_AUTH = HTTPBasicAuth("admin", "admin123") # Default k3d credentials
 
     @classmethod
     def setUpClass(cls):
         # Empty lists, subscribers, templates and list roles.
+        cls.delete_list_roles()
+        cls.delete_users()
         cls.delete_lists()
         cls.delete_subscribers()
-        cls.delete_tempplates()
-        cls.delete_list_roles_and_list_accounts()
+        cls.delete_templates()
         cls.clear_mailpit_messages()
 
         # Modify settings to ensure mailpit is the mail client for RSSMonk
@@ -155,25 +158,25 @@ class ListmonkClientTestBase(unittest.TestCase):
             "appearance.public.custom_js": "",
             "upload.s3.aws_secret_access_key": ""
         })
-        assert 200 == response.status_code
+        assert response.status_code == 200
         time.sleep(5) # Listmonk will reload, so a pause is needed
 
 
     def tearDown(self):
         # Empty lists, subscribers, templates and list roles.
+        self.delete_list_roles()
+        self.delete_users()
         self.delete_lists()
         self.delete_subscribers()
-        self.delete_tempplates()
-        self.delete_list_roles_and_list_accounts()
+        self.delete_templates()
         self.clear_mailpit_messages()
 
     @classmethod
     def delete_lists(cls):
         admin_session = make_admin_session()
         # Testing purposes assume low counts
-        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=True&per_page=all")
-        data = dict(response.json()).get("data", {})
-        lists_data = data.get("results", []) if isinstance(data, dict) else []
+        response = admin_session.get(f"{LISTMONK_URL}/api/lists")
+        lists_data = dict(response.json()).get("data", {}).get("results", [])
         for list_data in lists_data:
             admin_session.delete(f"{LISTMONK_URL}/api/lists/{list_data['id']}")
 
@@ -182,13 +185,12 @@ class ListmonkClientTestBase(unittest.TestCase):
         admin_session = make_admin_session()
         admin_session.delete(f"{LISTMONK_URL}/api/maintenance/subscribers/orphan")
         response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
-        data = dict(response.json()).get("data", {})
-        lists_data = data.get("results", []) if isinstance(data, dict) else []
+        lists_data = dict(response.json()).get("data", {}).get("results", [])
         for list_data in lists_data:
             admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{list_data['id']}")
 
     @classmethod
-    def delete_tempplates(cls):
+    def delete_templates(cls):
         admin_session = make_admin_session()
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")
         lists_data = response.json()["data"]
@@ -196,12 +198,21 @@ class ListmonkClientTestBase(unittest.TestCase):
             admin_session.delete(f"{LISTMONK_URL}/api/templates/{list_data['id']}")
 
     @classmethod
-    def delete_list_roles_and_list_accounts(cls):
+    def delete_list_roles(cls):
         admin_session = make_admin_session()
         response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
         lists_data = response.json()["data"]
         for list_data in lists_data:
             admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
+
+    @classmethod
+    def delete_users(cls):
+        admin_session = make_admin_session()
+        response = admin_session.get(f"{LISTMONK_URL}/api/users")
+        lists_data = response.json()["data"]
+        for list_data in lists_data:
+            if list_data['id'] != 1:
+                admin_session.delete(f"{LISTMONK_URL}/api/users/{list_data['id']}")
 
     @classmethod
     def clear_mailpit_messages(cls):
