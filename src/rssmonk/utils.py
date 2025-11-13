@@ -1,7 +1,7 @@
 import hashlib
 from typing import Optional
 
-from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailType
+from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType
 
 
 # Removes everything except for the one key in the dict, empty if the key is not present in the dict
@@ -38,7 +38,7 @@ def make_list_role_name_by_url(url: str) -> str:
 def make_list_role_name(hash: str) -> str:
     return ROLE_PREFIX + hash
 
-def make_template_name(feed_hash: str, email_type: EmailType) -> str:
+def make_template_name(feed_hash: str, email_type: EmailPhaseType) -> str:
     return f"{feed_hash}-{email_type.value}"
 
 def make_filter_url(data: list | dict[str, list[int]]) -> str:

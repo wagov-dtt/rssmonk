@@ -202,7 +202,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert isinstance(response_json, dict)
 
         # - Check the lists are removed
-        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=True&per_page=all")
+        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=true&per_page=all")
         lists_data = response.json()["data"]["results"] if "results" in response.json()["data"] else []
         assert 0 == len(lists_data)
 

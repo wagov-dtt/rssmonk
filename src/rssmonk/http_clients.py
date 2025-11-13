@@ -11,7 +11,7 @@ import requests
 
 from rssmonk.models import EmailTemplate, ListmonkTemplate
 from rssmonk.utils import make_template_name
-from rssmonk.types import EmailType
+from rssmonk.types import EmailPhaseType
 
 from .logging_config import get_logger
 
@@ -123,6 +123,7 @@ class ListmonkClient:
 
     def get_lists(self, name: Optional[str] = None, tag: str = None, per_page: str = "all"):
         """Get all lists, optionally filtered by tag."""
+        # "minimal": True is used in urls to Listmonk to get ascending id, but does not work here.
         params = {"per_page": per_page}
         if name:
             params["query"] = name
@@ -241,7 +242,7 @@ class ListmonkClient:
         data = self.get("/api/templates")
         return self._normalize_results(data)
 
-    def find_email_template(self, feed_hash: str, template_type: EmailType) -> ListmonkTemplate | None:
+    def find_email_template(self, feed_hash: str, template_type: EmailPhaseType) -> ListmonkTemplate | None:
         """Find a single email template."""
         template_name = make_template_name(feed_hash, template_type)
         templates = self.get_templates()

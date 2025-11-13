@@ -62,7 +62,7 @@ ALL_FILTER = "all"
 """The keyword for every option in a filter"""
 NO_REPLY = os.environ.get("NO_REPLY_EMAIL", "noreply@noreply (No reply location)")
  
-class EmailType(str, Enum):
+class EmailPhaseType(str, Enum):
     """
     Email template types that may or may be used for emails.
     Mandatory emails

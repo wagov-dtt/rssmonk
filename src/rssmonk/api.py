@@ -23,6 +23,7 @@ from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
     BulkProcessResponse,
+    DeleteTemplateRequest,
     EmptyResponse,
     ErrorResponse,
     FeedAccountConfigurationRequest,
@@ -43,9 +44,9 @@ from .models import (
     SubscriptionPreferencesRequest,
     SubscriptionPreferencesResponse,
     SubscriptionResponse,
-    EmailType,
+    EmailPhaseType,
     ListmonkTemplate,
-    TemplateRequest,
+    CreateTemplateRequest,
     TemplateResponse,
     UnsubscribeAdminRequest,
     UnsubscribeRequest,
@@ -344,16 +345,15 @@ async def create_feed(
     response_model=TemplateResponse,
     status_code=201,
     tags=["feeds"],
-    summary="Create email templates for RSS Feed (Requires admin privileges)",
-    description="Creates or updates email templates for RSS feed for newsletter generation. Requires admin privileges."
+    summary="Create email templates for RSS Feed",
+    description="Creates or updates email templates for RSS feed for newsletter generation."
 )
 async def create_template(
-    request: TemplateRequest,
+    request: CreateTemplateRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> TemplateResponse:
     """Create a template"""
-
     with rss_monk:
         feed_hash = make_url_hash(str(request.feed_url))
         rss_monk.validate_feed_visibility(feed_hash)
@@ -374,6 +374,33 @@ async def create_template(
                 body = request.body,
                 body_source = request.body_source,
                 is_default = False)
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP create_feed: {e}")
+            raise
+
+
+@app.delete(
+    "/api/feeds/templates",
+    response_model=TemplateResponse,
+    status_code=201,
+    tags=["feeds"],
+    summary="Create email templates for RSS Feed",
+    description="Creates or updates email templates for RSS feed for newsletter generation."
+)
+async def delete_feed_template(
+    request: DeleteTemplateRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)
+) -> TemplateResponse:
+    """Delete a template"""
+    with rss_monk:
+        feed_hash = make_url_hash(str(request.feed_url))
+        rss_monk.validate_feed_visibility(feed_hash)
+        try:
+            # Delete the feed template
+            return rss_monk.delete_template(feed_hash, request.phase_type)
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
         except httpx.HTTPError as e:
@@ -587,7 +614,7 @@ async def delete_feed_by_url(
                 rss_monk.delete_list_role(str(request.feed_url))
 
                 # Delete templates associated with the url
-                rss_monk.delete_templates(str(request.feed_url))
+                rss_monk.delete_feed_templates(str(request.feed_url))
 
                 return {"message": "Feed, associated roles and account have been deleted successfully"}
             else:
@@ -800,11 +827,11 @@ async def feed_subscribe(
                 base_url = feed_data.email_base_url
                 subject = None # Accessed by {{ .Tx.Data.subject }} if used
 
-                template = rss_monk.get_template(feed_hash, EmailType.SUBSCRIBE)
+                template = rss_monk.get_template(feed_hash, EmailPhaseType.SUBSCRIBE)
                 if template is None:
                     logger.error("No subscribe template found for %s", feed_hash)
                     # Cronjob should remove the attribs in the next day
-                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"Pending subscription added, but template dependancy missing for {EmailType.SUBSCRIBE.value}")
+                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"Pending subscription added, but template dependancy missing for {EmailPhaseType.SUBSCRIBE.value}")
 
                 # Make filter list, for the subscribe link without email (make user type it in again)
                 subscribe_link = f"{base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
@@ -964,7 +991,7 @@ async def feed_unsubscribe(
             
             # Send emails
             if not bypass_confirmation:
-                template = rss_monk.get_template(feed_hash, EmailType.UNSUBSCRIBE)
+                template = rss_monk.get_template(feed_hash, EmailPhaseType.UNSUBSCRIBE)
                 if template is None:
                     logger.error("No unsubscribe template found for feed %s. Skipping", feed_hash)
                     # TODO - Add option in list description for optional email, or for confirm unsubscribe link(?), when feature is requrested

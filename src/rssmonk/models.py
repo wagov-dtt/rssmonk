@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
-from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, DisplayTextFilterType, FrequencyFilterType, EmailType, Frequency, ListVisibilityType
+from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
 
 class Feed(BaseModel):
     """RSS feed model."""
@@ -97,14 +97,19 @@ class FeedProcessRequest(BaseModel):
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
     auto_send: bool = Field(False, description="Automatically send created campaigns")
 
-class TemplateRequest(BaseModel):
+class CreateTemplateRequest(BaseModel):
     """Request model for creating a template for a RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
     template_type: str = Field(..., description="Type of the template (campaign, campaign_visual, or tx)")
-    phase_type: EmailType = Field(..., description="The phase in the email subscribe cycle the template is for")
+    phase_type: EmailPhaseType = Field(..., description="The phase in the email subscribe cycle the template is for")
     subject: Optional[str] = Field(None, description="The email template subject line. Mandatory for tx templates")
     body_source: Optional[str] = Field(None, description="If type is campaign_visual, the JSON source for the email-builder tempalate")
     body: str = Field(..., description="HTML body of the template")
+
+class DeleteTemplateRequest(BaseModel):
+    """Request model for deleting a template for a RSS feed."""
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
+    phase_type: EmailPhaseType = Field(..., description="The phase in the email subscribe cycle the template is for")
 
 class PublicSubscribeRequest(BaseModel):
     """Request model for public subscription endpoint and no filter."""

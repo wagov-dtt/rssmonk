@@ -1,4 +1,7 @@
-"""Test Feed API endpoints (/apit/feeds/*)."""
+"""
+Test Feed API endpoints
+- /api/feeds
+"""
 
 from http import HTTPStatus
 import requests
@@ -45,6 +48,9 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
         assert (response.status_code == HTTPStatus.CREATED),  "Set up failed: "+response.text
 
+    def make_feed_account(self, feed_url: str):
+
+        return ""
 
     def test_get_feeds_no_access(self):
         """GET /api/feeds - List RSS Feeds
@@ -58,7 +64,6 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNAUTHORIZED
 
     def test_list_feeds_admin_success(self):
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
         self.insert_example_rss() # Add example rss
 
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
@@ -72,11 +77,9 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert data["feeds"][2]["feed_url"] == "https://example.com/rss/example"
 
     def test_list_feeds_feed_account_success(self):
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
         self.insert_example_rss() # Add example rss
 
-        # TODO - Make 
-        feed_auth = HTTPBasicAuth("admin", "admin123") # TODO - 
+        feed_auth = HTTPBasicAuth("admin", "admin123")
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=feed_auth)
         assert response.status_code == 200
         data = response.json()
@@ -97,28 +100,13 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         - Create feed with already exists with incoming frequencies having partial overlap with existing
         - Create feed with invalid url, frequency and list_visibility
         """
-        pass
-
-    def test_create_feed_templates(self):
-        """POST /api/feeds/templates - Create email templates (admin only)
-        - Create feed template
-        """
-        pass
-
-    def test_create_account_feed(self):
-        """POST /api/feeds/account - Create account RSS Feed (admin only)
-        - Create feed account. Ensure list role and account have been created with limited role
-        """
-
-        pass
-
-    def test_reset_account_password(self):
-        """POST /api/feeds/account-reset-password - Reset RSS Feed account password (admin only)"""
-        pass
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
+        # TODO
+        assert False
 
     def test_get_feed_by_url(self):
         """GET /api/feeds/by-url - Get Feed by URL"""
-        pass
+        assert False
 
     def test_delete_feed_by_url(self):
         """DELETE /api/feeds/by-url - Delete Feed by URL (admin only)
@@ -126,28 +114,16 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         - Delete non existing feed
         - Delete existing feed. Ensure feed, user account, list role, templates are removed
         """
-        pass
+        assert False
 
     def test_get_configurations(self):
         """GET /api/feeds/configurations - Get URL Configurations"""
-        pass
+        assert False
 
     def test_update_configurations(self):
         """PUT /api/feeds/configurations - Update Feed Configuration"""
-        pass
+        assert False
 
     def test_get_subscribe_preferences(self):
         """GET /api/feeds/subscribe-preferences - Get Feed preferences"""
-        pass
-
-    def test_subscribe_to_feed(self):
-        """POST /api/feeds/subscribe - Subscribe to a Feed"""
-        pass
-
-    def test_confirm_subscription(self):
-        """POST /api/feeds/subscribe-confirm - Confirm subscription to a Feed"""
-        pass
-
-    def test_unsubscribe_from_feed(self):
-        """POST /api/feeds/unsubscribe - Unsubscribe from a Feed"""
-        pass
+        assert False

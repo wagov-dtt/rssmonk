@@ -16,8 +16,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
-from rssmonk.utils import make_list_role_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, FEED_URL_RSSMONK_QUERY, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailType
+from rssmonk.utils import make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, FEED_URL_RSSMONK_QUERY, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -311,7 +311,6 @@ class RSSMonk:
             except:
                 # Log on failure, will try to fix later
                 logger.error("Failed to delete list role {role_id}")
-                pass
         return True
 
 
@@ -391,30 +390,36 @@ class RSSMonk:
     # Template operations
     # TODO - Set up map, name to template id, if there are many, for caching
 
-    def get_template(self, feed_hash: str, template_type: EmailType):
+    def get_template(self, feed_hash: str, phase_type: EmailPhaseType):
         """Get a template associated with a feed and template type"""
         # TODO - Future cache here
-        return self._admin.find_email_template(feed_hash, template_type)
+        return self._admin.find_email_template(feed_hash, phase_type)
 
-    def add_update_template(self, feed_hash: str, template_type: EmailType, new_template: EmailTemplate):
+    def add_update_template(self, feed_hash: str, phase_type: EmailPhaseType, new_template: EmailTemplate):
         """Insert or update an email template for a feed"""
-        template = self._admin.find_email_template(feed_hash, template_type)
+        template = self._admin.find_email_template(feed_hash, phase_type)
         if template is None:
             return self._admin.create_email_template(new_template)
         else:
             return self._admin.update_email_template(template["id"], new_template)
 
-    def delete_templates(self, feed_url: str):
+    def delete_template(self, feed_hash: str, phase_type: EmailPhaseType):
+        """Delete singular templates associated with the feed"""
+        template_name = make_template_name(feed_hash, phase_type)
+        templates = self._admin.get_templates()
+        for template in templates:
+            if template_name == template["name"]:
+                return self._admin.delete_email_template(template["id"])
+        return False
+
+    def delete_feed_templates(self, feed_url: str) -> bool:
         """Delete all templates associated with the feed"""
         templates = self._admin.get_templates()
         url_hash = make_url_hash(str(feed_url))
         for template in templates:
             if url_hash in template["name"]:
-                try:
-                    self._admin.delete_email_template(template["id"])
-                except:
-                    # Ignore 404s and other expected errors. 
-                    pass
+                return self._admin.delete_email_template(template["id"])
+        return False
 
 
     # Subscriber operations. Data from these functions should not leak attributes 
