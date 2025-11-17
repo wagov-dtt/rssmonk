@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import time
 import unittest
 from requests.auth import HTTPBasicAuth
@@ -221,3 +222,60 @@ class ListmonkClientTestBase(unittest.TestCase):
         sessions.get(MAILPIT_URL)
         sessions.delete(MAILPIT_URL+"/api/v1/messages") # Either 200 or 302
 
+    #-------------------------
+    # Helper functions to set up functionality
+    #
+    # Note - These functions do act on RSSMonk, to prevent extra work to prevent having
+    #        to keep updating the tests with calls to Listmonk as RSSMonk changes.
+    #        These tests are designed to be light and generic
+    #-------------------------
+    def make_feed_list(self):
+        """Creating single feed used for testing"""
+        create_feed_data = {
+            "feed_url": "https://example.com/rss",
+            "email_base_url": "https://example.com/media",
+            "poll_frequencies": ["instant", "daily"],
+            "name": "Example Media Statements"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
+        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
+
+        create_feed_data = {
+            "feed_url": "https://example_one.com/rss",
+            "email_base_url": "https://example_one.com/media",
+            "poll_frequencies": ["instant", "daily"],
+            "name": "Example One Media Statements"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
+        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
+
+    def make_feed_account(self) -> dict[str, str]:
+        """Creating accounts used for testing"""
+        create_feed_data = {
+            "feed_url": "https://example.com/rss",
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
+        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
+        return response.json()
+
+
+    def make_feed_templates(self):
+        """Creating templates used for testing. Independant of the feed list creation"""
+        template_data = {
+            "feed_url": "https://example.com/rss",
+            "subject": "Subject Line",
+            "phase_type": "subscribe",
+            "template_type": "tx",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, data=template_data)
+        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
+        template_data = {
+            "feed_url": "https://example.com/rss",
+            "subject": "Subject Line",
+            "phase_type": "unsubscribe",
+            "template_type": "tx",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, data=template_data)
+        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text

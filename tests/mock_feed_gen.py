@@ -1,8 +1,17 @@
+from fastapi import FastAPI
 import random
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime, timedelta
 import uuid
+
+
+external_app = FastAPI()
+
+@external_app.get("/feed-{x}")
+async def ping(x: int):
+    return make_media_statements_feed(x)
+
 
 # Only need to make a few items over a few minutes, or days for testing purposes
 # Edited from CoPilot output for feed generation
@@ -55,10 +64,10 @@ def make_media_statements_feed(items: int) -> str:
         ET.SubElement(item, "title").text = f"Title number {i + 1}"
         ET.SubElement(item, "link").text = f"https://www.wa.gov.au/government/media-statements/project-update-{i+1}"
         ET.SubElement(item, "description").text = (
-            f"Description number {i}\n"
-            f"Published: {base_date.strftime('%a, %d %b %Y %H:%M:%S +0800')}\n"
-            f"Minister: {email_minister_str}\n"
-            f"Portfolio: {email_portfolio_str}\n"
+            f"Description number {i}"
+            f"Published: {base_date.strftime('%a, %d %b %Y %H:%M:%S +0800')}"
+            f"Minister: {email_minister_str}"
+            f"Portfolio: {email_portfolio_str}"
             "Regions: Perth Metro"
         )
         ET.SubElement(item, "pubDate").text = base_date.strftime('%a, %d %b %Y %H:%M:%S +0800')

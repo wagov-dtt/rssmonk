@@ -1,1 +1,0 @@
-# This file will store the updated RSS feed that is feed into testing /api/feeds/process/*

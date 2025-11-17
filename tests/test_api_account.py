@@ -13,11 +13,6 @@ from tests.listmonk_testbase import RSSMONK_URL, ListmonkClientTestBase
 
 
 class TestRSSMonkFeedAccount(ListmonkClientTestBase):
-    def make_feed(self):
-        pass
-
-    def make_feed_account(self):
-        pass
 
     # Account creation
     def test_create_feed_account_success(self):
@@ -37,11 +32,12 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         # Second attempt should return conflict
         response = requests.post(RSSMONK_URL+"/api/feeds/account", json=payload, auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.CONFLICT
+        
 
     def test_create_feed_account_invalid_url(self):
         payload = {"feed_url": "invalid-url"}
         response = requests.post(RSSMONK_URL+"/api/feeds/account", json=payload, auth=self.ADMIN_AUTH)
-        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
 
     def test_create_feed_account_unauthorized(self):
         payload = {"feed_url": "http://example.com/rss"}

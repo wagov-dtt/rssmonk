@@ -166,6 +166,12 @@ class FeedResponse(BaseModel):
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
 
+class FeedAccountConfigurationResponse(BaseModel):
+    """Request model for obtaining the configuration from a RSS feed."""
+    feed_url: HttpUrl = Field(..., description="RSS feed URL")
+    # TODO
+    # - Other information that is useful
+    #  - Mailing template for the mailing frequencies if the feed list has it (eg. instant email template for a poll freq of instant)
 
 class FeedListResponse(BaseModel):
     """Response model for listing RSS feeds."""

@@ -334,6 +334,7 @@ async def create_feed(
                 url_hash=feed.url_hash
             )
     except ValueError as e:
+        logger.error(f"ValueError in create_feed: {e}")
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except httpx.HTTPError as e:
         logger.error(f"HTTP create_feed: {e}")
@@ -629,6 +630,7 @@ async def delete_feed_by_url(
 
 @app.get(
     "/api/feeds/configurations",
+    #response_model=FeedAccountConfigurationResponse,
     tags=["feeds"],
     summary="Get URL Configurations",
     description="Get all feed configurations for a specific URL"
@@ -636,12 +638,13 @@ async def delete_feed_by_url(
 async def get_url_configurations(
     request: FeedAccountConfigurationRequest,
     rss_monk: RSSMonk = Depends(get_rss_monk)
-):
+):# -> FeedAccountConfigurationResponse:
     """Get all configurations for a URL."""
     try:
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
             configurations = config_manager.get_url_configurations(request.feed_url)
+            # TODO - Map configurations to FeedAccountConfigurationResponse
             return configurations
     except Exception as e:
         logger.error(f"Failed to get URL configurations: {e}")

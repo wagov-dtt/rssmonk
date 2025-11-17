@@ -1,4 +1,5 @@
-# This pytest is to test the entire lifecycle of a feed, primarily as a sanity check on changes
+# This pytest is to test the entire lifecycle of a feed, primarily as a sanity check on workflow
+
 # - Feed creation
 # - Feed account creation
 # - Feed template insertions
@@ -6,7 +7,7 @@
 # - Confirm subscription to feed
 # - Unsubscribe from feed
 # - Delete feed
-# Requires k3s to be running with a freshly created RSSMonk, Listmonk and Postgres running
+# Requires k3s to be running with RSSMonk, Listmonk and Postgres running
 from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
