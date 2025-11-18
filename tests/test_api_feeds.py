@@ -11,7 +11,7 @@ from requests.auth import HTTPBasicAuth
 import uvicorn
 from .mock_feed_gen import external_app
 
-from tests.listmonk_testbase import RSSMONK_URL, ListmonkClientTestBase
+from tests.listmonk_testbase import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeeds(ListmonkClientTestBase):
@@ -128,10 +128,10 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.UNAUTHORIZED), response.text
 
         # - Invalid credentials (active account, not admin)
-        self.make_feed_list()
-        acct_data = self.make_feed_account()
+        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(accounts.items()))
         create_feed_data = {}
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth(acct_data["name"], acct_data["api_password"]), json=create_feed_data)
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth(user, pwd), json=create_feed_data)
         assert (response.status_code == HTTPStatus.UNAUTHORIZED), response.text
 
 

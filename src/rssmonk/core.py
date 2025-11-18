@@ -166,12 +166,15 @@ class RSSMonk:
         Check if the active credentials can see the feed's list, raises HTTP return codes otherwise.
         '''
         if not feed_hash:
-            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Not permitted to interact with this feed")
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Not permitted to interact with this feed")
 
         # Hash is used as a higher priority than the url
         found_feed = self._client.find_list_by_tag(tag=make_url_tag_from_hash(feed_hash))
         if found_feed is None:
-            raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
+            if self._client.username == self._admin.username:
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed does not exist")
+            else:
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
 
 
     # Account operations

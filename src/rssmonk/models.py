@@ -108,6 +108,10 @@ class CreateTemplateRequest(BaseModel):
 
 class DeleteTemplateRequest(BaseModel):
     """Request model for deleting a template for a RSS feed."""
+    phase_type: EmailPhaseType = Field(..., description="The phase in the email subscribe cycle the template is for")
+
+class DeleteTemplateAdminRequest(BaseModel):
+    """Request model for deleting a template for a RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
     phase_type: EmailPhaseType = Field(..., description="The phase in the email subscribe cycle the template is for")
 

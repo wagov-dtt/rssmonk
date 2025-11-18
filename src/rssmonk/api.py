@@ -355,10 +355,10 @@ async def create_template(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> TemplateResponse:
     """Create a template"""
-    with rss_monk:
-        feed_hash = make_url_hash(str(request.feed_url))
-        rss_monk.validate_feed_visibility(feed_hash)
-        try:
+    try:
+        with rss_monk:
+            feed_hash = make_url_hash(str(request.feed_url))
+            rss_monk.validate_feed_visibility(feed_hash)
             # Insert the feed template
             template_name = make_template_name(feed_hash, request.phase_type)
             new_subject = request.subject if request.subject is not None else "{{ .Tx.Data.subject }}"
@@ -375,11 +375,11 @@ async def create_template(
                 body = request.body,
                 body_source = request.body_source,
                 is_default = False)
-        except ValueError as e:
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP create_feed: {e}")
-            raise
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP create_feed: {e}")
+        raise
 
 
 @app.delete(
@@ -763,26 +763,25 @@ async def feed_get_subscription_preferences(
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> SubscriptionPreferencesResponse:
     """Get feed subscription user's preferences endpoint."""
-    with rss_monk:
-        rss_monk.validate_feed_visibility(make_url_hash(str(request.feed_url)))
-        try:
+    try:
+        with rss_monk:
+            rss_monk.validate_feed_visibility(make_url_hash(str(request.feed_url)))
             attribs = rss_monk.get_subscriber_feed_filter(request.email)
             if attribs is not None:
                 # Remove feeds not permitted to be seen by the account
                 feed_hash = get_feed_hash_from_username(credentials.username)
                 if request.feed_url is None:
                     feed_hash = make_url_hash(str(request.feed_url))
-                rss_monk.validate_feed_visibility(feed_hash)
 
-                # Remove the other accounts that the credentials aren't meant to see
-                return_filter = { feed_hash : attribs.get(feed_hash, {}).get("filter", {}). get(feed_hash, {}) }
+                # TODO - Remove the other accounts that the credentials aren't meant to see
+                return_filter = { feed_hash : attribs.get(feed_hash, {}).get("filter", {}).get(feed_hash, {}) }
                 return SubscriptionPreferencesResponse(filter = return_filter)
             return SubscriptionPreferencesResponse(filter={})
-        except ValueError as e:
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-        except Exception as e:
-            logger.error(f"Subscription fetch failed: {e}")
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription retrieval failed")
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Subscription fetch failed: {e}")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription retrieval failed")
 
 
 @app.post(
@@ -801,13 +800,11 @@ async def feed_subscribe(
     # This can cover public or private feeds
     with rss_monk:
         bypass_confirmation = False
+        feed_hash = None
         if isinstance(request, SubscribeAdminRequest):
             if not settings.validate_admin_auth(credentials.username, credentials.password):
                 raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
-
-        feed_hash = None
-        if isinstance(request, SubscribeAdminRequest):
             feed_hash = make_url_hash(str(request.feed_url))
         else:
             feed_hash = get_feed_hash_from_username(credentials.username)
@@ -876,12 +873,11 @@ async def feed_subscribe_confirm(
     rss_monk: RSSMonk = Depends(get_rss_monk)   
 ):
     """Feed subscription confirmation endpoint."""
-    with rss_monk:
-        rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
-        feed_hash = extract_feed_hash(credentials.username)
+    try:
+        with rss_monk:
+            rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
+            feed_hash = extract_feed_hash(credentials.username)
 
-
-        try:
             subscriber_id = request.id
             sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid = '{subscriber_id}'")
             req_uuid = request.guid
@@ -914,13 +910,13 @@ async def feed_subscribe_confirm(
             rss_monk.getClient().update_subscriber(subs["id"], subs)
             return EmptyResponse()
        
-        except ValueError as e:
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
-        except HTTPException as e:
-            raise e # Deliberate reraise
-        except Exception as e:
-            logger.error("Failed to confirm subscription: %s", e)
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
+    except HTTPException as e:
+        raise e # Deliberate reraise
+    except Exception as e:
+        logger.error("Failed to confirm subscription: %s", e)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription confirmation failed")
 
 @app.post(
     "/api/feeds/unsubscribe",
@@ -935,25 +931,25 @@ async def feed_unsubscribe(
     rss_monk: RSSMonk = Depends(get_rss_monk)   
 ):
     """Feed subscription confirmation endpoint."""
-    with rss_monk:
-        feed_hash = None
-        token = None
-        bypass_confirmation = False
-        subscriber_query = ""
-        if isinstance(request, UnsubscribeAdminRequest):
-            if not settings.validate_admin_auth(credentials.username, credentials.password):
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
-            bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
-            feed_hash = make_url_hash(str(request.feed_url))
-            subscriber_query = f"subscribers.email = '{request.email}'"
-        else:
-            subscriber_query = f"subscribers.uuid = '{request.id}'"
-            feed_hash = get_feed_hash_from_username(credentials.username)
-            token = request.token
+    try:
+        with rss_monk:
+            feed_hash = None
+            token = None
+            bypass_confirmation = False
+            subscriber_query = ""
+            if isinstance(request, UnsubscribeAdminRequest):
+                if not settings.validate_admin_auth(credentials.username, credentials.password):
+                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
+                bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
+                feed_hash = make_url_hash(str(request.feed_url))
+                subscriber_query = f"subscribers.email = '{request.email}'"
+            else: # Is UnsubscribeRequest
+                subscriber_query = f"subscribers.uuid = '{request.id}'"
+                feed_hash = get_feed_hash_from_username(credentials.username)
+                token = request.token
 
-        rss_monk.validate_feed_visibility(feed_hash)
+            rss_monk.validate_feed_visibility(feed_hash)
 
-        try:
             sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
             subscriber_details = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subscriber_details or "id" not in subscriber_details:
@@ -1009,13 +1005,13 @@ async def feed_unsubscribe(
                 # Send email out for the user
                 rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
 
-        except ValueError as e:
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e
-        except HTTPException as e:
-            raise e # Deliberate reraise
-        except Exception as e:
-            logger.error("Failed to unsubscribe: %s", e)
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed" ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e
+    except HTTPException as e:
+        raise e # Deliberate reraise
+    except Exception as e:
+        logger.error("Failed to unsubscribe: %s", e)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed" ) from e
 
 
 @app.post(
