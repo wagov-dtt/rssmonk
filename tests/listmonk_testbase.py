@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import IntEnum
 from http import HTTPStatus
 import time
 from typing import Optional
@@ -13,10 +13,10 @@ MAILPIT_URL = "http://localhost:8025"
 
 def make_admin_session() -> requests.Session:
     # Create the session into Listmonk
-    admin_session = requests.Session()
+    __admin_session = requests.Session()
 
-    response = admin_session.get(f"{LISTMONK_URL}/admin/login")
-    nonce = admin_session.cookies.get("nonce")
+    response = __admin_session.get(f"{LISTMONK_URL}/admin/login")
+    nonce = __admin_session.cookies.get("nonce")
     assert nonce, "Nonce not found in cookies"
     login_data={
         "username": "admin",
@@ -24,13 +24,13 @@ def make_admin_session() -> requests.Session:
         "nonce": nonce,
         "next": "/admin"
     }
-    response = admin_session.post(f"{LISTMONK_URL}/admin/login", data=login_data, allow_redirects=False, timeout=30)
+    response = __admin_session.post(f"{LISTMONK_URL}/admin/login", data=login_data, allow_redirects=False, timeout=30)
     if response.status_code != 302:
         raise AssertionError("Failed to create prereq admin session to Listmonk")
-    return admin_session
+    return __admin_session
 
 
-class LifecyclePhase(Enum):
+class LifecyclePhase(IntEnum):
     """
     Life cycle phase of feed setup that the system should be in.
     This helps simplify the set up each test function requires
@@ -48,12 +48,14 @@ class LifecyclePhase(Enum):
 class ListmonkClientTestBase(unittest.TestCase):
     """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down. This should """
     ADMIN_AUTH = HTTPBasicAuth("admin", "admin123") # Default k3d credentials
+    __admin_session = make_admin_session()
 
 
     @classmethod
     def setUpClass(cls):
         # Empty lists, subscribers, templates and list roles.
         cls.delete_list_roles()
+        cls.delete_user_roles()
         cls.delete_users()
         cls.delete_lists()
         cls.delete_subscribers()
@@ -61,8 +63,7 @@ class ListmonkClientTestBase(unittest.TestCase):
         cls.clear_mailpit_messages()
 
         # Modify settings to ensure mailpit is the mail client for RSSMonk
-        admin_session = make_admin_session()
-        response = admin_session.put(LISTMONK_URL+"/api/settings", json={
+        response = cls.__admin_session.put(LISTMONK_URL+"/api/settings", json={
             "app.site_name": "Media Statements",
             "app.root_url": "http://localhost:9000",
             "app.logo_url": "",
@@ -184,6 +185,7 @@ class ListmonkClientTestBase(unittest.TestCase):
     def tearDown(self):
         # Empty lists, subscribers, templates and list roles.
         self.delete_list_roles()
+        self.delete_user_roles()
         self.delete_users()
         self.delete_lists()
         self.delete_subscribers()
@@ -192,54 +194,48 @@ class ListmonkClientTestBase(unittest.TestCase):
 
     @classmethod
     def delete_lists(cls):
-        admin_session = make_admin_session()
         # Testing purposes assume low counts
-        response = admin_session.get(f"{LISTMONK_URL}/api/lists")
+        response = cls.__admin_session.get(f"{LISTMONK_URL}/api/lists")
         lists_data = dict(response.json()).get("data", {}).get("results", [])
         for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/lists/{list_data['id']}")
+            cls.__admin_session.delete(f"{LISTMONK_URL}/api/lists/{list_data['id']}")
 
     @classmethod
     def delete_subscribers(cls):
-        admin_session = make_admin_session()
-        admin_session.delete(f"{LISTMONK_URL}/api/maintenance/subscribers/orphan")
-        response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
+        cls.__admin_session.delete(f"{LISTMONK_URL}/api/maintenance/subscribers/orphan")
+        response = cls.__admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
         lists_data = dict(response.json()).get("data", {}).get("results", [])
         for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{list_data['id']}")
+            cls.__admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{list_data['id']}")
 
     @classmethod
     def delete_templates(cls):
-        admin_session = make_admin_session()
-        response = admin_session.get(f"{LISTMONK_URL}/api/templates")
+        response = cls.__admin_session.get(f"{LISTMONK_URL}/api/templates")
         lists_data = response.json()["data"]
         for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/templates/{list_data['id']}")
+            cls.__admin_session.delete(f"{LISTMONK_URL}/api/templates/{list_data['id']}")
 
     @classmethod
     def delete_list_roles(cls):
-        admin_session = make_admin_session()
-        response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
+        response = cls.__admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
         lists_data = response.json()["data"]
         for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
+            cls.__admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
 
     @classmethod
-    def delete_list_roles(cls):
-        admin_session = make_admin_session()
-        response = admin_session.get(f"{LISTMONK_URL}/api/roles/users")
+    def delete_user_roles(cls):
+        response = cls.__admin_session.get(f"{LISTMONK_URL}/api/roles/users")
         lists_data = response.json()["data"]
         for list_data in lists_data:
-            admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
+            cls.__admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
 
     @classmethod
     def delete_users(cls):
-        admin_session = make_admin_session()
-        response = admin_session.get(f"{LISTMONK_URL}/api/users")
+        response = cls.__admin_session.get(f"{LISTMONK_URL}/api/users")
         lists_data = response.json()["data"]
         for list_data in lists_data:
             if list_data['id'] != 1:
-                admin_session.delete(f"{LISTMONK_URL}/api/users/{list_data['id']}")
+                cls.__admin_session.delete(f"{LISTMONK_URL}/api/users/{list_data['id']}")
 
     @classmethod
     def clear_mailpit_messages(cls):
@@ -265,7 +261,7 @@ class ListmonkClientTestBase(unittest.TestCase):
             self._make_feed_templates()
 
         if phase.value >= LifecyclePhase.FEED_SUBSCRIBED.value:
-            self._make_feed_subscriber(phase >= LifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+            self._make_feed_subscriber(phase >= LifecyclePhase.FEED_SUBSCRIBE_CONFIRMED.value)
 
         # These are needed for testing
         # LifecyclePhase.FEED_UNSUBSCRIBED
@@ -286,7 +282,7 @@ class ListmonkClientTestBase(unittest.TestCase):
             ],
             "description": "RSS Feed: https://example.com/rss/media-statements\nSubscription URL: https://example.com/media-statements"
         }
-        response = requests.post(LISTMONK_URL+"/api/lists", auth=self.ADMIN_AUTH, json=create_feed_data)
+        response = self.__admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
 
 
@@ -303,9 +299,9 @@ class ListmonkClientTestBase(unittest.TestCase):
             ],
             "description": "RSS Feed: https://example.com/rss/media-statements\nSubscription URL: https://example.com/media-statements"
         }
-        response = requests.post(LISTMONK_URL+"/api/lists", auth=self.ADMIN_AUTH, json=create_feed_data)
+        response = self.__admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
-        list_id = response.json()["id"]
+        list_id = response.json()["data"]["id"]
 
         create_feed_data = {
             "name": "Somewhere Statements",
@@ -317,9 +313,9 @@ class ListmonkClientTestBase(unittest.TestCase):
             ],
             "description": "RSS Feed: https://somewhere.com/rss\nSubscription URL: https://somewhere.com/media-statements"
         }
-        response = requests.post(LISTMONK_URL+"/api/lists", auth=self.ADMIN_AUTH, json=create_feed_data)
+        response = self.__admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
-        other_list_id = response.json()["id"]
+        other_list_id = response.json()["data"]["id"]
 
         payload= {
             "name": "limited-user-role",
@@ -330,25 +326,25 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "templates:get"
             ]
         }
-        response = requests.post(LISTMONK_URL+"api/roles/users", json=payload)
-        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
-        limited_user_role_id = response["data"]["id"]
+        response = self.__admin_session.post(LISTMONK_URL+"/api/roles/users", json=payload)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
+        limited_user_role_id = response.json()["data"]["id"]
 
         payload = {
             "name": "list_role_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8",
             "lists": [ {"id": list_id, "permissions": ["list:get","list:manage"] } ]
         }
-        response = requests.post(LISTMONK_URL+"/api/roles/lists", json=payload)
-        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
-        list_role_id = response["data"]["id"]
+        response = self.__admin_session.post(LISTMONK_URL+"/api/roles/lists", json=payload)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
+        list_role_id = response.json()["data"]["id"]
 
         payload = {
             "name": "list_role_a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14",
             "lists": [ {"id": other_list_id, "permissions": ["list:get","list:manage"] } ]
         }
-        response = requests.post(LISTMONK_URL+"/api/roles/lists", json=payload)
-        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
-        other_list_role_id = response["data"]["id"]
+        response = self.__admin_session.post(LISTMONK_URL+"/api/roles/lists", json=payload)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
+        other_list_role_id = response.json()["data"]["id"]
 
         user_data = {
             "username": "user_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8",
@@ -359,9 +355,9 @@ class ListmonkClientTestBase(unittest.TestCase):
             "userRoleId": limited_user_role_id, "listRoleId": list_role_id,
             "user_role_id": limited_user_role_id, "list_role_id": list_role_id
         }
-        response = requests.post(LISTMONK_URL+"/api/users", json=user_data)
-        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
-        returnData = {response["data"]["username"]: response["data"]["password"]}
+        response = self.__admin_session.post(LISTMONK_URL+"/api/users", json=user_data)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
+        returnData = {response.json()["data"]["username"]: response.json()["data"]["password"]}
 
         user_data = {
             "username": "user_a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14",
@@ -369,12 +365,12 @@ class ListmonkClientTestBase(unittest.TestCase):
             "type": "api", "status": "enabled",
             "password": None, "password_login": False,
             "password2": None, "passwordLogin": False,
-            "userRoleId": other_list_role_id, "listRoleId": list_role_id,
-            "user_role_id": other_list_role_id, "list_role_id": list_role_id
+            "userRoleId": limited_user_role_id, "listRoleId": other_list_role_id,
+            "user_role_id": limited_user_role_id, "list_role_id": other_list_role_id
         }
-        response = requests.post(LISTMONK_URL+"/api/users", json=user_data)
-        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
-        returnData[response["data"]["username"]] = response["data"]["password"]
+        response = self.__admin_session.post(LISTMONK_URL+"/api/users", json=user_data)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
+        returnData[response.json()["data"]["username"]] = response.json()["data"]["password"]
 
         return returnData
 
@@ -387,7 +383,7 @@ class ListmonkClientTestBase(unittest.TestCase):
             "type": "tx",
             "body": "<html><body></body></html>"
         }
-        response = requests.post(LISTMONK_URL+"/api/templates", auth=self.ADMIN_AUTH, data=template_data)
+        response = self.__admin_session.post(LISTMONK_URL+"/api/templates", json=template_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
         template_data = {
             "name": "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-unsubscribe",
@@ -395,7 +391,7 @@ class ListmonkClientTestBase(unittest.TestCase):
             "type": "tx",
             "body": "<html><body></body></html>"
         }
-        response = requests.post(LISTMONK_URL+"/api/templates", auth=self.ADMIN_AUTH, data=template_data)
+        response = self.__admin_session.post(LISTMONK_URL+"/api/templates", json=template_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed: "+response.text
 
 

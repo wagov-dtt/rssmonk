@@ -172,6 +172,7 @@ class RSSMonk:
         found_feed = self._client.find_list_by_tag(tag=make_url_tag_from_hash(feed_hash))
         if found_feed is None:
             if self._client.username == self._admin.username:
+                # Give actual response to admins
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed does not exist")
             else:
                 raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
@@ -248,7 +249,7 @@ class RSSMonk:
         }
 
         try:
-            response = self._client.post("api/roles/users", payload)
+            response = self._admin.post("api/roles/users", payload)
             return response["id"]
         except httpx.HTTPStatusError as e:
             # Should be 409, but quickest way
@@ -256,7 +257,7 @@ class RSSMonk:
                 raise
             
             # User role already exists. Find the user role with the same name
-            user_roles = self._client.get("api/roles/users")
+            user_roles = self._admin.get("api/roles/users")
             for role in user_roles:
                 if isinstance(role, dict) and role["name"] == role_name:
                     return role["id"]
@@ -272,7 +273,7 @@ class RSSMonk:
         # Retrieve the list to get its ID for role creation.
         list_data = self._admin.find_list_by_tag(make_url_tag_from_hash(feed_hash))
         if list_data is None:
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="List does not exist")
+            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="List does not exist")
 
         # Attempt to create the role. If it exists retrieve the ID
         payload = {

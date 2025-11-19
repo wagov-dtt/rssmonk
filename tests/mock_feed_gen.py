@@ -87,4 +87,6 @@ def prettify(elem):
 
 
 if __name__ == "__main__":
-    print(make_media_statements_feed(random.randint(1, 4)))
+    #print(make_media_statements_feed(random.randint(1, 4)))
+    import uvicorn
+    uvicorn.run(external_app, port=10000, log_level="info")
