@@ -28,7 +28,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             "name": "Example Media Statements"
         }
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
-        assert (response.status_code == HTTPStatus.CREATED), response.text
+        assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         # Check values reflected back
@@ -39,11 +39,9 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert "url_hash" in response_json and "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" == response_json["url_hash"]
 
         # - Feed account creation, successfully
-        create_account = {
-            "feed_url": "https://example.com/rss/example"
-        }
+        create_account = {"feed_url": "https://example.com/rss/example"}
         response = requests.post(RSSMONK_URL+"/api/feeds/account", auth=self.ADMIN_AUTH, json=create_account)
-        assert (response.status_code == HTTPStatus.CREATED), response.text
+        assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         assert {"id", "name", "api_password"} == set(response_json.keys())
@@ -75,7 +73,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             }
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=account_auth, json=subscribe_data)
-        assert (response.status_code == HTTPStatus.BAD_REQUEST), response.text
+        assert (response.status_code == HTTPStatus.BAD_REQUEST), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         assert "Pending subscription added, but template dependancy missing for subscribe" == response_json["error"]
@@ -100,7 +98,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
                     + "Statement Team.</b></p>\r\n</body></html>"
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=account_auth, json=sub_template_data)
-        assert (response.status_code == HTTPStatus.CREATED), response.text
+        assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         # Check values reflected back, except for feed_url which has been turned into a hash
@@ -134,7 +132,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             }
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=account_auth, json=subscribe_data)
-        assert (response.status_code == HTTPStatus.OK), response.text
+        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         assert "Subscription successful" == response_json["message"]
@@ -163,7 +161,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             "guid": subscriber_guid
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=account_auth, json=confirm_sub_data)
-        assert (response.status_code == HTTPStatus.OK), response.text
+        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         # Check the feed attribs in the subscriber to ensure the filter has been set
         response = admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'test@test.com'"})
         subscriber = response.json()["data"]["results"][0]
@@ -185,7 +183,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             "token": filter_token
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=account_auth, json=unsub_feed_data)
-        assert (response.status_code == HTTPStatus.OK), response.text
+        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
 
         # - Delete feed
         delete_feed_data = {
@@ -194,11 +192,11 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         }
         # Attempt self deletion, failure.
         response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=account_auth, json=delete_feed_data)
-        assert (response.status_code == HTTPStatus.UNAUTHORIZED), response.text
+        assert (response.status_code == HTTPStatus.UNAUTHORIZED), f"{response.status_code}: {response.text}"
 
         # Delete with admin, successfully
         response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=self.ADMIN_AUTH, json=delete_feed_data)
-        assert (response.status_code == HTTPStatus.OK), response.text
+        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
 

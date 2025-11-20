@@ -131,7 +131,6 @@ class ListmonkClient:
         if tag:
             params["tag"] = tag
         data = self.get("/api/lists", params=params)
-        print(params)
         return self._normalize_results(data)
 
     def find_list_by_name(self, name):

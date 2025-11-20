@@ -106,8 +106,8 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
 
     def test_delete_feed_templates_non_admin_credentials_success(self):
-        # Non admin credentials, feed exists, DeleteTemplateRequest object
         accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        # Non admin credentials, feed exists, DeleteTemplateRequest object
         user, pwd = next(iter(accounts.items()))
 
         request = { "phase_type": "subscribe" }
@@ -115,11 +115,28 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
 
-    def test_delete_feed_templates_admin_credentials(self):
-        # Admin credentials, feeds exist, DeleteTemplateAdminRequest object
+    def test_delete_feed_templates_admin_failures(self):
+        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        # Admin credentials, feed does not exist, DeleteTemplateRequest object
+        delete_template_data = { "phase_type": "subscribe" }
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)
+        assert response.status_code == HTTPStatus.NOT_FOUND, f"{response.status_code}: {response.text}"
+
+        # Admin credentials, feed does not exist, DeleteTemplateAdminRequest object
         delete_template_data = {
-            "feed_url": "https://example.com/rss/example",
+            "feed_url": "https:///unknown-example.com/rss",
             "phase_type": "subscribe"
         }
-        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, data=delete_template_data)
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)
+        assert response.status_code == HTTPStatus.NOT_FOUND, f"{response.status_code}: {response.text}"
+
+
+    def test_delete_feed_templates_admin_success(self):
+        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        # Admin credentials, feeds exist, DeleteTemplateAdminRequest object
+        delete_template_data = {
+            "feed_url": "https://example.com/rss/media-statements",
+            "phase_type": "subscribe"
+        }
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"

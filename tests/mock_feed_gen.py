@@ -46,7 +46,7 @@ def make_media_statements_feed(items: int) -> str:
     })
 
     # Generate multiple items with advancing pubDate. Order of items is permitted per RSS spec
-    base_date = datetime.now()
+    base_date = datetime.now() - timedelta(minutes=(5*items + 2))
     for i in range(items):
         email_minister_str = ""
         email_ident_str = ""
@@ -83,7 +83,7 @@ def make_media_statements_feed(items: int) -> str:
 def prettify(elem):
     rough_string = ET.tostring(elem, 'utf-8')
     reparsed = minidom.parseString(rough_string)
-    return reparsed.toprettyxml(indent="  ")
+    return reparsed.toprettyxml(indent="  ",newl="")
 
 
 if __name__ == "__main__":

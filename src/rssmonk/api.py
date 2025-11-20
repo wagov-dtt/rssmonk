@@ -23,6 +23,7 @@ from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
     BulkProcessResponse,
+    DeleteTemplateAdminRequest,
     DeleteTemplateRequest,
     EmptyResponse,
     ErrorResponse,
@@ -391,14 +392,24 @@ async def create_template(
     description="Creates or updates email templates for RSS feed for newsletter generation."
 )
 async def delete_feed_template(
-    request: DeleteTemplateRequest,
+    request: DeleteTemplateRequest | DeleteTemplateAdminRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> TemplateResponse:
     """Delete a template"""
     with rss_monk:
-        feed_hash = make_url_hash(str(request.feed_url))
+        feed_hash = None
+        is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
+        if isinstance(request, DeleteTemplateAdminRequest):
+            if not is_valid_admin:
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
+            feed_hash = make_url_hash(str(request.feed_url))
+        else:
+            if is_valid_admin:
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
+            feed_hash = get_feed_hash_from_username(credentials.username)
         rss_monk.validate_feed_visibility(feed_hash)
+
         try:
             # Delete the feed template
             return rss_monk.delete_template(feed_hash, request.phase_type)
@@ -543,14 +554,14 @@ async def list_feeds(
     description="Retrieve a specific RSS feed by its URL"
 )
 async def get_feed_by_url(
-    url: str,
+    feed_url: str,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
 ) -> FeedResponse:
     """Get feed by URL."""
     try:
         with rss_monk:
-            feed = rss_monk.get_feed_by_url(url) # This will self validate access
+            feed = rss_monk.get_feed_by_url(feed_url) # This will self validate access
             if not feed:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
@@ -801,12 +812,15 @@ async def feed_subscribe(
     with rss_monk:
         bypass_confirmation = False
         feed_hash = None
+        is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
         if isinstance(request, SubscribeAdminRequest):
-            if not settings.validate_admin_auth(credentials.username, credentials.password):
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
+            if not is_valid_admin:
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
             feed_hash = make_url_hash(str(request.feed_url))
         else:
+            if is_valid_admin:
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
             feed_hash = get_feed_hash_from_username(credentials.username)
         rss_monk.validate_feed_visibility(feed_hash)
 
@@ -937,13 +951,16 @@ async def feed_unsubscribe(
             token = None
             bypass_confirmation = False
             subscriber_query = ""
+            is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
             if isinstance(request, UnsubscribeAdminRequest):
-                if not settings.validate_admin_auth(credentials.username, credentials.password):
-                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
+                if not is_valid_admin:
+                    raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
                 bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
                 feed_hash = make_url_hash(str(request.feed_url))
                 subscriber_query = f"subscribers.email = '{request.email}'"
             else: # Is UnsubscribeRequest
+                if is_valid_admin:
+                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="")
                 subscriber_query = f"subscribers.uuid = '{request.id}'"
                 feed_hash = get_feed_hash_from_username(credentials.username)
                 token = request.token
