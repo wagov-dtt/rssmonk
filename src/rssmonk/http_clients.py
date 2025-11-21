@@ -94,7 +94,7 @@ class ListmonkClient:
         except httpx.HTTPError as e:
             logger.error("HTTP %s %s: %s", method, path, e)
             print(e.with_traceback(None))
-            raise e
+            raise
 
     def get(self, path, params=None):
         """GET request."""

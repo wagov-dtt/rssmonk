@@ -86,23 +86,23 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
         # Delete non existing feed template
         template_to_delete = {}
-        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), data=template_to_delete)
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=template_to_delete)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Delete template of a non existant phase
-        template_to_delete = {"phase_type": "weekly_digest" }
-        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), data=template_to_delete)
+        template_to_delete = {"phase_type": "yearly_digest" }
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=template_to_delete)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Delete template of a phase, which does not exist
         template_to_delete = {"phase_type": "random" }
-        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), data=template_to_delete)
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=template_to_delete)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
-        # Delete existing template that the account does not have access to (Should be bounced because this is admin only)
-        template_to_delete = {"feed_url": "https://somewhere.com/rss", "phase_type": "subscribe" }
-        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), data=template_to_delete)
-        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        # Delete existing template that the account does not have access to (Should be bounced because this is an admin only form)
+        template_to_delete = {"feed_url": "https://somewhere.com/rss", "phase_type": "subscribe"}
+        response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=template_to_delete)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
     def test_delete_feed_templates_non_admin_credentials_success(self):
@@ -116,11 +116,10 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
 
     def test_delete_feed_templates_admin_failures(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
         # Admin credentials, feed does not exist, DeleteTemplateRequest object
         delete_template_data = { "phase_type": "subscribe" }
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)
-        assert response.status_code == HTTPStatus.NOT_FOUND, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
 
         # Admin credentials, feed does not exist, DeleteTemplateAdminRequest object
         delete_template_data = {

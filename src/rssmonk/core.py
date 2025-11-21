@@ -216,7 +216,7 @@ class RSSMonk:
                 # Already exists, return error so they can recreate account, or bail
                 raise HTTPException(status_code=HTTPStatus.CONFLICT)
             else:
-                raise e
+                raise
 
 
     def delete_api_user(self, api_name: str) -> bool: # TODO - User id and password
