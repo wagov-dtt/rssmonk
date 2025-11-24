@@ -1,6 +1,7 @@
 """Integration tests for RSS Monk end-to-end functionality."""
 
 import asyncio
+from warnings import deprecated
 import httpx
 import pytest
 import time
@@ -14,7 +15,8 @@ class IntegrationTestSuite:
         self.listmonk_url = listmonk_url
         self.mailpit_url = "http://localhost:8025"
         self.auth = ("admin", "admin123")  # Default k3d credentials
-        
+
+    @deprecated("This test flow might be superceeded by the test within test_lifecycle")        
     async def test_full_workflow(self):
         """Test complete RSS Monk workflow."""
         async with httpx.AsyncClient() as client:

@@ -13,7 +13,7 @@ if __name__ == "__main__":
     RSS feed test
     """
     session = requests.Session()
-    response = session.get("https://dev2.wagov.pipeline.development.digital.wa.gov.au/rss/media-statements")
+    response = session.get("https://www.wa.gov.au/rss/media-statements")
     # 403 due to Cloudfront
     print(response.text)
 

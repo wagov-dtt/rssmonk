@@ -12,7 +12,7 @@ from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
 
-from tests.listmonk_testbase import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, ListmonkClientTestBase, make_admin_session
+from tests.conftest import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, ListmonkClientTestBase, make_admin_session
 
 
 class TestLifeCycleMethods(ListmonkClientTestBase):

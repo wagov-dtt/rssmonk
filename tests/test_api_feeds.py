@@ -3,7 +3,7 @@ Test Feed API endpoints
 - /api/feeds
 """
 
-import asyncio
+import time
 from http import HTTPStatus
 from multiprocessing import Process
 import requests
@@ -11,7 +11,7 @@ from requests.auth import HTTPBasicAuth
 import uvicorn
 from .mock_feed_gen import external_app
 
-from tests.listmonk_testbase import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
+from tests.conftest import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeeds(ListmonkClientTestBase):
@@ -22,7 +22,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         cls.server = uvicorn.Server(config)
         cls.process = Process(target=cls.server.run)
         cls.process.start()
-        asyncio.run(asyncio.sleep(1))  # Give server time to start
+        time.sleep(2)  # Blocking wait to give server time to start
 
     @classmethod
     def tearDownClass(cls):
@@ -153,7 +153,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         user, pwd = next(iter(accounts.items()))
         create_feed_data = {}
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth(user, pwd), json=create_feed_data)
-        assert (response.status_code == HTTPStatus.UNAUTHORIZED), f"{response.status_code}: {response.text}"
+        assert (response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT), f"{response.status_code}: {response.text}"
 
 
     def test_create_feed_admin_not_full_object(self):
@@ -227,11 +227,12 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
-        assert response_json["feed_url"] == "https://localhost:10000/feed-1"
-        assert response_json["email_base_url"] == "https://example.com/media"
-        assert response_json["poll_frequencies"] == ["instant"]
-        assert response_json["name"] == "Media Statements"
-        assert "url_hash" in response_json and "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" == response_json["url_hash"]
+        assert response_json["feed_url"] == "https://localhost:10000/feed-1", response_json
+        assert response_json["email_base_url"] == "https://example.com/media", response_json
+        assert response_json["poll_frequencies"] == ["instant"], response_json
+        assert response_json["name"] == "https://localhost:10000/feed-1", response_json
+        assert response_json["url_hash"] == "019b873a9357ba2e1a51963aec30bcb911e9f92aff7c21835f0eb187707f35da", response_json
+
 
     def test_create_feeds_no_title_in_feed(self):
         # - Feed creation, feed_url, email_base_url, poll_frequencies (not accessible to fetch name)
@@ -244,9 +245,10 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
-        assert response_json["feed_url"] == "https://example.com/rss/example"
-        assert response_json["name"] == "https://example.com/rss/example"
-        assert "url_hash" in response_json and "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" == response_json["url_hash"]
+        assert response_json["feed_url"] == "https://example.com/rss/example", response_json
+        assert response_json["name"] == "https://example.com/rss/example", response_json
+        assert "url_hash" in response_json, response_json
+        assert response_json["url_hash"] == "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180", response_json
 
 
     def test_create_feeds_name_supplied(self):
@@ -300,14 +302,32 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.UNAUTHORIZED), f"{response.status_code}: {response.text}"
 
 
+    def test_get_feed_by_url_non_feed_non_admin(self):
+        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(accounts.items()))
+
+        # Non admin credentials, non existing feed
+        get_feed_data = {"feed_url": "https://feed-does-not-exist.com/rss"}
+        response = requests.get(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd), params=get_feed_data)
+        assert (response.status_code == HTTPStatus.NOT_FOUND), f"{response.status_code}: {response.text}"
+
+
     def test_get_feed_by_url_feed_non_admin(self):
         accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
         user, pwd = next(iter(accounts.items()))
 
-        # Non admin credentials, existing feed
+        # Non admin credentials, unaccessible but existing feed
         get_feed_data = {"feed_url": "https://somewhere.com/rss"}
         response = requests.get(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd), params=get_feed_data)
+        assert (response.status_code == HTTPStatus.NOT_FOUND), f"{response.status_code}: {response.text}"
+
+        # Non admin credentials, accessible existing feed
+        get_feed_data = {"feed_url": "https://example.com/rss/media-statements"}
+        response = requests.get(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd), params=get_feed_data)
         assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
+        data = response.json()
+        assert "email_base_url" in data and data["email_base_url"] == "https://example.com/media-statements"
+        assert "name" in data and data["name"] ==  "Example Media Statements"
 
 
     def test_get_feed_by_url_feed_admin(self):

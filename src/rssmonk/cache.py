@@ -98,35 +98,6 @@ class FeedCache:
                 
                 # Parse feed content
                 content = response.text
-                content = """<rss version="2.0"
-     xmlns:wa="https://www.wa.gov.au/rss/media-statements"
-     xmlns:dc="http://purl.org/dc/elements/1.1/"
-     xmlns:atom="http://www.w3.org/2005/Atom">
-  <channel>
-    <title>Media Statements</title>
-    <link>https://dev2.wagov.pipeline.development.digital.wa.gov.au/</link>
-    <description>Western Australian government media statements from the WA Government.</description>
-    <language>en</language>
-
-    <atom:link href="https://www.wa.gov.au/rss/media-statements" rel="self" type="application/rss+xml" />
-
-    <item>
-      <title>New Infrastructure Project</title>
-      <link>https://www.wa.gov.au/government/media-statements/cook-labor-government/land-sale-secures-start-of-northern-corridors-newest-town-centre-20250917</link>
-      <description>A land deal between the Cook Labor Government and Australasian real estate group Centuria Capital has been reached, marking a key milestone in the development of a new town centre at Alkimos.
-Published: Wed, 17 Sep 2025 18:08:20 +0800
-Minister: Hon. Roger Cook BA GradDipBus MBA MLA, Hon. Rita Saffioti BBus MLA
-Portfolio: Treasurer, Transport, Planning and Lands 
-Regions: Perth Metro</description>
-      <pubDate>Wed, 17 Sep 2025 18:08:20 +0800</pubDate>
-      <guid isPermaLink="false">9cc089b9-9613-4b98-9506-d52fee703ae6</guid>
-
-      <wa:subject_entities>Hon. Roger Cook BA GradDipBus MBA MLA, Hon. Rita Saffioti BBus MLA</wa:subject_entities>
-      <wa:identifiers>minister 0,minster 1,portfolio 143,portfolio 565,region 8635</wa:identifiers>
-    </item>
-  </channel>
-</rss>
-"""
                 content_hash = self._generate_content_hash(content)
                 
                 # Check if content actually changed

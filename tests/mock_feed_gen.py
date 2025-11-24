@@ -36,7 +36,7 @@ def make_media_statements_feed(items: int) -> str:
     # Create the channel element
     channel = ET.SubElement(rss, "channel")
     ET.SubElement(channel, "title").text = "Media Statements"
-    ET.SubElement(channel, "link").text = "https://dev2.wagov.pipeline.development.digital.wa.gov.au/"
+    ET.SubElement(channel, "link").text = "https://www.wa.gov.au/rss/media-statements"
     ET.SubElement(channel, "description").text = "Western Australian government media statements from the WA Government."
     ET.SubElement(channel, "language").text = "en"
     ET.SubElement(channel, "atom:link", {

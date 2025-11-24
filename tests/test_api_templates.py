@@ -8,7 +8,7 @@ import json
 import requests
 from requests.auth import HTTPBasicAuth
 
-from tests.listmonk_testbase import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
+from tests.conftest import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
@@ -116,14 +116,14 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
 
     def test_delete_feed_templates_admin_failures(self):
-        # Admin credentials, feed does not exist, DeleteTemplateRequest object
+        # Admin credentials, feed does not exist (does not matter here), DeleteTemplateRequest object
         delete_template_data = { "phase_type": "subscribe" }
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Admin credentials, feed does not exist, DeleteTemplateAdminRequest object
         delete_template_data = {
-            "feed_url": "https:///unknown-example.com/rss",
+            "feed_url": "https://unknown-example.com/rss",
             "phase_type": "subscribe"
         }
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)

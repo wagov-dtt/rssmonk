@@ -885,7 +885,10 @@ async def feed_subscribe_confirm(
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)   
 ):
-    """Feed subscription confirmation endpoint."""
+    """
+    Feed subscription confirmation endpoint. Admins should not use to confirm.
+    The bypass_confirmation flag should have been used when subscribing to a feed.
+    """
     try:
         with rss_monk:
             rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
@@ -975,7 +978,6 @@ async def feed_unsubscribe(
             feed_list = rss_monk.getClient().find_list_by_tag(make_url_tag_from_hash(feed_hash))
             if feed_list is None:
                 # Treat as if the subscriber has been removed from the list.
-                # TODO - 
                 if feed_hash in credentials.username:
                     # Log this discrepency. The feed appears to have gome missing, with the account linked to it, still existing
                     logger.warning("Non existent feed (hash: %s) access with user account %s. Possible misconfiguration",
@@ -1024,6 +1026,8 @@ async def feed_unsubscribe(
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e
     except HTTPException as e:
+        if e.status_code == HTTPStatus.NOT_FOUND:
+            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(e)) from e
         raise
     except Exception as e:
         logger.error("Failed to unsubscribe: %s", e)

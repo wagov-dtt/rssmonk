@@ -5,11 +5,10 @@ Test Feed API Account endpoints
 """
 
 from http import HTTPStatus
-import pytest
 import requests
 from requests.auth import HTTPBasicAuth
 
-from tests.listmonk_testbase import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
+from tests.conftest import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeedAccount(ListmonkClientTestBase):
