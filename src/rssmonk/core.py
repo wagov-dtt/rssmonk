@@ -436,7 +436,7 @@ class RSSMonk:
 
     def get_subscriber_feed_filter(self, email: str) -> Optional[dict]:
         """Get existing subscriber's data block."""
-        subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         if subs:
             s = subs[0]
             return s["attribs"]
@@ -452,7 +452,7 @@ class RSSMonk:
 
     def get_subscriber_uuid(self, email: str) -> str:
         """Get existing subscriber's data block."""
-        subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         if subs:
             s = subs[0]
             return s["uuid"]
@@ -462,7 +462,7 @@ class RSSMonk:
 
     def get_or_create_subscriber(self, email: str) -> Subscriber:
         """Get existing or create new subscriber."""
-        subs = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        subs = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         if subs:
             s = subs[0]
             return Subscriber(id=s["id"], email=s["email"]) # Listmonk will populate name from the email
@@ -498,7 +498,7 @@ class RSSMonk:
                                  bypass_confirmation: bool = False) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_hash(feed_hash)
-        sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        sub_list = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         subs: dict = sub_list[0] if sub_list is not None else None
 
         if not feed or not feed.id:
@@ -538,7 +538,7 @@ class RSSMonk:
 
     def remove_subscriber_filter(self, email: str, feed_hash: str):
         """Removes the feed hash from the attribs"""
-        sub_list = self._admin.get_subscribers(query=f"subscribers.email = '{email}'")
+        sub_list = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         subs: dict = sub_list[0] if sub_list is not None else None
 
         if not subs or "id" not in subs:

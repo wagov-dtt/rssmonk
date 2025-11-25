@@ -1,5 +1,5 @@
 import os
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
@@ -31,12 +31,12 @@ def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
         },
     }
 
-class ListVisibilityType(str, Enum):
+class ListVisibilityType(StrEnum):
     """List visibility type."""
     PUBLIC = "public"
     PRIVATE = "private"
 
-class Frequency(str, Enum):
+class Frequency(StrEnum):
     """Polling frequencies."""
     INSTANT = "instant"
     DAILY = "daily"
@@ -62,7 +62,7 @@ ALL_FILTER = "all"
 """The keyword for every option in a filter"""
 NO_REPLY = os.environ.get("NO_REPLY_EMAIL", "noreply@noreply (No reply location)")
  
-class EmailPhaseType(str, Enum):
+class EmailPhaseType(StrEnum):
     """
     Email template types that may or may be used for emails.
     Mandatory emails
@@ -81,7 +81,7 @@ class EmailPhaseType(str, Enum):
     DAILY_DIGEST = "daily_digest"
     WEEKLY_DIGEST = "weekly_digest"
 
-class ActionsURLSuffix(str, Enum):
+class ActionsURLSuffix(StrEnum):
     """Standardised URL patterns to append to base urls to perform actions"""
     SUBSCRIBE = "subscribe"
     UNSUBSCRIBE = "unsubscribe"

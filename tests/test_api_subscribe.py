@@ -4,7 +4,7 @@ from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
 
-from tests.conftest import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase, make_admin_session
+from tests.conftest import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
 
 class TestRSSMonkSubscribe(ListmonkClientTestBase):
@@ -19,7 +19,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_no_credentials(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
 
         # No credential, feed exist, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=None)
@@ -45,8 +45,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_non_admin_no_object(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credential, feed exist, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd))
@@ -54,8 +54,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_non_admin_subscribe_request(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credential, feed exist, SubscribeRequest object
         sub_req = {
@@ -78,8 +78,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_non_admin_subscribe_admin_request(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credential, feed exist, SubscribeAdminRequest object
         sub_req = {
@@ -93,7 +93,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_admin_no_object(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
 
         # Admin credential, feed exist, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=self.ADMIN_AUTH)
@@ -102,7 +102,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_admin_subscribe_request(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         subscribe_data = {
             "email": "john@example.com",
             "filter": {
@@ -130,7 +130,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_admin_subscribe_admin_request(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         subscribe_data = {
             "feed_url": "https://example.com/rss/media-statements",
             "email": "john@example.com",
@@ -172,7 +172,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_admin_subscribe_admin_request_with_bypass(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         subscribe_data = {
             "feed_url": "https://example.com/rss/media-statements",
             "email": "john@example.com",
@@ -216,15 +216,15 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
     # POST /api/feeds/subscribe-confirm
     # -------------------------
     def test_post_subscribe_confirm_no_credentials(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # No credentials, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=None, json=None)
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
     def test_post_subscribe_confirm_non_admin_credentials(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin, no object
         confirm_req = {}
@@ -243,8 +243,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_confirm_non_admin_credentials_success(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin, SubscribeConfirmRequest object, valid values
         confirm_req = {"id": "", "guid": ""}
@@ -253,7 +253,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
 
     def test_post_subscribe_confirm_admin_credentials(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
 
         # Admin, no object
         confirm_req = {}

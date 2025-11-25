@@ -8,13 +8,13 @@ from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
 
-from tests.conftest import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
+from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeedAccount(ListmonkClientTestBase):
     def test_create_feed_account_unauthorized(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
         payload = {"feed_url": "http://another-example.com/rss"}
 
         # No credentials, no existing account, FeedAccountRequest object
@@ -39,7 +39,7 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
 
 
     def test_create_feed_account_conflict(self):
-        self.initialise_system(LifecyclePhase.FEED_ACCOUNT)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
 
         # Admin credential, existing feed, FeedAccountRequest object
         payload = {"feed_url": "https://example.com/rss/media-statements"}
@@ -57,7 +57,7 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
 
 
     def test_create_feed_account_success(self):
-        self.initialise_system(LifecyclePhase.FEED_LIST)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_LIST)
 
         # Admin credential, existing feed, FeedAccountRequest object
         payload = {"feed_url": "https://example.com/rss/media-statements"}
@@ -112,7 +112,7 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
 
 
     def test_reset_password_success(self):
-        self.initialise_system(LifecyclePhase.FEED_ACCOUNT)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
 
         # Admin credentials, existing account, FeedAccountPasswordResetRequest object
         reset_payload = {"account_name": "user_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"}

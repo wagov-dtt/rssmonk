@@ -1,6 +1,6 @@
 """HTTP client utilities."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Optional
 from warnings import deprecated
 from fastapi import HTTPException
@@ -17,7 +17,7 @@ from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
-class AuthType(str, Enum):
+class AuthType(StrEnum):
     """Authentication method type."""
     BASIC = "basic"
     SESSION = "session"
@@ -160,7 +160,7 @@ class ListmonkClient:
 
     def get_subscribers(self, query=None):
         """Get subscribers, optionally filtered by query. Filters are not applied here"""
-        params = {"query": query} if query else {}
+        params = {"query": query, "page": 1} if query else {}
         data = self.get("/api/subscribers", params=params)
         return self._normalize_results(data)
 

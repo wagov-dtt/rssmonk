@@ -153,7 +153,7 @@ def listmonk_setup():
     time.sleep(5) # Listmonk will reload, so a pause is needed
 
 
-class LifecyclePhase(IntEnum):
+class UnitTestLifecyclePhase(IntEnum):
     """
     Life cycle phase of feed setup that the system should be in.
     This helps simplify the set up each test function requires
@@ -166,6 +166,11 @@ class LifecyclePhase(IntEnum):
     FEED_SUBSCRIBE_CONFIRMED = 5
     FEED_UNSUBSCRIBED = 6
     FEED_DELETED = 7
+
+
+class UnitTestInitialisedData:
+    accounts = {} # Accounts in username + password as pair
+    pending_subscriber = {} # Subscriber's UUID + TOKEN as pair
 
 
 @pytest.mark.usefixtures("listmonk_setup")
@@ -255,26 +260,26 @@ class ListmonkClientTestBase(unittest.TestCase):
     #-------------------------
     # Helper functions to set up functionality
     #-------------------------
-    def initialise_system(self, phase: LifecyclePhase) -> dict[str, str]:
+    def initialise_system(self, phase: UnitTestLifecyclePhase) -> UnitTestInitialisedData:
         # LifecyclePhase.NONE is a noop
-        accounts = {}
+        data = UnitTestInitialisedData()
 
-        if phase.value >= LifecyclePhase.FEED_LIST.value:
-            if phase.value >= LifecyclePhase.FEED_ACCOUNT.value:
-                accounts = self._make_feed_list_and_accounts()
+        if phase.value >= UnitTestLifecyclePhase.FEED_LIST.value:
+            if phase.value >= UnitTestLifecyclePhase.FEED_ACCOUNT.value:
+                data.accounts = self._make_feed_list_and_accounts()
             else:
                 self._make_feed_list()
 
-        if phase.value >= LifecyclePhase.FEED_TEMPLATES.value:
+        if phase.value >= UnitTestLifecyclePhase.FEED_TEMPLATES.value:
             self._make_feed_templates()
 
-        if phase.value >= LifecyclePhase.FEED_SUBSCRIBED.value:
-            self._make_feed_subscriber(phase >= LifecyclePhase.FEED_SUBSCRIBE_CONFIRMED.value)
+        if phase.value >= UnitTestLifecyclePhase.FEED_SUBSCRIBED.value:
+            data.pending_subscriber = self._make_feed_subscriber(phase >= UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED.value)
 
         # These are needed for testing
         # LifecyclePhase.FEED_UNSUBSCRIBED
         # LifecyclePhase.FEED_DELETED
-        return accounts
+        return data
 
 
     def _make_feed_list(self):
@@ -404,7 +409,10 @@ class ListmonkClientTestBase(unittest.TestCase):
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed template: "+response.text
 
 
-    def _make_feed_subscriber(self, confirmed: bool):
+    def _make_feed_subscriber(self, confirmed: bool) -> dict[str, str]:
+        returnVal = {} # Returns the subscriber and either the token, or the confirmation key
+        token_or_guid = ""
+
         # Either make subscriber that is confirmation pending (bypass email), or has been confirmed
         subscriber_data = {
             "email": "example@example.com",
@@ -426,6 +434,7 @@ class ListmonkClientTestBase(unittest.TestCase):
                     "token": "21286da0cb7c4f8083ca5846e5627c41"
                 }
             }
+            token_or_guid = "21286da0cb7c4f8083ca5846e5627c41"
         else:
             subscriber_data["attribs"] = {
                 "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8": {
@@ -441,6 +450,8 @@ class ListmonkClientTestBase(unittest.TestCase):
                     }
                 }
             }
+            token_or_guid = "c870fb40d6c54cd39a2d3b9c88b7d456"
         response = self.admin_session.post(LISTMONK_URL+"/api/subscribers", json=subscriber_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed subscriber: "+response.text
-
+        returnVal[response.json()["data"]["uuid"]] = token_or_guid # Get the UUID from the response
+        return returnVal

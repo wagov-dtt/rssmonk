@@ -895,7 +895,7 @@ async def feed_subscribe_confirm(
             feed_hash = extract_feed_hash(credentials.username)
 
             subscriber_id = request.id
-            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid = '{subscriber_id}'")
+            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid='{subscriber_id}'")
             req_uuid = request.guid
             subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subs or "id" not in subs:
@@ -959,12 +959,12 @@ async def feed_unsubscribe(
                     raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
                 bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
                 feed_hash = make_url_hash(str(request.feed_url))
-                subscriber_query = f"subscribers.email = '{request.email}'"
+                subscriber_query = f"subscribers.email='{request.email}'"
             else: # Is UnsubscribeRequest
                 if is_valid_admin:
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="")
                 feed_hash = get_feed_hash_from_username(credentials.username)
-                subscriber_query = f"subscribers.uuid = '{request.id}'"
+                subscriber_query = f"subscribers.uuid='{request.id}'"
                 token = request.token
 
             rss_monk.validate_feed_visibility(feed_hash)
@@ -972,7 +972,7 @@ async def feed_unsubscribe(
             sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
             subscriber_details = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subscriber_details or "id" not in subscriber_details:
-                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid subscriber details")
 
             # Search for subscription for the user to delete
             feed_list = rss_monk.getClient().find_list_by_tag(make_url_tag_from_hash(feed_hash))
@@ -996,7 +996,7 @@ async def feed_unsubscribe(
             if feed_hash in subscriber_details["attribs"]:
                 previous_filter = subscriber_details["attribs"][feed_hash]
                 # If not admin, match token in the subscriber
-                if token is not None and token != previous_filter["token"]:
+                if not is_valid_admin and token != previous_filter["token"]:
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Incorrect token")
                 del subscriber_details["attribs"][feed_hash]
 
@@ -1031,7 +1031,8 @@ async def feed_unsubscribe(
         raise
     except Exception as e:
         logger.error("Failed to unsubscribe: %s", e)
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed" ) from e
+        traceback.print_exception(e)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed") from e
 
 
 @app.post(

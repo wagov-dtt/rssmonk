@@ -11,7 +11,7 @@ from requests.auth import HTTPBasicAuth
 import uvicorn
 from .mock_feed_gen import external_app
 
-from tests.conftest import RSSMONK_URL, LifecyclePhase, ListmonkClientTestBase
+from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeeds(ListmonkClientTestBase):
@@ -57,12 +57,14 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
         assert (response.status_code == HTTPStatus.CREATED),  "Set up failed: "+response.text
 
+
     def _make_feed_account(self, feed_url: str):
         """
         These are called when required and should be called after insert_example_rss()
         """
 
         return ""
+
 
     def test_get_feeds_no_access(self):
         """
@@ -72,9 +74,11 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=None)
         assert response.status_code == 401
 
+
     def test_list_feeds_unauthorized_user(self):
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth("no-one", "pawword"))
         assert response.status_code == HTTPStatus.UNAUTHORIZED
+
 
     def test_list_feeds_admin_success(self):
         self._insert_example_rss() # Add example rss
@@ -89,6 +93,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert data["feeds"][1]["feed_url"] == "https://abc.net.example/rss/example"
         assert data["feeds"][2]["feed_url"] == "https://example.com/rss/example"
 
+
     def test_list_feeds_feed_account_success(self):
         self._insert_example_rss() # Add example rss
 
@@ -97,6 +102,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 3
+
 
     def test_list_feeds_empty_list(self):
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
@@ -126,8 +132,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=None, json=create_feed_data)
         assert (response.status_code == HTTPStatus.UNAUTHORIZED), f"{response.status_code}: {response.text}"
 
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
         # - Non admin credentials, correct details
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth(user, pwd), json=create_feed_data)
         assert (response.status_code == HTTPStatus.UNAUTHORIZED), f"{response.status_code}: {response.text}"
@@ -149,8 +155,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
     def test_create_feed_non_admin_failures(self):
         # - Invalid credentials (active account, not admin)
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
         create_feed_data = {}
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth(user, pwd), json=create_feed_data)
         assert (response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT), f"{response.status_code}: {response.text}"
@@ -276,8 +282,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
 
     def test_get_feed_by_url_no_feed_non_admin(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credentials, no feed
         get_feed_data = {"feed_url": "https://unknownn.com/rss"}
@@ -294,7 +300,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
 
     def test_get_feed_by_url_feed_no_credentials(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
 
         # No credentials, existing feed
         get_feed_data = {"feed_url": "https://example.com/rss/example"}
@@ -303,8 +309,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
 
     def test_get_feed_by_url_non_feed_non_admin(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credentials, non existing feed
         get_feed_data = {"feed_url": "https://feed-does-not-exist.com/rss"}
@@ -313,8 +319,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
 
     def test_get_feed_by_url_feed_non_admin(self):
-        accounts = self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(accounts.items()))
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credentials, unaccessible but existing feed
         get_feed_data = {"feed_url": "https://somewhere.com/rss"}
@@ -331,7 +337,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
 
     def test_get_feed_by_url_feed_admin(self):
-        self.initialise_system(LifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
 
         # Admin credentials, no existing feed
         get_feed_data = {"feed_url": "https://example.com/rss/example"}
