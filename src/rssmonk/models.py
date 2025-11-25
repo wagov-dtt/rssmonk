@@ -1,8 +1,9 @@
 """Pydantic models for RSS Monk API."""
 import hashlib
 from typing import Any, Optional
+import uuid
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
 
@@ -141,13 +142,34 @@ class SubscriptionPreferencesRequest(BaseModel):
 
 class SubscribeConfirmRequest(BaseModel):
     """Request model for a subscription confirmation endpoint."""
-    id: str = Field(..., description="The id of the subscriber")
+    subscriber_id: str = Field(..., description="The id of the subscriber")
     guid: str = Field(..., description="The uuid of the new subscription filters to confirm as active")
+
+    @field_validator("subscriber_id")
+    def subscriber_id_length(cls, value):
+        uuid.UUID(value) # ValueError from here is fine to trickle up
+        return value
+
+    @field_validator("guid")
+    def guid_length(cls, value):
+        uuid.UUID(value) # ValueError from here is fine to trickle up
+        return value
 
 class UnsubscribeRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""
-    id: str = Field(..., description="The id of the subscriber")
+    subscriber_id: str = Field(..., description="The id of the subscriber")
     token: str = Field(..., description="The token to match against the subscriber's filter to remove")
+
+    @field_validator("subscriber_id")
+    def subscriber_id_length(cls, value):
+        uuid.UUID(value) # ValueError from here is fine to trickle up
+        return value
+
+    @field_validator("token")
+    def guid_length(cls, value):
+        if len(value) == 0:
+            raise ValueError("Token should not be empty")
+        return value
 
 class UnsubscribeAdminRequest(BaseModel):
     """Response model for a subscription preferences (filter)."""

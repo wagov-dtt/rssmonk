@@ -85,7 +85,7 @@ subscribers_processed = Counter('subscribers_processed', 'Total number of subscr
 # FastAPI app with comprehensive OpenAPI configuration
 app = FastAPI(
     title="RSS Monk API",
-    version="0.0.2",
+    version="0.2.1",
     description="""
 RSS Monk - RSS feed aggregator that turns RSS feeds into email newsletters using Listmonk.
 
@@ -210,7 +210,7 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "RSS Monk API",
-        "version": "2.0.0",
+        "version": "0.2.1",
         "description": "RSS feed aggregator using Listmonk",
         "documentation": "/docs",
         "health_check": "/health"
@@ -894,7 +894,7 @@ async def feed_subscribe_confirm(
             rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
             feed_hash = extract_feed_hash(credentials.username)
 
-            subscriber_id = request.id
+            subscriber_id = request.subscriber_id
             sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid='{subscriber_id}'")
             req_uuid = request.guid
             subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None

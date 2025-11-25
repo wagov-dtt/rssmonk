@@ -1,6 +1,6 @@
 [project]
 name = "rssmonk"
-version = "0.2.0"
+version = "0.2.1"
 description = "RSS Monk - RSS feed aggregator that turns RSS feeds into email newsletters using Listmonk"
 readme = "README.md"
 license = {text = "MIT"}

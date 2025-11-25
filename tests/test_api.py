@@ -16,7 +16,7 @@ def test_root_endpoint():
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "RSS Monk API"
-    assert data["version"] == "2.0.0"
+    assert data["version"] == "0.2.1"
 
 
 def test_health_endpoint():

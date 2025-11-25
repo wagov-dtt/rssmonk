@@ -157,7 +157,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
 
         # - Confirm subscription to feed, successfully
         confirm_sub_data = {
-            "id": subscriber_uuid.replace("-", ""),
+            "subscriber_id": subscriber_uuid.replace("-", ""),
             "guid": subscriber_guid
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=account_auth, json=confirm_sub_data)
@@ -179,7 +179,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
 
         # - Unsubscribe from feed, successfully
         unsub_feed_data = {
-            "id": subscriber_uuid.replace("-", ""),
+            "subscriber_id": subscriber_uuid.replace("-", ""),
             "token": filter_token
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=account_auth, json=unsub_feed_data)

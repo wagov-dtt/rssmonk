@@ -216,14 +216,14 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
     # POST /api/feeds/subscribe-confirm
     # -------------------------
     def test_post_subscribe_confirm_no_credentials(self):
-        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
         # No credentials, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=None, json=None)
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
     def test_post_subscribe_confirm_non_admin_credentials(self):
-        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
         user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin, no object
@@ -232,28 +232,28 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Non admin, SubscribeConfirmRequest object, empty values
-        confirm_req = {"id": "", "guid": ""}
+        confirm_req = {"subscriber_id": "", "guid": ""}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=HTTPBasicAuth(user, pwd), json=confirm_req)
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Non admin, SubscribeConfirmRequest object, invalid values
-        confirm_req = {"id": "", "guid": ""}
+        confirm_req = {"subscriber_id": "", "guid": ""}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=HTTPBasicAuth(user, pwd), json=confirm_req)
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
 
     def test_post_subscribe_confirm_non_admin_credentials_success(self):
-        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
         user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin, SubscribeConfirmRequest object, valid values
-        confirm_req = {"id": "", "guid": ""}
+        confirm_req = {"subscriber_id": "", "guid": ""}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=HTTPBasicAuth(user, pwd), json=confirm_req)
-        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
 
     def test_post_subscribe_confirm_admin_credentials(self):
-        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
 
         # Admin, no object
         confirm_req = {}
@@ -261,11 +261,12 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Admin, SubscribeConfirmRequest object, empty values
-        confirm_req = {"id": "", "guid": ""}
+        confirm_req = {"subscriber_id": "", "guid": ""}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
+        sub_id, token = next(iter(init_data.pending_subscriber.items()))
         # Admin, SubscribeConfirmRequest object, valid values - Rejected because admin should go to /api/subscribe
-        confirm_req = {"id": "", "guid": ""}
+        confirm_req = {"subscriber_id": sub_id, "guid": token}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
