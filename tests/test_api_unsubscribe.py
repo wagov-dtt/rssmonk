@@ -88,8 +88,28 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         unsub_request = {"subscriber_id": sub_uuid, "token": sub_token}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        # Check to see if user has been removed (should have been removed)
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='example@example.com'"})
+        assert response.json()["data"]["total"] == 0
         # TODO - Check email
-        # TODO - Check to see if user exists (should have been removed)
+
+
+    def test_post_unsubscribe_non_admin_unsubscribe_request_multiple_subscriptions(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+        user, pwd = next(iter(init_data.accounts.items()))
+        sub_uuid, sub_token = next(iter(init_data.pending_subscriber.items()))
+        # TODO - Subscribe to the other subscription
+
+        # Non admin credentials, feed existing, UnsubscribeRequest object, ID value, valid token
+        unsub_request = {"subscriber_id": sub_uuid, "token": sub_token}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        # Check to see if user continues to exist
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='example@example.com'"})
+        assert response.json()["data"]["total"] == 0
+        # TODO - Check email
 
 
     def test_post_unsubscribe_non_admin_unsubscribe_request(self):
@@ -100,6 +120,8 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         unsub_request = {"subscriber_id": "", "token": ""}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Value error, badly formed hexadecimal UUID string" in response.text
+        assert "Value error, Token should not be empty" in response.text
 
 
     def test_post_unsubscribe_non_admin_unsubscribe_admin_request(self):

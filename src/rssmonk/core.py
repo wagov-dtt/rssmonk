@@ -406,7 +406,7 @@ class RSSMonk:
         if template is None:
             return self._admin.create_email_template(new_template)
         else:
-            return self._admin.update_email_template(template["id"], new_template)
+            return self._admin.update_email_template(template.id, new_template)
 
     def delete_template(self, feed_hash: str, phase_type: EmailPhaseType):
         """Delete singular templates associated with the feed"""

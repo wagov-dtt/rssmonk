@@ -179,7 +179,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
 
         # - Unsubscribe from feed, successfully
         unsub_feed_data = {
-            "subscriber_id": subscriber_uuid.replace("-", ""),
+            "subscriber_id": subscriber_uuid.replace("-", ""), # Hyphens are removed 
             "token": filter_token
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=account_auth, json=unsub_feed_data)

@@ -37,7 +37,7 @@ class Feed(BaseModel):
         #return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
 
 class ListmonkTemplate(BaseModel):
-    """Template data model for Listmonk"""
+    """Template data model for Listmonk. Optional fields are for POST to /api/templates"""
     id: Optional[int] = None
     name: str
     subject: Optional[str] = None

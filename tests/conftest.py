@@ -426,9 +426,9 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8": {
                     "filter": {
                         "instant": {
-                            "ministers": [0, 1],
-                            "portfolio": [2170, 2166],
-                            "region": [2, 3]
+                            "ministers": [1, 2],
+                            "portfolio": [1110, 1111],
+                            "region": [5, 7]
                         }
                     },
                     "token": "21286da0cb7c4f8083ca5846e5627c41"
@@ -439,7 +439,7 @@ class ListmonkClientTestBase(unittest.TestCase):
             subscriber_data["attribs"] = {
                 "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8": {
                     "c870fb40d6c54cd39a2d3b9c88b7d456": {
-                        "expires": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()), # TODO - One day away
+                        "expires": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
                         "filter": {
                             "instant": {
                                 "ministers": [0, 1],

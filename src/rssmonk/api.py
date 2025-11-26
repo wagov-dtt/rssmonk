@@ -858,7 +858,7 @@ async def feed_subscribe(
                 }
 
                 # Send email out for the user
-                rss_monk.getClient().send_transactional(NO_REPLY, template["id"], "html", transaction)
+                rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
 
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
@@ -869,6 +869,7 @@ async def feed_subscribe(
             raise
         except Exception as e:
             logger.error("Subscribe: %s", e)
+            traceback.print_exc()
             # Convert to 500
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
 
@@ -891,11 +892,15 @@ async def feed_subscribe_confirm(
     """
     try:
         with rss_monk:
+            if settings.validate_admin_auth(credentials.username, credentials.password):
+                raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Administrators must use the bypass when subscribing")
+
             rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
             feed_hash = extract_feed_hash(credentials.username)
 
             subscriber_id = request.subscriber_id
             sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid='{subscriber_id}'")
+
             req_uuid = request.guid
             subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subs or "id" not in subs:
@@ -964,12 +969,13 @@ async def feed_unsubscribe(
                 if is_valid_admin:
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="")
                 feed_hash = get_feed_hash_from_username(credentials.username)
-                subscriber_query = f"subscribers.uuid='{request.id}'"
+                subscriber_query = f"subscribers.uuid='{request.subscriber_id}'"
                 token = request.token
 
             rss_monk.validate_feed_visibility(feed_hash)
 
             sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
+            print(sub_list)
             subscriber_details = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subscriber_details or "id" not in subscriber_details:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid subscriber details")
@@ -1021,6 +1027,7 @@ async def feed_unsubscribe(
                     "subscription_link": subscribe_link,
                 }
                 # Send email out for the user
+                print(transaction)
                 rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
 
     except ValueError as e:

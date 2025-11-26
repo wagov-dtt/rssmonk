@@ -255,18 +255,18 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
     def test_post_subscribe_confirm_admin_credentials(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
 
-        # Admin, no object
+        # Admin, no object. Data models are checked first
         confirm_req = {}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
-        # Admin, SubscribeConfirmRequest object, empty values
+        # Admin, SubscribeConfirmRequest object, empty values. Data models are checked first
         confirm_req = {"subscriber_id": "", "guid": ""}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         sub_id, token = next(iter(init_data.pending_subscriber.items()))
-        # Admin, SubscribeConfirmRequest object, valid values - Rejected because admin should go to /api/subscribe
+        # Admin, SubscribeConfirmRequest object, valid values - Rejected because admin should go to /api/feeds/subscribe
         confirm_req = {"subscriber_id": sub_id, "guid": token}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
-        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert response.status_code == HTTPStatus.FORBIDDEN, f"{response.status_code}: {response.text}"

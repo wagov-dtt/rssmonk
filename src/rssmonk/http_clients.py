@@ -247,7 +247,15 @@ class ListmonkClient:
         templates = self.get_templates()
         for template in templates:
             if template["name"] == template_name:
-                return template
+                lmTemplate = ListmonkTemplate(
+                    id = template["id"],
+                    name = template["name"],
+                    subject = template["subject"],
+                    type = template["type"],
+                    body = template["body"],
+                    body_source = template["body_source"],
+                    is_default = template["is_default"])
+                return lmTemplate
         return None
 
     def create_email_template(self, template: EmailTemplate):
@@ -285,6 +293,7 @@ class ListmonkClient:
         if subject is not None:
             payload["subject"] = subject
 
+        print(payload)
         return self.post("/api/tx", payload)
 
     def get_users(self) -> list | None:
