@@ -286,13 +286,11 @@ class ListmonkClient:
         payload = {
             "subscriber_emails": data["subscriber_emails"],
             "from_email": reply_email,
+            "subject": subject,
             "template_id": template_id,
             "data": data,
             "content_type": content_type
         }
-        if subject is not None:
-            payload["subject"] = subject
-
         print(payload)
         return self.post("/api/tx", payload)
 

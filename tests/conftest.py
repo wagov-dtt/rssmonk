@@ -1,3 +1,4 @@
+import json
 import time
 import pytest
 import requests
@@ -164,22 +165,27 @@ class UnitTestLifecyclePhase(IntEnum):
     FEED_TEMPLATES = 3
     FEED_SUBSCRIBED = 4
     FEED_SUBSCRIBE_CONFIRMED = 5
-    FEED_UNSUBSCRIBED = 6
-    FEED_DELETED = 7
+    # These would not be required
+    #FEED_UNSUBSCRIBED = 6
+    #FEED_DELETED = 7
 
 
 class UnitTestInitialisedData:
     accounts = {} # Accounts in username + password as pair
-    pending_subscriber = {} # Subscriber's UUID + TOKEN as pair
+    subscribers = {} # Subscriber's UUID + TOKEN as pair
 
 
 @pytest.mark.usefixtures("listmonk_setup")
 class ListmonkClientTestBase(unittest.TestCase):
-    """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down. This should """
+    """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down."""
+    FEED_HASH_ONE = "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"
+    FEED_HASH_TWO = "a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14"
     ADMIN_AUTH = HTTPBasicAuth("admin", "admin123") # Default k3d credentials
     admin_session = make_admin_session()
+    one_feed_subscriber_uuid = ""
+    two_feed_subscriber_uuid = ""
     __limited_user_role_id = -1
-    __feed_list_id = -1
+    __feed_list_id = {}
 
 
     @classmethod
@@ -193,7 +199,7 @@ class ListmonkClientTestBase(unittest.TestCase):
         cls.delete_templates()
         cls.clear_mailpit_messages()
         cls.__limited_user_role_id = -1
-        cls.__feed_list_id = -1
+        cls.__feed_list_id = {}
 
     def tearDown(self):
         # Empty lists, subscribers, templates and list roles.
@@ -274,11 +280,8 @@ class ListmonkClientTestBase(unittest.TestCase):
             self._make_feed_templates()
 
         if phase.value >= UnitTestLifecyclePhase.FEED_SUBSCRIBED.value:
-            data.pending_subscriber = self._make_feed_subscriber(phase >= UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED.value)
+            data.subscribers = self._make_feed_subscriber(phase >= UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
 
-        # These are needed for testing
-        # LifecyclePhase.FEED_UNSUBSCRIBED
-        # LifecyclePhase.FEED_DELETED
         return data
 
 
@@ -291,17 +294,17 @@ class ListmonkClientTestBase(unittest.TestCase):
             "tags": [
                 "freq:instant",
                 "freq:daily",
-                "url:0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"
+                "url:"+self.FEED_HASH_ONE
             ],
             "description": "RSS Feed: https://example.com/rss/media-statements\nSubscription URL: https://example.com/media-statements"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
-        self.__feed_list_id = response.json()["data"]["id"]
+        self.__feed_list_id[self.FEED_HASH_ONE] = response.json()["data"]["id"]
 
 
-    def _make_feed_list_and_accounts(self) -> dict[str, str]:
-        """Creating feed and accounts used for testing"""
+    def _make_feed_list_and_accounts(self) -> dict[str, dict[str, str]]:
+        """Creating two feeds and accounts used for testing"""
         create_feed_data = {
             "name": "Example Media Statements",
             "type": "private",
@@ -309,29 +312,29 @@ class ListmonkClientTestBase(unittest.TestCase):
             "tags": [
                 "freq:instant",
                 "freq:daily",
-                "url:0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"
+                f"url:{self.FEED_HASH_ONE}"
             ],
             "description": "RSS Feed: https://example.com/rss/media-statements\nSubscription URL: https://example.com/media-statements"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
-        self.__feed_list_id = response.json()["data"]["id"]
+        self.__feed_list_id[self.FEED_HASH_ONE] = response.json()["data"]["id"]
 
-        create_feed_data = {
+        create_feed_two_data = {
             "name": "Somewhere Statements",
             "type": "private",
             "optin": "single",
             "tags": [
                 "freq:instant",
-                "url:a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14"
+                "url:"+self.FEED_HASH_TWO
             ],
             "description": "RSS Feed: https://somewhere.com/rss\nSubscription URL: https://somewhere.com/media-statements"
         }
-        response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
+        response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_two_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
-        other_list_id = response.json()["data"]["id"]
+        self.__feed_list_id[self.FEED_HASH_TWO] = response.json()["data"]["id"]
 
-        payload= {
+        create_limited_use_role = {
             "name": "limited-user-role",
             "permissions": [
                 "subscribers:get",
@@ -340,28 +343,30 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "templates:get"
             ]
         }
-        response = self.admin_session.post(LISTMONK_URL+"/api/roles/users", json=payload)
+        response = self.admin_session.post(LISTMONK_URL+"/api/roles/users", json=create_limited_use_role)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make user role: "+response.text
         self.__limited_user_role_id = response.json()["data"]["id"]
 
-        payload = {
-            "name": "list_role_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8",
-            "lists": [ {"id": self.__feed_list_id, "permissions": ["list:get","list:manage"] } ]
+        create_list_role = {
+            "name": "list_role_"+self.FEED_HASH_ONE,
+            "lists": [ {"id": self.__feed_list_id[self.FEED_HASH_ONE],
+                        "permissions": ["list:get","list:manage"] } ]
         }
-        response = self.admin_session.post(LISTMONK_URL+"/api/roles/lists", json=payload)
+        response = self.admin_session.post(LISTMONK_URL+"/api/roles/lists", json=create_list_role)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make list role: "+response.text
         list_role_id = response.json()["data"]["id"]
 
-        payload = {
-            "name": "list_role_a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14",
-            "lists": [ {"id": other_list_id, "permissions": ["list:get","list:manage"] } ]
+        create_list_two_role = {
+            "name": "list_role_"+self.FEED_HASH_TWO,
+            "lists": [ {"id": self.__feed_list_id[self.FEED_HASH_TWO],
+                        "permissions": ["list:get","list:manage"] } ]
         }
-        response = self.admin_session.post(LISTMONK_URL+"/api/roles/lists", json=payload)
+        response = self.admin_session.post(LISTMONK_URL+"/api/roles/lists", json=create_list_two_role)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make list role: "+response.text
         other_list_role_id = response.json()["data"]["id"]
 
         user_data = {
-            "username": "user_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8",
+            "username": "user_"+self.FEED_HASH_ONE,
             "email": "", "name":"",
             "type": "api", "status": "enabled",
             "password": None, "password_login": False,
@@ -373,8 +378,8 @@ class ListmonkClientTestBase(unittest.TestCase):
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make user: "+response.text
         returnData = {response.json()["data"]["username"]: response.json()["data"]["password"]}
 
-        user_data = {
-            "username": "user_a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14",
+        user_two_data = {
+            "username": "user_"+self.FEED_HASH_TWO,
             "email": "", "name":"",
             "type": "api", "status": "enabled",
             "password": None, "password_login": False,
@@ -382,7 +387,7 @@ class ListmonkClientTestBase(unittest.TestCase):
             "userRoleId": self.__limited_user_role_id, "listRoleId": other_list_role_id,
             "user_role_id": self.__limited_user_role_id, "list_role_id": other_list_role_id
         }
-        response = self.admin_session.post(LISTMONK_URL+"/api/users", json=user_data)
+        response = self.admin_session.post(LISTMONK_URL+"/api/users", json=user_two_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make user: "+response.text
         returnData[response.json()["data"]["username"]] = response.json()["data"]["password"]
 
@@ -392,66 +397,100 @@ class ListmonkClientTestBase(unittest.TestCase):
     def _make_feed_templates(self):
         """Creating templates used for testing. Independant of the feed list creation"""
         template_data = {
-            "name": "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-subscribe",
+            "name": self.FEED_HASH_ONE+"-subscribe",
             "subject": "Subscribed Subject Line",
             "type": "tx",
             "body": "<html><body></body></html>"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/templates", json=template_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed template: "+response.text
-        template_data = {
-            "name": "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-unsubscribe",
+        template_two_data = {
+            "name": self.FEED_HASH_ONE+"-unsubscribe",
             "subject": "Unsubscribed Subject Line",
             "type": "tx",
             "body": "<html><body></body></html>"
         }
-        response = self.admin_session.post(LISTMONK_URL+"/api/templates", json=template_data)
+        response = self.admin_session.post(LISTMONK_URL+"/api/templates", json=template_two_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed template: "+response.text
 
 
     def _make_feed_subscriber(self, confirmed: bool) -> dict[str, str]:
         returnVal = {} # Returns the subscriber and either the token, or the confirmation key
-        token_or_guid = ""
 
-        # Either make subscriber that is confirmation pending (bypass email), or has been confirmed
+        # Make subscriber that has ONE pending or has been confirmed subscription
+        user_one_token_or_guid = {}
         subscriber_data = {
             "email": "example@example.com",
             "preconfirm_subscriptions": True,
             "status": "enabled",
-            "lists": [self.__feed_list_id]
+            "lists": [self.__feed_list_id[self.FEED_HASH_ONE]]
         }
 
         if confirmed:
             subscriber_data["attribs"] = {
-                "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8": {
-                    "filter": {
-                        "instant": {
-                            "ministers": [1, 2],
-                            "portfolio": [1110, 1111],
-                            "region": [5, 7]
-                        }
-                    },
-                    "token": "21286da0cb7c4f8083ca5846e5627c41"
+                self.FEED_HASH_ONE: {
+                    "filter": {"instant": {"ministers": [1, 2], "portfolio": [1110, 1111], "region": [5, 7]}},
+                    "token": "900a558ca21afbd04fc10f18aa120e0c"                              
                 }
             }
-            token_or_guid = "21286da0cb7c4f8083ca5846e5627c41"
+            user_one_token_or_guid[self.FEED_HASH_ONE] = "900a558ca21afbd04fc10f18aa120e0c"
         else:
             subscriber_data["attribs"] = {
-                "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8": {
+                self.FEED_HASH_ONE: {
                     "c870fb40d6c54cd39a2d3b9c88b7d456": {
                         "expires": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
-                        "filter": {
-                            "instant": {
-                                "ministers": [0, 1],
-                                "portfolio": [2170, 2166],
-                                "region": [2, 3]
-                            }
-                        }
+                        "filter": {"instant": {"ministers": [1, 2], "portfolio": [1110, 1111], "region": [5, 7]}},
                     }
                 }
             }
-            token_or_guid = "c870fb40d6c54cd39a2d3b9c88b7d456"
+            user_one_token_or_guid[self.FEED_HASH_ONE] = "c870fb40d6c54cd39a2d3b9c88b7d456"
         response = self.admin_session.post(LISTMONK_URL+"/api/subscribers", json=subscriber_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed subscriber: "+response.text
-        returnVal[response.json()["data"]["uuid"]] = token_or_guid # Get the UUID from the response
+        self.one_feed_subscriber_uuid = response.json()["data"]["uuid"]
+        returnVal[self.one_feed_subscriber_uuid] = user_one_token_or_guid # Get the UUID from the response
+
+        # Make subscriber that has TWO pending or has been confirmed subscription
+        user_two_token_or_guid = {}
+        subscriber_two_data = {
+            "email": "two-feed-subscriber@example.com",
+            "preconfirm_subscriptions": True,
+            "status": "enabled",
+            "lists": [self.__feed_list_id[self.FEED_HASH_ONE],
+                      self.__feed_list_id[self.FEED_HASH_TWO]]
+        }
+
+        if confirmed:
+            subscriber_two_data["attribs"] = {
+                self.FEED_HASH_ONE: {
+                    "filter": {"instant": {"ministers": [1, 2], "portfolio": [1110, 1111], "region": [5, 7]}},
+                    "token": "91238e275a6c7f281ca5846e56a27c53"
+                },
+                self.FEED_HASH_TWO: {
+                    "filter": {"instant": {"ministers": [0, 1], "portfolio": [2170, 2166], "region": [2, 3]}},
+                    "token": "21286da0cb7c4f8083ca5846e5627c41"
+                }
+            }
+            user_two_token_or_guid[self.FEED_HASH_ONE] = "91238e275a6c7f281ca5846e56a27c53"
+            user_two_token_or_guid[self.FEED_HASH_TWO] = "21286da0cb7c4f8083ca5846e5627c41"
+        else:
+            subscriber_two_data["attribs"] = {
+                self.FEED_HASH_ONE: {
+                    "810c3fb40d6c54cda9a2d369c8b2d77a": {
+                        "expires": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
+                        "filter": {"instant": {"ministers": [1, 2], "portfolio": [1110, 1111], "region": [5, 7]}}
+                    }
+                },
+                self.FEED_HASH_TWO: {
+                    "c870fb40d6c54cd39a2d3b9c88b7d456": {
+                        "expires": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
+                        "filter": {"instant": {"ministers": [0, 1], "portfolio": [2170, 2166], "region": [2, 3]}}
+                    }
+                }
+            }
+            user_two_token_or_guid[self.FEED_HASH_ONE] = "810c3fb40d6c54cda9a2d369c8b2d77a"
+            user_two_token_or_guid[self.FEED_HASH_TWO] = "c870fb40d6c54cd39a2d3b9c88b7d456"
+        response = self.admin_session.post(LISTMONK_URL+"/api/subscribers", json=subscriber_two_data)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed subscriber: "+response.text
+        self.two_feed_subscriber_uuid = response.json()["data"]["uuid"]
+        returnVal[self.two_feed_subscriber_uuid] = user_two_token_or_guid # Get the UUID from the response
         return returnVal

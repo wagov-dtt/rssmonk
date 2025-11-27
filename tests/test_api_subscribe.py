@@ -265,8 +265,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
-        sub_id, token = next(iter(init_data.pending_subscriber.items()))
+        sub_tokens = init_data.subscribers[self.one_feed_subscriber_uuid]
         # Admin, SubscribeConfirmRequest object, valid values - Rejected because admin should go to /api/feeds/subscribe
-        confirm_req = {"subscriber_id": sub_id, "guid": token}
+        confirm_req = {"subscriber_id": self.one_feed_subscriber_uuid, "guid": sub_tokens[self.FEED_HASH_ONE]}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
         assert response.status_code == HTTPStatus.FORBIDDEN, f"{response.status_code}: {response.text}"

@@ -903,7 +903,7 @@ async def feed_subscribe_confirm(
 
             req_uuid = request.guid
             subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
-            if not subs or "id" not in subs:
+            if not subs:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details")
 
             # Search for subscription for the user
@@ -975,9 +975,8 @@ async def feed_unsubscribe(
             rss_monk.validate_feed_visibility(feed_hash)
 
             sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
-            print(sub_list)
             subscriber_details = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
-            if not subscriber_details or "id" not in subscriber_details:
+            if not subscriber_details:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid subscriber details")
 
             # Search for subscription for the user to delete
@@ -1002,6 +1001,7 @@ async def feed_unsubscribe(
             if feed_hash in subscriber_details["attribs"]:
                 previous_filter = subscriber_details["attribs"][feed_hash]
                 # If not admin, match token in the subscriber
+                print(f"Token for {feed_hash} is {token}, with previous token is {previous_filter["token"]}")
                 if not is_valid_admin and token != previous_filter["token"]:
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Incorrect token")
                 del subscriber_details["attribs"][feed_hash]
@@ -1026,15 +1026,19 @@ async def feed_unsubscribe(
                     "subscriber_emails": subscriber_details["email"],
                     "subscription_link": subscribe_link,
                 }
+
                 # Send email out for the user
-                print(transaction)
-                rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
+                try:
+                    rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
+                except Exception as e:
+                    logger.error("Failed to send an unsubscribe email: %s", e)
+                    raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Successfully unsubscribed, Requested email could not be sent") from e
 
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e
     except HTTPException as e:
         if e.status_code == HTTPStatus.NOT_FOUND:
-            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(e)) from e
+            raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Invalid details provided.")
         raise
     except Exception as e:
         logger.error("Failed to unsubscribe: %s", e)

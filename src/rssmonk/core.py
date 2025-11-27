@@ -503,7 +503,7 @@ class RSSMonk:
 
         if not feed or not feed.id:
             raise ValueError(f"Feed not found: {feed_hash}")
-        if not subs or "id" not in subs:
+        if not subs:
             raise ValueError(f"Subscriber not found: {email}")
 
         # Attribs format - url-hash and uuids are permitted to be many
@@ -541,7 +541,7 @@ class RSSMonk:
         sub_list = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         subs: dict = sub_list[0] if sub_list is not None else None
 
-        if not subs or "id" not in subs:
+        if not subs:
             return # Count as removed
 
         # Attribs format

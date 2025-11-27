@@ -1,9 +1,11 @@
 
+import json
 import time
 from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
 
+from rssmonk.types import FEED_ACCOUNT_PREFIX
 from tests.conftest import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
 
@@ -28,7 +30,8 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_request_failures(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin credentials, feed existing, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd))
@@ -41,51 +44,52 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         assert "Field required" in response.text
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, empty values
-        unsub_request = {"subscriber_id": "", "token": ""}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        unsub_2_request = {"subscriber_id": "", "token": ""}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_2_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Value error, badly formed hexadecimal UUID string" in response.text
         assert "Value error, Token should not be empty" in response.text
 
-        id, token = next(iter(init_data.pending_subscriber.items()))
+        sub_tokens = init_data.subscribers[self.one_feed_subscriber_uuid]
         # Non admin credentials, feed existing, UnsubscribeRequest object, non valid ID value, empty token
-        unsub_request = {"subscriber_id": "00000000-0000-0000-0000-000000000000", "token": ""}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        unsub_3_request = {"subscriber_id": "00000000-0000-0000-0000-000000000000", "token": ""}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_3_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Value error, Token should not be empty" in response.text
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, non valid ID value, token that does not exist
-        unsub_request = {"subscriber_id": "00000000-0000-0000-0000-000000000000", "token": "00000000000000000000000000000000"}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        unsub_4_request = {"subscriber_id": "00000000-0000-0000-0000-000000000000", "token": "00000000000000000000000000000000"}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_4_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Invalid subscriber details" in response.text
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, no ID value, token is valid
-        unsub_request = {"subscriber_id": "", "token": token}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        unsub_5_request = {"subscriber_id": "", "token": sub_tokens[self.FEED_HASH_ONE]}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_5_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Value error, badly formed hexadecimal UUID string" in response.text
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, valid ID value, empty token
-        unsub_request = {"subscriber_id": id, "token": ""}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        unsub_6_request = {"subscriber_id": self.one_feed_subscriber_uuid, "token": ""}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_6_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Value error, Token should not be empty" in response.text
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, ID value, token that does not exist
-        unsub_request = {"subscriber_id": id, "token": "00000000000000000000000000000000"}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
+        unsub_7_request = {"subscriber_id": self.one_feed_subscriber_uuid, "token": "00000000000000000000000000000000"}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_7_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Incorrect token" in response.text
 
 
     def test_post_unsubscribe_non_admin_unsubscribe_request_valid_data(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user, pwd = next(iter(init_data.accounts.items()))
-        sub_uuid, sub_token = next(iter(init_data.pending_subscriber.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
+        sub_tokens = init_data.subscribers[self.one_feed_subscriber_uuid]
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, ID value, valid token
-        unsub_request = {"subscriber_id": sub_uuid, "token": sub_token}
+        unsub_request = {"subscriber_id": self.one_feed_subscriber_uuid, "token": sub_tokens[self.FEED_HASH_ONE]}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
 
@@ -97,24 +101,25 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_request_multiple_subscriptions(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user, pwd = next(iter(init_data.accounts.items()))
-        sub_uuid, sub_token = next(iter(init_data.pending_subscriber.items()))
-        # TODO - Subscribe to the other subscription
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
+        sub_tokens = init_data.subscribers[self.two_feed_subscriber_uuid]
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, ID value, valid token
-        unsub_request = {"subscriber_id": sub_uuid, "token": sub_token}
+        unsub_request = {"subscriber_id": self.two_feed_subscriber_uuid, "token": sub_tokens[self.FEED_HASH_ONE]}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
 
         # Check to see if user continues to exist
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='example@example.com'"})
-        assert response.json()["data"]["total"] == 0
+        assert response.json()["data"]["total"] == 1
         # TODO - Check email
 
 
     def test_post_unsubscribe_non_admin_unsubscribe_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, empty values
         unsub_request = {"subscriber_id": "", "token": ""}
@@ -126,7 +131,8 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_admin_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin credentials, feed existing, UnsubscribeAdminRequest object
         unsub_request = {"email": "", "feed_url": "", "bypass_confirmation" : True}
@@ -138,8 +144,7 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
     def test_post_unsubscribe_admin_unsubscribe_request(self):
         self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
 
-        unsub_request = {}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_request)
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json={})
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Field required" in response.text
 
@@ -158,13 +163,13 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Admin credentials, feed existing, UnsubscribeAdminRequest object - unknown feed
-        unsub_request = {"email": "john@example.com", "feed_url": "http://www.abc.net.au/news", "bypass_confirmation" : True}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_request)
+        unsub_2_request = {"email": "john@example.com", "feed_url": "http://www.abc.net.au/news", "bypass_confirmation" : True}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_2_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Admin credentials, feed existing, valid UnsubscribeAdminRequest object
-        unsub_request = {"email": "", "feed_url": "", "bypass_confirmation" : True}
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_request)
+        unsub_3_request = {"email": "", "feed_url": "", "bypass_confirmation" : True}
+        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_3_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
 
