@@ -179,7 +179,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
 
         # - Unsubscribe from feed, successfully
         unsub_feed_data = {
-            "subscriber_id": subscriber_uuid.replace("-", ""), # Hyphens are removed 
+            "subscriber_id": subscriber_uuid.replace("-", ""), # Hyphens is removed 
             "token": filter_token
         }
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=account_auth, json=unsub_feed_data)
@@ -200,27 +200,27 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         response_json = response.json()
         assert isinstance(response_json, dict)
 
-        # - Check the lists are removed
+        # - Check the lists is removed
         response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=true&per_page=all")
         lists_data = response.json()["data"]["results"] if "results" in response.json()["data"] else []
-        assert 0 == len(lists_data)
+        assert len(lists_data) == 0
 
         # - Check the subscriber is no longer subscribed to the list (or has been deleted)
         response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
         lists_data = response.json().get("data", {}).get("results", [])
 
-        # - Check the templates are removed
+        # - Check the templates is removed
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")
         lists_data = response.json()["data"]
         for list_data in lists_data:
             assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" not in list_data["name"]
 
-        # - Check the user role are removed
+        # - Check the user role is removed
         response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
         lists_data = response.json()["data"]
-        assert 0 == len(lists_data)
+        assert len(lists_data) == 0
 
         # - Check the users if left with only admin (only role left)
         response = admin_session.get(f"{LISTMONK_URL}/api/users")
         lists_data = response.json()["data"]
-        assert 1 == len(lists_data)
+        assert len(lists_data) == 1

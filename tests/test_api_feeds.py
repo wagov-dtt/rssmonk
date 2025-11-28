@@ -9,9 +9,11 @@ from multiprocessing import Process
 import requests
 from requests.auth import HTTPBasicAuth
 import uvicorn
+
+from rssmonk.types import FEED_ACCOUNT_PREFIX
 from .mock_feed_gen import external_app
 
-from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
+from tests.conftest import LISTMONK_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
 
 class TestRSSMonkFeeds(ListmonkClientTestBase):
@@ -66,13 +68,30 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         return ""
 
 
-    def test_get_feeds_no_access(self):
-        """
-        GET /api/feeds - List RSS Feeds
-        - No acesss
-        """
+    # -------------------------
+    # GET /api/feeds
+    # -------------------------
+    def test_get_feeds_no_credentials(self):
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=None)
-        assert response.status_code == 401
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+    def test_get_feeds_unauthorized_user(self):
+        response = requests.get(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth("no-one", "pawword"))
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+    def test_get_feeds_non_admin_credentials(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
+        user, pwd = next(iter(init_data.accounts.items()))
+
+        response = requests.get(RSSMONK_URL+"/api/feeds", auth=HTTPBasicAuth(user, pwd))
+        assert response.status_code == HTTPStatus.OK
+
+
+    def test_get_feeds_admin_credentials(self):
+        response = requests.get(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.OK
 
 
     def test_list_feeds_unauthorized_user(self):
@@ -274,6 +293,10 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert "url_hash" in response_json and "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" == response_json["url_hash"]
 
 
+    # -------------------------
+    # GET /api/feeds/by-url
+    # -------------------------
+
     def test_get_feed_by_url_no_feed_no_credentials(self):
         # No credentials, no feed
         get_feed_data = {"feed_url": "https://unknownn.com/rss"}
@@ -323,12 +346,12 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         user, pwd = next(iter(init_data.accounts.items()))
 
         # Non admin credentials, unaccessible but existing feed
-        get_feed_data = {"feed_url": "https://somewhere.com/rss"}
+        get_feed_data = {"feed_url": self.FEED_TWO_FEED_URL}
         response = requests.get(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd), params=get_feed_data)
         assert (response.status_code == HTTPStatus.NOT_FOUND), f"{response.status_code}: {response.text}"
 
         # Non admin credentials, accessible existing feed
-        get_feed_data = {"feed_url": "https://example.com/rss/media-statements"}
+        get_feed_data = {"feed_url": self.FEED_ONE_FEED_URL}
         response = requests.get(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd), params=get_feed_data)
         assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         data = response.json()
@@ -352,48 +375,149 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert isinstance(response_json, dict)
 
 
-    def test_delete_feed_by_url(self):
-        """
-        DELETE /api/feeds/by-url - Delete Feed by URL (admin only)
-        - No account access
-        - No admin 
-        - Delete non existing feed
-        - Delete existing feed. Ensure feed, user account, list role, templates are removed
-        """
+    # -------------------------
+    # DELETE /api/feeds/by-url
+    # -------------------------
+
+    def test_delete_feed_by_url_no_credentials(self):
+        response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=None)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+
+    def test_delete_feed_by_url_non_admin_credentials(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
+
+        response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd))
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+
+
+    def test_delete_feed_by_url_admin_no_feed(self):
         # - Delete non existing feed
         delete_feed_data = {"feed_url": "https://example.com/rss/example"}
         response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=self.ADMIN_AUTH, json=delete_feed_data)
         assert (response.status_code == HTTPStatus.NOT_FOUND), f"{response.status_code}: {response.text}"
 
-        self._insert_example_rss()
-        delete_feed_data = {"feed_url": "https://example.com/rss/example"}
+
+    def test_delete_feed_by_url_admin_success(self):
+        self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+        # Delete existing feed
+        delete_feed_data = {"feed_url": self.FEED_ONE_FEED_URL}
         response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=self.ADMIN_AUTH, json=delete_feed_data)
         assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
 
+        # - Check the requested list is removed
+        admin_session = make_admin_session()
+        response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=true&per_page=all")
+        lists_data = response.json()["data"]["results"] if "results" in response.json()["data"] else []
+        assert len(lists_data) == 1, lists_data
+        assert self.FEED_ONE_FEED_URL not in lists_data
 
-    def test_get_subscribe_preferences(self):
-        """
-        GET /api/feeds/subscribe-preferences
-        - Get Feed preferences
-        """
-        assert False
+        # - Check the subscriber is no longer subscribed to the list (or has been deleted)
+        response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
+        subs_data = response.json().get("data", {}).get("results", [])
+        # Deletion of feed will remove users who only had the one feed as a subscription
+        assert len(subs_data) == 1, subs_data
+        assert self.FEED_ONE_FEED_URL not in subs_data
+
+        # - Check the user role for the list is removed
+        response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
+        role_lists_data = response.json()["data"]
+        assert len(lists_data) == 1, role_lists_data
+        for list_data in role_lists_data:
+            assert self.FEED_HASH_ONE not in list_data["name"]
+
+        # - Check the users if left with only admin (only role left)
+        response = admin_session.get(f"{LISTMONK_URL}/api/users")
+        users_data = response.json()["data"]
+        assert len(users_data) == 2, users_data
+        for list_data in users_data:
+            assert self.FEED_HASH_ONE not in list_data["name"]
+
+        # - Check the list templates is removed
+        response = admin_session.get(f"{LISTMONK_URL}/api/templates")
+        template_list_data = response.json()["data"]
+        for list_data in template_list_data:
+            assert self.FEED_HASH_ONE not in list_data["name"]
+
+
+    # -------------------------
+    # GET /api/feeds/subscribe-preferences
+    # -------------------------
+    def test_get_subscribe_preferences_no_credentials(self):
+        response = requests.get(RSSMONK_URL+"/api/feeds/subscribe-preferences", auth=None)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+
+    def test_get_subscribe_preferences_non_admin_credentials(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
+
+        response = requests.get(RSSMONK_URL+"/api/feeds/subscribe-preferences", auth=HTTPBasicAuth(user, pwd))
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Field required" in response.text
+
+
+    def test_get_subscribe_preferences_admin_credentials(self):
+        response = requests.get(RSSMONK_URL+"/api/feeds/subscribe-preferences", auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Field required" in response.text
 
 
     # TODO - Still unsure what to do with these endpoints
-    def test_get_configurations(self):
-        """
-        GET /api/feeds/configurations
-        - Get URL Configurations
-        """
-        assert False
+    # -------------------------
+    # GET /api/feeds/configurations
+    # -------------------------
 
-    def test_update_configurations(self):
-        """
-        PUT /api/feeds/configurations
-        - Update Feed Configuration
-        """
-        assert False
+    def test_get_feed_configurations_no_credentials(self):
+        response = requests.get(RSSMONK_URL+"/api/feeds/configurations", auth=None)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
+    def test_get_feed_configurations_non_admin_credentials(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
+
+        response = requests.get(RSSMONK_URL+"/api/feeds/configurations", auth=HTTPBasicAuth(user, pwd))
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Field required" in response.text
+
+        # TODO - Get feed configuration with actual data
+
+
+    def test_get_feed_configurations_admin_credentials(self):
+        response = requests.get(RSSMONK_URL+"/api/feeds/configurations", auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Field required" in response.text
+        
+        # TODO - Get feed configuration with actual data
+
+
+    # -------------------------
+    # PUT /api/feeds/configurations
+    # -------------------------
+    def test_put_feed_configurations_no_credentials(self):
+        response = requests.put(RSSMONK_URL+"/api/feeds/configurations", auth=None)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+
+    def test_put_feed_configurations_non_admin_credentials(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
+
+        response = requests.put(RSSMONK_URL+"/api/feeds/configurations", auth=HTTPBasicAuth(user, pwd))
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Field required" in response.text
+
+    # TODO - Put feed configuration with actual data
+
+
+    def test_put_feed_configurations_admin_credentials(self):
+        response = requests.put(RSSMONK_URL+"/api/feeds/configurations", auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Field required" in response.text
+
+    # TODO - Put feed configuration with actual data

@@ -33,7 +33,6 @@ def make_admin_session() -> requests.Session:
 
 @pytest.fixture(scope="session")
 def listmonk_setup():
-    print("Performing once off set up")
     # Modify settings to ensure mailpit is the mail client for RSSMonk
     response = make_admin_session().put(LISTMONK_URL+"/api/settings", json={
         "app.site_name": "Media Statements",
@@ -180,6 +179,9 @@ class ListmonkClientTestBase(unittest.TestCase):
     """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down."""
     FEED_HASH_ONE = "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"
     FEED_HASH_TWO = "a1ca7266e62dee5b39ad9622740e9a1e1275057f99a501eace02da174cf7bd14"
+    FEED_ONE_FEED_URL = "https://example.com/rss/media-statements"
+    FEED_TWO_FEED_URL = "https://somewhere.com/rss"
+    
     ADMIN_AUTH = HTTPBasicAuth("admin", "admin123") # Default k3d credentials
     admin_session = make_admin_session()
     one_feed_subscriber_uuid = ""
@@ -296,7 +298,7 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "freq:daily",
                 "url:"+self.FEED_HASH_ONE
             ],
-            "description": "RSS Feed: https://example.com/rss/media-statements\nSubscription URL: https://example.com/media-statements"
+            "description": f"RSS Feed: {self.FEED_ONE_FEED_URL}\nSubscription URL: https://example.com/media-statements"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
@@ -312,9 +314,9 @@ class ListmonkClientTestBase(unittest.TestCase):
             "tags": [
                 "freq:instant",
                 "freq:daily",
-                f"url:{self.FEED_HASH_ONE}"
+                "url:"+self.FEED_HASH_ONE
             ],
-            "description": "RSS Feed: https://example.com/rss/media-statements\nSubscription URL: https://example.com/media-statements"
+            "description": f"RSS Feed: {self.FEED_ONE_FEED_URL}\nSubscription URL: https://example.com/media-statements"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
@@ -328,7 +330,7 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "freq:instant",
                 "url:"+self.FEED_HASH_TWO
             ],
-            "description": "RSS Feed: https://somewhere.com/rss\nSubscription URL: https://somewhere.com/media-statements"
+            "description": f"RSS Feed: {self.FEED_TWO_FEED_URL}\nSubscription URL: https://somewhere.com/media-statements"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_two_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text

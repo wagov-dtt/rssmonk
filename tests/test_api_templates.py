@@ -8,6 +8,7 @@ import json
 import requests
 from requests.auth import HTTPBasicAuth
 
+from rssmonk.types import FEED_ACCOUNT_PREFIX
 from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
 
 
@@ -79,7 +80,9 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
     def test_delete_feed_templates_non_admin_credentials_failure(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
+
         # Delete at the end point with no payload
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd))
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
@@ -99,7 +102,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
 
         # Delete existing template that the account does not have access to (Should be bounced because this is an admin only form)
-        existing_template_to_delete = {"feed_url": "https://somewhere.com/rss", "phase_type": "subscribe"}
+        existing_template_to_delete = {"feed_url": self.FEED_TWO_FEED_URL, "phase_type": "subscribe"}
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=existing_template_to_delete)
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
@@ -107,7 +110,8 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
     def test_delete_feed_templates_non_admin_credentials_success(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # Non admin credentials, feed exists, DeleteTemplateRequest object
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         request = { "phase_type": "subscribe" }
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=request)
@@ -133,7 +137,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # Admin credentials, feeds exist, DeleteTemplateAdminRequest object
         delete_template_data = {
-            "feed_url": "https://example.com/rss/media-statements",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "phase_type": "subscribe"
         }
         response = requests.delete(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=delete_template_data)

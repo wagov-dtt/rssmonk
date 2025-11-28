@@ -4,6 +4,7 @@ from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
 
+from rssmonk.types import FEED_ACCOUNT_PREFIX
 from tests.conftest import LISTMONK_URL, MAILPIT_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
 
@@ -46,7 +47,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_non_admin_no_object(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin credential, feed exist, no object
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd))
@@ -55,7 +57,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_non_admin_subscribe_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin credential, feed exist, SubscribeRequest object
         sub_req = {
@@ -68,8 +71,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
-        assert "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8" in subscriber["attribs"]
-        feed_attribs = subscriber["attribs"]["0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"]
+        assert self.FEED_HASH_ONE in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_HASH_ONE]
         # Should only be a single item in here, the key is the guid.
         assert isinstance(feed_attribs, dict)
         assert "filter" not in feed_attribs
@@ -79,12 +82,13 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_non_admin_subscribe_admin_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin credential, feed exist, SubscribeAdminRequest object
         sub_req = {
             "email": "email@example.com",
-            "feed_url": "https://example.com/rss/media-statements",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "filter": {"instant": {"region": [1, 2]}},
             "display_text": {"instant": {"region": ["Verbose region 1", "Verbose region 2"]}}
         }
@@ -132,7 +136,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
     def test_post_subscribe_admin_subscribe_admin_request(self):
         self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         subscribe_data = {
-            "feed_url": "https://example.com/rss/media-statements",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "email": "john@example.com",
             "filter": {
                 "instant" : {
@@ -162,8 +166,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
-        assert "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8" in subscriber["attribs"]
-        feed_attribs = subscriber["attribs"]["0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"]
+        assert self.FEED_HASH_ONE in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_HASH_ONE]
         # Should only be a single item in here, the key is the guid.
         assert isinstance(feed_attribs, dict)
         assert "filter" not in feed_attribs
@@ -174,7 +178,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
     def test_post_subscribe_admin_subscribe_admin_request_with_bypass(self):
         self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         subscribe_data = {
-            "feed_url": "https://example.com/rss/media-statements",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "email": "john@example.com",
             "filter": {
                 "instant" : {
@@ -203,8 +207,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         # - Check listmonk for attribs feed with only and token existance
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
-        assert "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8" in subscriber["attribs"]
-        feed_attribs = subscriber["attribs"]["0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"]
+        assert self.FEED_HASH_ONE in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_HASH_ONE]
         # Should only be a single item in here, the key is the guid.
         assert isinstance(feed_attribs, dict)
         assert "filter" in feed_attribs
@@ -224,7 +228,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_confirm_non_admin_credentials(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin, no object
         confirm_req = {}
@@ -244,7 +249,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_confirm_non_admin_credentials_success(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
 
         # Non admin, SubscribeConfirmRequest object, valid values
         confirm_req = {"subscriber_id": "", "guid": ""}

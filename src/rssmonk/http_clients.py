@@ -291,7 +291,6 @@ class ListmonkClient:
             "data": data,
             "content_type": content_type
         }
-        print(payload)
         return self.post("/api/tx", payload)
 
     def get_users(self) -> list | None:

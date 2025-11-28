@@ -156,7 +156,7 @@ class SubscribeConfirmRequest(BaseModel):
         return value
 
 class UnsubscribeRequest(BaseModel):
-    """Response model for a subscription preferences (filter)."""
+    """Request model for unsubscribing from a feed."""
     subscriber_id: str = Field(..., description="The id of the subscriber")
     token: str = Field(..., description="The token to match against the subscriber's filter to remove")
 
@@ -172,10 +172,15 @@ class UnsubscribeRequest(BaseModel):
         return value
 
 class UnsubscribeAdminRequest(BaseModel):
-    """Response model for a subscription preferences (filter)."""
+    """Admin request model for unsubscribing from a feed."""
     email: str = Field(..., description="Subscriber email address ")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to unsubscribe from")
     bypass_confirmation: Optional[bool] = Field(False, description="Bypass any second email that might be send out for unsubscribing")
+
+class ClearSubscriberRequest(BaseModel):
+    """Request model for clearing all subscribers from a feed."""
+    feed_url: HttpUrl = Field(..., description="RSS feed URL to unsubscribe from")
+
 
 # Response Models
 

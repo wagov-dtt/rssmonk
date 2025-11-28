@@ -23,6 +23,7 @@ from .logging_config import get_logger
 from .models import (
     ApiAccountResponse,
     BulkProcessResponse,
+    ClearSubscriberRequest,
     DeleteTemplateAdminRequest,
     DeleteTemplateRequest,
     EmptyResponse,
@@ -60,7 +61,6 @@ if Settings.ensure_env_file():
     print("Created .env file with default settings. Please edit LISTMONK_ADMIN_PASSWORD before starting.")
 
 settings = Settings()
-security = HTTPBasic()
 
 # Configure Swagger UI with actual credentials from environment
 swagger_ui_params = {
@@ -149,6 +149,7 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
     """Validate credentials against Listmonk API."""
     if settings.validate_admin_auth(credentials.username, credentials.password):
         return credentials.username, credentials.password
+
     try:
         # Test credentials against Listmonk
         async with httpx.AsyncClient() as client:
@@ -169,6 +170,7 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Listmonk service unavailable"
         )
+
 
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
@@ -597,19 +599,21 @@ async def delete_feed_by_url(
 
     try:
         with rss_monk:
+            subscriber_list = []
+
             # Find all subscribers that are subscribed to the feed
             feed_hash = make_url_hash(str(request.feed_url))
             feed_data = rss_monk.get_feed_by_hash(feed_hash)
-            subscriber_list = []
-
             if feed_data is not None:
-                # If feed_data is none, ignore
+                # Notify subscriber list if it exists
                 # http://localhost:9000/api/subscribers?list_id=1&page=1&per_page=100
                 subscriber_list = _get_all_feed_subscribers(rss_monk._client, feed_data.id)
 
                 if request.notify:
                     # Send campaign email to announce the closure of a mailing list
-                    # TODO
+                    # TODO - Will need to figure out what to do here and if we have to (probably)
+                    # extend FeedDeleteRequest to add in the new URL for a notification.
+                    # OR, no URL to send the old one... -> NEW /api/feeds/reset-subscribers as functionality for 
                     pass
 
             # Deleting the feed will automatically remove it from all subscribers
@@ -915,7 +919,7 @@ async def feed_subscribe_confirm(
                 # React as if it has expired
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
-            # Expired links are removed from the attributes for one feed
+            # Expired links is removed from the attributes for one feed
             if feed_attribs[req_uuid]['expires'] < datetime.now(timezone.utc).timestamp():
                 # No deletion will occur here, there will be a cronjob to remove expired pending filters
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
@@ -1001,7 +1005,6 @@ async def feed_unsubscribe(
             if feed_hash in subscriber_details["attribs"]:
                 previous_filter = subscriber_details["attribs"][feed_hash]
                 # If not admin, match token in the subscriber
-                print(f"Token for {feed_hash} is {token}, with previous token is {previous_filter["token"]}")
                 if not is_valid_admin and token != previous_filter["token"]:
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Incorrect token")
                 del subscriber_details["attribs"][feed_hash]
@@ -1045,6 +1048,31 @@ async def feed_unsubscribe(
         traceback.print_exception(e)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed") from e
 
+
+@app.post(
+    "/api/feeds/clear-feed-subscribers",
+    response_model=EmptyResponse,
+    status_code=501, # TODO - Remove 
+    tags=["feeds"],
+    summary="Unsubscribes all users from an existing feed, but does not delete the feed.",
+    description="Unsubscribes all users from an existing feed, but does not delete the feed."
+)
+async def clear_feed_subscribers(
+    request: ClearSubscriberRequest,
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    rss_monk: RSSMonk = Depends(get_rss_monk)   
+):
+    """Feed subscription confirmation endpoint."""
+    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED, detail="This will be implemented at a later date")
+    try:
+        with rss_monk:
+             pass
+    except ValueError as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        logger.error("Failed to unsubscribe: %s", e)
+        traceback.print_exception(e)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed") from e   
 
 @app.post(
     "/api/public/subscribe",
@@ -1191,18 +1219,19 @@ async def public_listmonk_passthrough(
 
 
 
-def _get_all_feed_subscribers(client: ListmonkClient, feed_ident: int):
+def _get_all_feed_subscribers(client: ListmonkClient, feed_ident: int) -> list[dict]:
     """Fetch all pages and put into a list"""
     try:
         subscriber_list = []
 
-        total_pages = 10
+        keep_retrieving = True
         page = 1
-        while page <= total_pages:
+        while keep_retrieving:
             data = client.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
             norm_data = client._normalize_results(data)
-            subscriber_list += norm_data
-            total_pages = data["total"]
+            subscriber_list.extend(norm_data)
+            keep_retrieving = (data["page"] * data["per_page"]) < data["total"]
+            # Total here means total number of records extracted by the query, then paginated
             page += 1
     except Exception as e:
         traceback.print_exc()

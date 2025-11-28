@@ -8,13 +8,16 @@ from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
 
+from rssmonk.types import FEED_ACCOUNT_PREFIX
 from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
 
 
 class TestRSSMonkFeedAccount(ListmonkClientTestBase):
     def test_create_feed_account_unauthorized(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(init_data.accounts.items()))
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
+
         payload = {"feed_url": "http://another-example.com/rss"}
 
         # No credentials, no existing account, FeedAccountRequest object
@@ -42,7 +45,7 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
 
         # Admin credential, existing feed, FeedAccountRequest object
-        payload = {"feed_url": "https://example.com/rss/media-statements"}
+        payload = {"feed_url": self.FEED_ONE_FEED_URL}
         response = requests.post(RSSMONK_URL+"/api/feeds/account", json=payload, auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.CONFLICT, f"{response.status_code}: {response.text}"
         assert "A user already exists for" in response.text
@@ -60,7 +63,7 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_LIST)
 
         # Admin credential, existing feed, FeedAccountRequest object
-        payload = {"feed_url": "https://example.com/rss/media-statements"}
+        payload = {"feed_url": self.FEED_ONE_FEED_URL}
         response = requests.post(RSSMONK_URL+"/api/feeds/account", json=payload, auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
         data = response.json()
@@ -86,7 +89,6 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         payload = {"account_name": "some_account"}
         response = requests.post(RSSMONK_URL+"/api/feeds/account-reset-password", json=payload, auth=("unknown", "account"))
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
-        self.assertEqual("", "", "")
 
         # Account credentials, existing different account, FeedAccountPasswordResetRequest object
         payload = {"account_name": "some_account"}
@@ -111,14 +113,25 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.NOT_FOUND, f"{response.status_code}: {response.text}"
 
 
+    def test_reset_password_self_reset(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
+        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        pwd = init_data.accounts[user]
+
+        # Admin credentials, existing account, FeedAccountPasswordResetRequest object
+        reset_payload = {"account_name": f"user_{self.FEED_HASH_ONE}"}
+        response = requests.post(RSSMONK_URL+"/api/feeds/account-reset-password", json=reset_payload, auth=HTTPBasicAuth(user, pwd))
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+
     def test_reset_password_success(self):
         self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
 
         # Admin credentials, existing account, FeedAccountPasswordResetRequest object
-        reset_payload = {"account_name": "user_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"}
+        reset_payload = {"account_name": f"user_{self.FEED_HASH_ONE}"}
         response = requests.post(RSSMONK_URL+"/api/feeds/account-reset-password", json=reset_payload, auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
         data = response.json()
-        assert data["name"] == "user_0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8"
+        assert data["name"] == f"user_{self.FEED_HASH_ONE}"
         assert "api_password" in data
         # TODO, need to check that the account still has the list role and limited user role 

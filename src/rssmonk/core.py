@@ -417,14 +417,13 @@ class RSSMonk:
                 return self._admin.delete_email_template(template["id"])
         return False
 
-    def delete_feed_templates(self, feed_url: str) -> bool:
+    def delete_feed_templates(self, feed_url: str):
         """Delete all templates associated with the feed"""
         templates = self._admin.get_templates()
         url_hash = make_url_hash(str(feed_url))
         for template in templates:
             if url_hash in template["name"]:
-                return self._admin.delete_email_template(template["id"])
-        return False
+                self._admin.delete_email_template(template["id"])
 
 
     # Subscriber operations. Data from these functions should not leak attributes 
@@ -536,6 +535,7 @@ class RSSMonk:
         self._client.update_subscriber(subs["id"], subs)
         return None if bypass_confirmation else filter_uuid
 
+
     def remove_subscriber_filter(self, email: str, feed_hash: str):
         """Removes the feed hash from the attribs"""
         sub_list = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
@@ -553,9 +553,11 @@ class RSSMonk:
         # Have to covert the extracted lists to be a list of numbers to retain subscriptions
         subs["lists"] = numberfy_subbed_lists(subs["lists"])
 
-        # Update the subscriber
-        self._client.update_subscriber(subs["id"], subs)
-        return
+        if len(subs["lists"]) > 0:
+            # Update the subscriber
+            self._client.update_subscriber(subs["id"], subs)
+        else:
+            self.getAdminClient().delete_subscriber(subs["id"])
 
 
     # Feed processing
@@ -564,7 +566,6 @@ class RSSMonk:
         """Process single feed - fetch articles and create campaigns using cache."""
         if auto_send is None:
             auto_send = self.settings.rss_auto_send
-#{'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
         try:
             # Fetch articles using cache
             articles, feed_title = await feed_cache.get_feed(
