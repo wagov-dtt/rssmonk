@@ -103,7 +103,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         self._insert_example_rss() # Add example rss
 
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         data = response.json()
         assert data["total"] == 3
         assert len(data["feeds"]) == 3 
@@ -118,14 +118,14 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
         feed_auth = HTTPBasicAuth("admin", "admin123")
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=feed_auth)
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         data = response.json()
         assert data["total"] == 3
 
 
     def test_list_feeds_empty_list(self):
         response = requests.get(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH)
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         data = response.json()
         assert data["total"] == 0
         assert data["feeds"] == []

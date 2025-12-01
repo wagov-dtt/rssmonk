@@ -121,6 +121,6 @@ analyze:
   scc --exclude-dir .git --by-file .
 
 # Docker build to test
-docker-run:
+docker:
   docker build -t  wagov-dtt/rssmonk:dev .
   docker images

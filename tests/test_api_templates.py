@@ -5,11 +5,12 @@ Test Feed API endpoints
 
 from http import HTTPStatus
 import json
+import os
 import requests
 from requests.auth import HTTPBasicAuth
 
 from rssmonk.types import FEED_ACCOUNT_PREFIX
-from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
+from tests.conftest import LISTMONK_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
 
 class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
@@ -29,10 +30,18 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
         self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # - Replace an existing feed template
-        pass
+        sub_template = {
+            "name": self.FEED_HASH_ONE+"-subscribe",
+            "subject": "Subscribed Subject Line",
+            "type": "tx",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=None, json=sub_template)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
-    def test_post_feed_templates_non_admin_credentials(self):
-        # - Post new feed template
+
+    def test_post_feed_templates_incorreect_credentials(self):
+        # - Post new feed template, with incorrect credentials
         sub_template = {
             "feed_url": "http://example.com/rss",
             "subject": "Subject Line",
@@ -43,10 +52,65 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth("not", "admin123"), json=sub_template)
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
-        # - Replace an existing feed template
-        pass
+        # - Replace an existing feed template, with incorrect credentials
+        sub_template = {
+            "feed_url": "http://example.com/rss",
+            "subject": "Subject Line",
+            "phase_type": "subscribe",
+            "template_type": "tx",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth("not", "admin123"), json=sub_template)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
-    def test_post_feed_templates_admin_credentials(self):
+
+    def test_post_feed_templates_non_admin_credentials(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user, pwd = next(iter(init_data.accounts.items()))
+        # - Post new feed template
+        sub_template = {
+            "feed_url": "http://example.com/rss",
+            "subject": "Subject Line",
+            "phase_type": "subscribe",
+            "template_type": "tx",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=sub_template)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+        # - Post new feed template, that the account does not have access to
+        sub_template = {
+            "feed_url": self.FEED_TWO_FEED_URL,
+            "template_type": "tx",
+            "phase_type": "subscribe",
+            "subject": "Subscribed Subject Line",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=sub_template)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+        # - Replace an existing feed template
+        sub_template = {
+            "feed_url": self.FEED_ONE_FEED_URL,
+            "template_type": "tx",
+            "phase_type": "subscribe",
+            "subject": "Very special template",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=HTTPBasicAuth(user, pwd), json=sub_template)
+        assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
+        assert "id" in response.json()
+        # Check to see that the number of templates has not increased and that the template has been saved
+        admin_session = make_admin_session()
+        response = admin_session.get(f"{LISTMONK_URL}/api/templates")
+        templates_list = response.json()["data"]
+        assert len(templates_list) == 3, templates_list
+        for template in templates_list:
+            if template["name"] == "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-subscribe":
+                assert template["subject"] == "Very special template"
+
+
+    def test_post_feed_templates_admin_credentials_no_feed(self):
         # - Admin credentials, no feeds, CreateTemplateRequest object
         sub_template = {
             "feed_url": "http://example.com/rss",
@@ -58,8 +122,28 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=sub_template)
         assert response.status_code == HTTPStatus.NOT_FOUND, f"{response.status_code}: {response.text}"
 
+
+    def test_post_feed_templates_admin_credentials_success(self):
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # - Replace an existing feed template
-        pass
+        sub_template = {
+            "feed_url": self.FEED_ONE_FEED_URL,
+            "template_type": "tx",
+            "phase_type": "subscribe",
+            "subject": "Very special template",
+            "body": "<html><body></body></html>"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=self.ADMIN_AUTH, json=sub_template)
+        assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
+        assert "id" in response.json()
+        # Check to see that the number of templates has not increased and that the template has been saved
+        admin_session = make_admin_session()
+        response = admin_session.get(f"{LISTMONK_URL}/api/templates")
+        templates_list = response.json()["data"]
+        assert len(templates_list) == 3, templates_list
+        for template in templates_list:
+            if template["name"] == "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-subscribe":
+                assert template["subject"] == "Very special template"
 
 
     # -------------------------

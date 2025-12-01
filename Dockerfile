@@ -8,10 +8,11 @@ LABEL org.opencontainers.image.licenses=Apache-2.0
 # Copy only the required source into the image
 ADD ./src /app
 # Need a few files from the parent directory
-COPY ./pyproject.toml ./uv.lock /app
+COPY ./pyproject.toml ./uv.lock /app/
 
 # Sync the project into a new environment, using the frozen lockfile
 WORKDIR /app
+RUN rm -rf /app/scrapbook /app/rssmonk.egg-info
 
 # Switch to a non root user
 RUN  adduser --uid 10001 appuser && chown appuser:appuser -R .

@@ -310,7 +310,7 @@ async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(secur
 @app.post(
     "/api/feeds",
     response_model=FeedResponse,
-    status_code=201,
+    status_code=HTTPStatus.CREATED,
     tags=["feeds"],
     summary="Create RSS Feed (Requires admin privileges)",
     description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Requires admin privileges."
@@ -347,7 +347,7 @@ async def create_feed(
 @app.post(
     "/api/feeds/templates",
     response_model=TemplateResponse,
-    status_code=201,
+    status_code=HTTPStatus.CREATED,
     tags=["feeds"],
     summary="Create email templates for RSS Feed",
     description="Creates or updates email templates for RSS feed for newsletter generation."
@@ -424,7 +424,7 @@ async def delete_feed_template(
 @app.post(
     "/api/feeds/account",
     response_model=ApiAccountResponse,
-    status_code=201,
+    status_code=HTTPStatus.CREATED,
     tags=["feeds"],
     summary="Create account RSS Feed (Requires admin privileges)",
     description="Create a new limited access account to operate on the feed. Requires admin privileges."
@@ -471,7 +471,7 @@ async def create_feed_account(
 @app.post(
     "/api/feeds/account-reset-password",
     response_model=ApiAccountResponse,
-    status_code=201,
+    status_code=HTTPStatus.CREATED,
     tags=["feeds"],
     summary="Resets the password for a RSS Feed account (Requires admin privileges)",
     description="Resets the password for a RSS Feed account. Requires admin privileges."
@@ -880,7 +880,7 @@ async def feed_subscribe(
 
 @app.post(
     "/api/feeds/subscribe-confirm",
-    response_model=EmptyResponse,
+    status_code=HTTPStatus.OK,
     tags=["feeds"],
     summary="Confirm subscription to a Feed",
     description="Confirm the filtered subscription of an email address to an RSS feed. Authentication required"
@@ -933,7 +933,6 @@ async def feed_subscribe_confirm(
             subs["lists"] = numberfy_subbed_lists(subs["lists"])
             # Update the subscriber
             rss_monk.getClient().update_subscriber(subs["id"], subs)
-            return EmptyResponse()
        
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -945,7 +944,7 @@ async def feed_subscribe_confirm(
 
 @app.post(
     "/api/feeds/unsubscribe",
-    response_model=EmptyResponse,
+    status_code=HTTPStatus.OK,
     tags=["feeds"],
     summary="Unsubscribes a user from a Feed",
     description="Removes the email address from a RSS feed. Authentication required"
@@ -991,7 +990,7 @@ async def feed_unsubscribe(
                     # Log this discrepency. The feed appears to have gome missing, with the account linked to it, still existing
                     logger.warning("Non existent feed (hash: %s) access with user account %s. Possible misconfiguration",
                                    feed_hash, credentials.username)
-                return EmptyResponse()
+                return
             feed_data = rss_monk._parse_feed_from_list(feed_list)
 
             # Remove list from subscriber's list
@@ -1022,7 +1021,7 @@ async def feed_unsubscribe(
                     logger.error("No unsubscribe template found for feed %s. Skipping", feed_hash)
                     # TODO - Add option in list description for optional email, or for confirm unsubscribe link(?), when feature is requrested
                     # Currently okay to return empty. User is unsubscribed, the notification is a courtesy
-                    return EmptyResponse()
+                    return
 
                 subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
                 transaction = {
@@ -1052,7 +1051,7 @@ async def feed_unsubscribe(
 @app.post(
     "/api/feeds/clear-feed-subscribers",
     response_model=EmptyResponse,
-    status_code=501, # TODO - Remove 
+    status_code=HTTPStatus.NOT_IMPLEMENTED, # TODO - Remove 
     tags=["feeds"],
     summary="Unsubscribes all users from an existing feed, but does not delete the feed.",
     description="Unsubscribes all users from an existing feed, but does not delete the feed."

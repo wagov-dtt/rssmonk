@@ -300,7 +300,6 @@ class ListmonkClient:
 
 
 @deprecated("Should not be used.")
-# TODO - Why is this here?
 def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk/2.0"):
     """Deprecarted - Fetch and parse RSS feed. """
     try:

@@ -9,7 +9,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from rssmonk.types import FEED_ACCOUNT_PREFIX
-from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
+from tests.conftest import LISTMONK_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
 
 class TestRSSMonkFeedAccount(ListmonkClientTestBase):
@@ -134,4 +134,4 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         data = response.json()
         assert data["name"] == f"user_{self.FEED_HASH_ONE}"
         assert "api_password" in data
-        # TODO, need to check that the account still has the list role and limited user role 
+        assert len(dict(data).get("api_password", "")) == 32

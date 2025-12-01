@@ -186,8 +186,14 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
 
         # Admin credentials, feed existing, valid UnsubscribeAdminRequest object
-        unsub_request = {"email": "", "feed_url": "", "bypass_confirmation" : True}
+        unsub_request = {"email": "example@example.com", "feed_url": self.FEED_ONE_FEED_URL, "bypass_confirmation" : True}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_request)
-        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
-        # TODO - Check email
-        # TODO - Check to see if user exists (should have been removed)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+        
+        # Check email
+        response = requests.get(MAILPIT_URL+"/api/v1/messages?limit=50")
+        assert response.json()["unread"] == 0
+
+        # Check to see if subscriber exists (should have been removed)
+        response = make_admin_session().get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'example@example.com'"})
+        assert len(response.json()["data"]["results"]) == 0

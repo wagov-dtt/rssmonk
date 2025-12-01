@@ -149,7 +149,7 @@ def listmonk_setup():
         "appearance.public.custom_js": "",
         "upload.s3.aws_secret_access_key": ""
     })
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     time.sleep(5) # Listmonk will reload, so a pause is needed
 
 
