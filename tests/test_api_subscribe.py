@@ -47,7 +47,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_non_admin_no_object(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin credential, feed exist, no object
@@ -57,7 +57,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_non_admin_subscribe_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin credential, feed exist, SubscribeRequest object
@@ -71,8 +71,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
-        assert self.FEED_HASH_ONE in subscriber["attribs"]
-        feed_attribs = subscriber["attribs"][self.FEED_HASH_ONE]
+        assert self.FEED_ONE_HASH in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
         # Should only be a single item in here, the key is the guid.
         assert isinstance(feed_attribs, dict)
         assert "filter" not in feed_attribs
@@ -82,7 +82,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_non_admin_subscribe_admin_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin credential, feed exist, SubscribeAdminRequest object
@@ -166,8 +166,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
-        assert self.FEED_HASH_ONE in subscriber["attribs"]
-        feed_attribs = subscriber["attribs"][self.FEED_HASH_ONE]
+        assert self.FEED_ONE_HASH in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
         # Should only be a single item in here, the key is the guid.
         assert isinstance(feed_attribs, dict)
         assert "filter" not in feed_attribs
@@ -207,8 +207,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         # - Check listmonk for attribs feed with only and token existance
         response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
-        assert self.FEED_HASH_ONE in subscriber["attribs"]
-        feed_attribs = subscriber["attribs"][self.FEED_HASH_ONE]
+        assert self.FEED_ONE_HASH in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
         # Should only be a single item in here, the key is the guid.
         assert isinstance(feed_attribs, dict)
         assert "filter" in feed_attribs
@@ -228,7 +228,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_confirm_non_admin_credentials(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin, no object
@@ -249,7 +249,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
     def test_post_subscribe_confirm_non_admin_credentials_success(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin, SubscribeConfirmRequest object, valid values
@@ -273,6 +273,6 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
 
         sub_tokens = init_data.subscribers[self.one_feed_subscriber_uuid]
         # Admin, SubscribeConfirmRequest object, valid values - Rejected because admin should go to /api/feeds/subscribe
-        confirm_req = {"subscriber_id": self.one_feed_subscriber_uuid, "guid": sub_tokens[self.FEED_HASH_ONE]}
+        confirm_req = {"subscriber_id": self.one_feed_subscriber_uuid, "guid": sub_tokens[self.FEED_ONE_HASH]}
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=self.ADMIN_AUTH, json=confirm_req)
         assert response.status_code == HTTPStatus.FORBIDDEN, f"{response.status_code}: {response.text}"

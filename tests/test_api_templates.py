@@ -19,7 +19,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
     # -------------------------
     def test_post_feed_templates_no_credentials(self):
         sub_template = {
-            "feed_url": "http://example.com/rss",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "subject": "Subject Line",
             "phase_type": "subscribe",
             "template_type": "tx",
@@ -31,7 +31,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # - Replace an existing feed template
         sub_template = {
-            "name": self.FEED_HASH_ONE+"-subscribe",
+            "name": self.FEED_ONE_HASH+"-subscribe",
             "subject": "Subscribed Subject Line",
             "type": "tx",
             "body": "<html><body></body></html>"
@@ -43,7 +43,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
     def test_post_feed_templates_incorreect_credentials(self):
         # - Post new feed template, with incorrect credentials
         sub_template = {
-            "feed_url": "http://example.com/rss",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "subject": "Subject Line",
             "phase_type": "subscribe",
             "template_type": "tx",
@@ -54,7 +54,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
         # - Replace an existing feed template, with incorrect credentials
         sub_template = {
-            "feed_url": "http://example.com/rss",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "subject": "Subject Line",
             "phase_type": "subscribe",
             "template_type": "tx",
@@ -66,10 +66,10 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
     def test_post_feed_templates_non_admin_credentials(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user, pwd = next(iter(init_data.accounts.items()))
-        # - Post new feed template
+        user, pwd = next(iter(init_data.accounts.items())) # Feed one credentials
+        # - Post new feed template, using an account with limited role
         sub_template = {
-            "feed_url": "http://example.com/rss",
+            "feed_url": "https://brand-new-feed.com",
             "subject": "Subject Line",
             "phase_type": "subscribe",
             "template_type": "tx",
@@ -113,7 +113,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
     def test_post_feed_templates_admin_credentials_no_feed(self):
         # - Admin credentials, no feeds, CreateTemplateRequest object
         sub_template = {
-            "feed_url": "http://example.com/rss",
+            "feed_url": self.FEED_ONE_FEED_URL,
             "subject": "Subject Line",
             "phase_type": "subscribe",
             "template_type": "tx",
@@ -164,7 +164,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
 
     def test_delete_feed_templates_non_admin_credentials_failure(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Delete at the end point with no payload
@@ -194,7 +194,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
     def test_delete_feed_templates_non_admin_credentials_success(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         # Non admin credentials, feed exists, DeleteTemplateRequest object
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         request = { "phase_type": "subscribe" }

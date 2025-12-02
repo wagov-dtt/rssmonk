@@ -86,8 +86,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
 
     def test_feeds_process_no_feed_admin(self):
-        # Admin, process feed that does not exist
-        process_data = {"feed_url": "http://example.com/rss"}
+        # Admin, process feed that does not exist (yet)
+        process_data = {"feed_url": self.FEED_ONE_FEED_URL}
         response = requests.post(RSSMONK_URL+"/api/feeds/process", auth=self.ADMIN_AUTH, json=process_data)
         assert response.status_code == HTTPStatus.NOT_FOUND, f"{response.status_code}: {response.text}"
 
@@ -172,10 +172,10 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert "total_emails_sent" in data and data["total_emails_sent"] == 0
 
 
-    def test_feeds_bulk_process_feed_admin(self):
+    def test_feeds_bulk_process_feed_instant_admin(self):
         self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        # Admin, process existing feeds
 
+        # Admin, process existing feeds with instant tag
         response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/instant", auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         data = response.json()
@@ -184,16 +184,28 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert "total_emails_sent" in data and data["total_emails_sent"] == 0
         # TODO - Check emails
 
+
+    def test_feeds_bulk_process_feed_daily_admin(self):
+        self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+
+        # Admin, process existing feeds with instant tag
         response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/daily", auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         data = response.json()
         assert "frequency" in data and data["frequency"] == "daily"
-        assert "feeds_processed" in data and data["feeds_processed"] == 1
+        assert "feeds_processed" in data and data["feeds_processed"] == 2
         assert "total_emails_sent" in data and data["total_emails_sent"] == 0
+        # TODO - Check emails
 
+
+    def test_feeds_bulk_process_feed_weekly_admin(self):
+        self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+
+        # Admin, process existing feeds with instant tag
         response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/weekly", auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         data = response.json()
         assert "frequency" in data and data["frequency"] == "weekly"
-        assert "feeds_processed" in data and data["feeds_processed"] == 0
+        assert "feeds_processed" in data and data["feeds_processed"] == 1
         assert "total_emails_sent" in data and data["total_emails_sent"] == 0
+        # TODO - Check emails

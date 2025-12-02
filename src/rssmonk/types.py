@@ -23,6 +23,7 @@ def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
             "check_day": None,
             "description": "Daily at 5pm",
         },
+        # This option should be rarely used, but is available
         "freq:weekly": {
             "interval_minutes": None,
             "check_time": (17, 0),  # 5pm

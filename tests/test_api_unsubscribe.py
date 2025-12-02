@@ -30,7 +30,7 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_request_failures(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin credentials, feed existing, no object
@@ -64,7 +64,7 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         assert "Invalid subscriber details" in response.text
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, no ID value, token is valid
-        unsub_5_request = {"subscriber_id": "", "token": sub_tokens[self.FEED_HASH_ONE]}
+        unsub_5_request = {"subscriber_id": "", "token": sub_tokens[self.FEED_ONE_HASH]}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_5_request)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Value error, badly formed hexadecimal UUID string" in response.text
@@ -84,12 +84,12 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_request_valid_data(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
         sub_tokens = init_data.subscribers[self.one_feed_subscriber_uuid]
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, ID value, valid token
-        unsub_request = {"subscriber_id": self.one_feed_subscriber_uuid, "token": sub_tokens[self.FEED_HASH_ONE]}
+        unsub_request = {"subscriber_id": self.one_feed_subscriber_uuid, "token": sub_tokens[self.FEED_ONE_HASH]}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
 
@@ -101,12 +101,12 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_request_multiple_subscriptions(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
         sub_tokens = init_data.subscribers[self.two_feed_subscriber_uuid]
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, ID value, valid token
-        unsub_request = {"subscriber_id": self.two_feed_subscriber_uuid, "token": sub_tokens[self.FEED_HASH_ONE]}
+        unsub_request = {"subscriber_id": self.two_feed_subscriber_uuid, "token": sub_tokens[self.FEED_ONE_HASH]}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=HTTPBasicAuth(user, pwd), json=unsub_request)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
 
@@ -118,7 +118,7 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin credentials, feed existing, UnsubscribeRequest object, empty values
@@ -131,7 +131,7 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
 
     def test_post_unsubscribe_non_admin_unsubscribe_admin_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Non admin credentials, feed existing, UnsubscribeAdminRequest object
@@ -186,7 +186,8 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
 
         # Admin credentials, feed existing, valid UnsubscribeAdminRequest object
-        unsub_request = {"email": "example@example.com", "feed_url": self.FEED_ONE_FEED_URL, "bypass_confirmation" : True}
+        email_address = "example@example.com"
+        unsub_request = {"email": email_address, "feed_url": self.FEED_ONE_FEED_URL, "bypass_confirmation" : True}
         response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=self.ADMIN_AUTH, json=unsub_request)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         
@@ -195,5 +196,8 @@ class TestRSSMonkUnsubscribe(ListmonkClientTestBase):
         assert response.json()["unread"] == 0
 
         # Check to see if subscriber exists (should have been removed)
-        response = make_admin_session().get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'example@example.com'"})
-        assert len(response.json()["data"]["results"]) == 0
+        response = make_admin_session().get(LISTMONK_URL+"/api/subscribers", json={"query": f"subscribers.email = '%{email_address}%'"})
+        subscribers = response.json()["data"]["results"]
+        assert len(subscribers) == 1
+        for subscriber in subscribers:
+            assert subscriber["email"] != email_address # The query permits partial matches

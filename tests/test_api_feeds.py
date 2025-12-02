@@ -226,6 +226,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         }
         response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
         assert (response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT), f"{response.status_code}: {response.text}"
+        assert "" in response.text
 
         # - list_visibility
         create_feed_data = {
@@ -355,7 +356,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         response = requests.get(RSSMONK_URL+"/api/feeds/by-url", auth=HTTPBasicAuth(user, pwd), params=get_feed_data)
         assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         data = response.json()
-        assert "email_base_url" in data and data["email_base_url"] == "https://example.com/media-statements"
+        assert "email_base_url" in data and data["email_base_url"] == "https://example.com/rss/media-statements"
         assert "name" in data and data["name"] ==  "Example Media Statements"
 
 
@@ -412,8 +413,10 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         admin_session = make_admin_session()
         response = admin_session.get(f"{LISTMONK_URL}/api/lists?minimal=true&per_page=all")
         lists_data = response.json()["data"]["results"] if "results" in response.json()["data"] else []
-        assert len(lists_data) == 1, lists_data
-        assert self.FEED_ONE_FEED_URL not in lists_data
+        assert len(lists_data) == 2, lists_data
+        for list_item in lists_data:
+            assert isinstance(list_item, dict)
+            assert self.FEED_ONE_FEED_URL not in list_item
 
         # - Check the subscriber is no longer subscribed to the list (or has been deleted)
         response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
@@ -425,22 +428,22 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         # - Check the user role for the list is removed
         response = admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
         role_lists_data = response.json()["data"]
-        assert len(lists_data) == 1, role_lists_data
+        assert len(lists_data) == 2, role_lists_data
         for list_data in role_lists_data:
-            assert self.FEED_HASH_ONE not in list_data["name"]
+            assert self.FEED_ONE_HASH not in list_data["name"]
 
         # - Check the users if left with only admin (only role left)
         response = admin_session.get(f"{LISTMONK_URL}/api/users")
         users_data = response.json()["data"]
         assert len(users_data) == 2, users_data
         for list_data in users_data:
-            assert self.FEED_HASH_ONE not in list_data["name"]
+            assert self.FEED_ONE_HASH not in list_data["name"]
 
         # - Check the list templates is removed
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")
         template_list_data = response.json()["data"]
         for list_data in template_list_data:
-            assert self.FEED_HASH_ONE not in list_data["name"]
+            assert self.FEED_ONE_HASH not in list_data["name"]
 
 
     # -------------------------
@@ -453,7 +456,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
     def test_get_subscribe_preferences_non_admin_credentials(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         response = requests.get(RSSMONK_URL+"/api/feeds/subscribe-preferences", auth=HTTPBasicAuth(user, pwd))

@@ -2,6 +2,7 @@
 
 import os
 import hmac
+import traceback
 from warnings import deprecated
 import httpx
 import uuid
@@ -17,7 +18,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, FEED_URL_RSSMONK_QUERY, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -605,7 +606,9 @@ class RSSMonk:
 
         except Exception as e:
             logger.error(f"Feed processing failed for {feed.name}: {e}")
+            traceback.print_exc()
             return 0
+
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
         """Process all feeds of given frequency that are due."""
@@ -613,7 +616,9 @@ class RSSMonk:
         results = {}
 
         for feed in feeds:
+            # TODO - Only handing instant and not the others
             if self._should_poll(frequency, feed):
+                print(f"Processing {frequency.value} {feed.name}")
                 results[feed.name] = await self.process_feed(feed)
 
         # TODO - Consider using for loop below if required
@@ -637,7 +642,7 @@ class RSSMonk:
             import feedparser
 
             feed = feedparser.parse(url)
-            return feed.feed.get("title", url)
+            return feed.get("title", url)
         except Exception:
             return url
 
@@ -691,7 +696,7 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            if tag.startswith(f"last-seen:{feed.poll_frequencies.value}:"):
+            if str(tag).startswith(f"last-seen:{feed.poll_frequencies.value}:"):
                 last_guid = tag.split(":", 3)[3]
                 break
 
@@ -706,7 +711,9 @@ class RSSMonk:
         return articles
 
     def _should_poll(self, current_frequency: Frequency, feed: Feed) -> bool:
-        """Check if feed should be polled."""
+        """Determine if a feed should be polled based on frequency settings."""
+        now = datetime.now()
+
         config = AVAILABLE_FREQUENCY_SETTINGS().get(f"freq:{current_frequency.value}")
         if not config:
             return False
@@ -717,37 +724,39 @@ class RSSMonk:
 
         last_poll = None
         for tag in tags:
-            if tag.startswith(f"last-poll:{current_frequency.value}:"):
+            print(tag)
+            if str(tag).startswith(f"last-poll:{current_frequency.value}:"):
                 try:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
                 except (ValueError, IndexError):
                     continue
 
-        now = datetime.now()
 
-        # Interval-based check
+        # If no last_poll data, allow polling immediately to get the data into the list
+        if not last_poll:
+            return True
+
+        # TODO - I think these checks need to be more explicit
+
+        # Interval-based check (instant)
         if config.get("interval_minutes"):
-            if not last_poll:
-                return True
-            return now - last_poll > timedelta(minutes=config["interval_minutes"])
+            return now - last_poll > timedelta(minutes=config["interval_minutes"]) # Is this adding time? Should be substracting time
 
         # Time-based check (daily/weekly)
         if config.get("check_time"):
             target_hour, target_minute = config["check_time"]
+            target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
 
             # Increased tolerance for negative drift
             if config.get("check_day") is not None:  # Weekly
                 if now.weekday() != config["check_day"]:
                     return False
-                if last_poll:
-                    if last_poll > now - timedelta(weeks=1, minutes=15):
-                        return False
+                if last_poll and last_poll > now - timedelta(weeks=1, minutes=15):
+                    return False
             else:  # Daily
-                if last_poll:
-                    if last_poll > now - timedelta(days=1, minutes=15):
-                        return False
+                if last_poll and last_poll > now - timedelta(days=1, minutes=15):
+                    return False
 
-            target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
             return now >= target_time
 
         return False
@@ -764,8 +773,8 @@ class RSSMonk:
         # Remove old state tags
         tags = [
             t for t in tags
-            if not t.startswith(f"last-poll:{feed.poll_frequencies.value}:")
-            and not t.startswith(f"last-seen:{feed.poll_frequencies.value}:")
+            if not str(t).startswith(f"last-poll:{feed.poll_frequencies.value}:")
+            and not str(t).startswith(f"last-seen:{feed.poll_frequencies.value}:")
         ]
 
         # Add new poll time
@@ -774,7 +783,7 @@ class RSSMonk:
         tags.append(f"last-poll:{feed.poll_frequencies.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
-        if articles:
+        if articles and len(articles) > 0:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
             tags.append(f"last-seen:{feed.poll_frequencies.value}:{latest_guid}")
 

@@ -15,7 +15,7 @@ from tests.conftest import LISTMONK_URL, RSSMONK_URL, UnitTestLifecyclePhase, Li
 class TestRSSMonkFeedAccount(ListmonkClientTestBase):
     def test_create_feed_account_unauthorized(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         payload = {"feed_url": "http://another-example.com/rss"}
@@ -35,7 +35,7 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
 
     def test_create_feed_account_no_feed(self):
         # Admin credential, no existing feed, FeedAccountRequest object
-        payload = {"feed_url": "http://example.com/rss"}
+        payload = {"feed_url": self.FEED_ONE_FEED_URL}
         response = requests.post(RSSMONK_URL+"/api/feeds/account", json=payload, auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, f"{response.status_code}: {response.text}"
         assert "List does not exist" in response.text
@@ -115,11 +115,11 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
 
     def test_reset_password_self_reset(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
-        user = FEED_ACCOUNT_PREFIX + self.FEED_HASH_ONE
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
         pwd = init_data.accounts[user]
 
         # Admin credentials, existing account, FeedAccountPasswordResetRequest object
-        reset_payload = {"account_name": f"user_{self.FEED_HASH_ONE}"}
+        reset_payload = {"account_name": f"user_{self.FEED_ONE_HASH}"}
         response = requests.post(RSSMONK_URL+"/api/feeds/account-reset-password", json=reset_payload, auth=HTTPBasicAuth(user, pwd))
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
@@ -128,10 +128,10 @@ class TestRSSMonkFeedAccount(ListmonkClientTestBase):
         self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT)
 
         # Admin credentials, existing account, FeedAccountPasswordResetRequest object
-        reset_payload = {"account_name": f"user_{self.FEED_HASH_ONE}"}
+        reset_payload = {"account_name": f"user_{self.FEED_ONE_HASH}"}
         response = requests.post(RSSMONK_URL+"/api/feeds/account-reset-password", json=reset_payload, auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
         data = response.json()
-        assert data["name"] == f"user_{self.FEED_HASH_ONE}"
+        assert data["name"] == f"user_{self.FEED_ONE_HASH}"
         assert "api_password" in data
         assert len(dict(data).get("api_password", "")) == 32

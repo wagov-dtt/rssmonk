@@ -258,8 +258,8 @@ async def health_check() -> HealthResponse:
     "/metrics",
     response_model=str,
     tags=["health"],
-    summary="Obtain metrics (Requires admin privileges)",
-    description="Obtain metrics about RSSMonk (Requires admin privileges)"
+    summary="Obtain metrics (Admin only)",
+    description="Obtain metrics about RSSMonk (Admin only)"
 )
 async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> str:
     """Metrics endpoint."""
@@ -312,8 +312,8 @@ async def clear_cache(credentials: Annotated[HTTPBasicCredentials, Depends(secur
     response_model=FeedResponse,
     status_code=HTTPStatus.CREATED,
     tags=["feeds"],
-    summary="Create RSS Feed (Requires admin privileges)",
-    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Requires admin privileges."
+    summary="Create RSS Feed (Admin only)",
+    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Admin only."
 )
 async def create_feed(
     request: FeedCreateRequest,
@@ -426,8 +426,8 @@ async def delete_feed_template(
     response_model=ApiAccountResponse,
     status_code=HTTPStatus.CREATED,
     tags=["feeds"],
-    summary="Create account RSS Feed (Requires admin privileges)",
-    description="Create a new limited access account to operate on the feed. Requires admin privileges."
+    summary="Create account RSS Feed (Admin only)",
+    description="Create a new limited access account to operate on the feed. Admin only."
 )
 async def create_feed_account(
     request: FeedAccountRequest,
@@ -473,8 +473,8 @@ async def create_feed_account(
     response_model=ApiAccountResponse,
     status_code=HTTPStatus.CREATED,
     tags=["feeds"],
-    summary="Resets the password for a RSS Feed account (Requires admin privileges)",
-    description="Resets the password for a RSS Feed account. Requires admin privileges."
+    summary="Resets the password for a RSS Feed account (Admin only)",
+    description="Resets the password for a RSS Feed account. Admin only."
 )
 async def create_feed_account(
     request: FeedAccountPasswordResetRequest,
@@ -584,9 +584,9 @@ async def get_feed_by_url(
 @app.delete(
     "/api/feeds/by-url",
     tags=["feeds"],
-    summary="Delete Feed by URL (Requires admin privileges)",
+    summary="Delete Feed by URL (Admin only)",
     description="Remove an RSS feed by its URL and remove it from all subscribers." \
-    " It will also remove list roles, the account created and all associated email templates. Requires admin privileges."
+    " It will also remove list roles, the account created and all associated email templates. Admin only."
 )
 async def delete_feed_by_url(
     request: FeedDeleteRequest,
@@ -702,7 +702,7 @@ async def update_feed_configuration(
     response_model=FeedProcessResponse,
     tags=["processing"],
     summary="Process Single Feed",
-    description="Process a specific RSS feed and create email campaigns for new articles. Requires admin privileges."
+    description="Process a specific RSS feed and create email campaigns for new articles. Admin only."
 )
 async def process_feed(
     request: FeedProcessRequest,
@@ -737,7 +737,7 @@ async def process_feed(
     response_model=BulkProcessResponse,
     tags=["processing"],
     summary="Process Feeds by Frequency",
-    description="Process all RSS feeds of a specific frequency (used by cron jobs). Requires admin privileges."
+    description="Process all RSS feeds of a specific frequency (used by cron jobs). Admin only."
 )
 async def process_feeds_bulk(
     frequency: Frequency,
