@@ -330,7 +330,6 @@ class ListmonkClientTestBase(unittest.TestCase):
             "optin": "single",
             "tags": [
                 "freq:daily",
-                "freq:weekly",
                 "url:"+self.FEED_THREE_HASH
             ],
             "description": f"RSS Feed: {self.FEED_THREE_FEED_URL}\nSubscription URL: {self.FEED_THREE_FEED_URL}/media-statements"

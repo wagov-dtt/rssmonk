@@ -92,4 +92,4 @@ just start    # Deploy RSS Monk on k3d cluster
 - **"Emails not arriving"** - Verify RSS feed URL, check Mailpit at :8025
 - **"Want to start over"** - Run `just clean && just start`
 - **"How to add feeds"** - Use `just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily`
-- **"What frequencies work"** - 5min, daily, weekly
+- **"What frequencies work"** - 5min, daily

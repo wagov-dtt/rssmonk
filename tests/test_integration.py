@@ -67,11 +67,6 @@ class IntegrationTestSuite:
                 "url": "https://www.abc.net.au/news/feed/10719986/rss.xml", 
                 "frequency": "instant",
                 "name": "ABC News Instant"
-            },
-            {
-                "url": "https://feeds.reuters.com/reuters/topNews",
-                "frequency": "weekly",
-                "name": "Reuters Weekly"
             }
         ]
         
@@ -185,7 +180,7 @@ class IntegrationTestSuite:
             
         # Try to update the first feed's frequency
         original_feed = feeds[0]
-        new_frequency = "weekly" if original_feed["frequency"] != "weekly" else "daily"
+        new_frequency = "daily"
         
         # Delete old feed
         response = await client.delete(

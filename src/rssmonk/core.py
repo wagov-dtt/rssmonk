@@ -229,8 +229,8 @@ class RSSMonk:
         return self._admin.delete(f"/api/users/{users["id"]}")
 
 
-    def reset_api_user_password(self, username: str) -> str:
-        """Reset API user password."""
+    def reset_api_user_password(self, username: str) -> dict:
+        """Reset API user password. This function only makes a user with no roles attached to it"""
         # Currently we delete and recreate the user here.
         # In the future, Listmonk may have a reset api password functionality
         self.delete_api_user(username)
@@ -564,7 +564,7 @@ class RSSMonk:
     # Feed processing
 
     async def process_feed(self, feed: Feed, auto_send: Optional[bool] = None) -> int:
-        """Process single feed - fetch articles and create campaigns using cache."""
+        """Process single feed - fetch articles and send tx  using cache."""
         if auto_send is None:
             auto_send = self.settings.rss_auto_send
         try:

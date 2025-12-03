@@ -71,7 +71,6 @@ The RSS Monk API validates all credentials against Listmonk directly:
 
 - `instant` - Every 5 minutes
 - `daily` - Daily at 5pm Perth time (Australia/Perth)
-- `weekly` - Weekly on Friday at 5pm Perth time (Australia/Perth)
 
 ## Web Interfaces
 

@@ -129,9 +129,6 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
 
         response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/daily", auth=None)
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
-        
-        response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/weekly", auth=None)
-        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
     def test_feeds_bulk_process_non_admin(self):
@@ -142,9 +139,6 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
         response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/daily", auth=HTTPBasicAuth(user, pwd))
-        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
-        
-        response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/weekly", auth=HTTPBasicAuth(user, pwd))
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
@@ -161,13 +155,6 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         data = response.json()
         assert "frequency" in data and data["frequency"] == "daily"
-        assert "feeds_processed" in data and data["feeds_processed"] == 0
-        assert "total_emails_sent" in data and data["total_emails_sent"] == 0
-
-        response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/weekly", auth=self.ADMIN_AUTH)
-        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
-        data = response.json()
-        assert "frequency" in data and data["frequency"] == "weekly"
         assert "feeds_processed" in data and data["feeds_processed"] == 0
         assert "total_emails_sent" in data and data["total_emails_sent"] == 0
 
@@ -194,18 +181,5 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         data = response.json()
         assert "frequency" in data and data["frequency"] == "daily"
         assert "feeds_processed" in data and data["feeds_processed"] == 2
-        assert "total_emails_sent" in data and data["total_emails_sent"] == 0
-        # TODO - Check emails
-
-
-    def test_feeds_bulk_process_feed_weekly_admin(self):
-        self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
-
-        # Admin, process existing feeds with instant tag
-        response = requests.post(RSSMONK_URL+"/api/feeds/process/bulk/weekly", auth=self.ADMIN_AUTH)
-        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
-        data = response.json()
-        assert "frequency" in data and data["frequency"] == "weekly"
-        assert "feeds_processed" in data and data["feeds_processed"] == 1
         assert "total_emails_sent" in data and data["total_emails_sent"] == 0
         # TODO - Check emails

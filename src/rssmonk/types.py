@@ -23,13 +23,13 @@ def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
             "check_day": None,
             "description": "Daily at 5pm",
         },
-        # This option should be rarely used, but is available
-        "freq:weekly": {
-            "interval_minutes": None,
-            "check_time": (17, 0),  # 5pm
-            "check_day": 4,  # Friday
-            "description": "Weekly on Friday at 5pm",
-        },
+        # This option can be added on as a special case of daily (Collect 7 daily items and mail on the Friday)
+        #"freq:weekly": {
+        #    "interval_minutes": None,
+        #    "check_time": (17, 0),  # 5pm
+        #    "check_day": 4,  # Friday
+        #    "description": "Weekly on Friday at 5pm",
+        #},
     }
 
 class ListVisibilityType(StrEnum):
@@ -41,7 +41,7 @@ class Frequency(StrEnum):
     """Polling frequencies."""
     INSTANT = "instant"
     DAILY = "daily"
-    WEEKLY = "weekly"
+    #WEEKLY = "weekly"
 
 
 # Account prefixes
@@ -68,7 +68,7 @@ class EmailPhaseType(StrEnum):
     Email template types that may or may be used for emails.
     Mandatory emails
     - subscribe, 
-    - instant_digest, daily_digest, weekly_digest as required by the feed
+    - instant_digest, daily_digest as required by the feed
     """
     SUBSCRIBE = "subscribe"
     SUBSCRIBE_CONFIRM = "sub_confirm"
@@ -80,7 +80,7 @@ class EmailPhaseType(StrEnum):
 
     INSTANT_DIGEST = "instant_digest"
     DAILY_DIGEST = "daily_digest"
-    WEEKLY_DIGEST = "weekly_digest"
+    #WEEKLY_DIGEST = "weekly_digest"
 
 class ActionsURLSuffix(StrEnum):
     """Standardised URL patterns to append to base urls to perform actions"""

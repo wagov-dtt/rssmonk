@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import uuid
 
 
+# Fixed list of guid for testing
 guid_list = ["0209399a-8fc8-4034-86d0-a8423000",
              "87bad491-5bec-490b-b16a-defde001",
              "34b3e3aa-0975-4ff8-baf0-dd07d002",
@@ -80,12 +81,12 @@ def make_media_statements_feed(items: int) -> str:
         ET.SubElement(item, "link").text = f"hhttps://www.localhost:10000/rss/media-statements/project-update-{i+1}"
         ET.SubElement(item, "description").text = (
             f"Description number {i}\n"
-            f"Published: {base_date.strftime('%a, %d %b %Y %H:%M:%S +0800')}\n"
+            f"Published: {base_date.strftime('a, %d %b %Y %H:%M:%S +0800')}\n"
             f"Minister: {email_minister_str}\n"
             f"Portfolio: {email_portfolio_str}\n"
             f"Regions: {email_region_str}\n"
         )
-        ET.SubElement(item, "pubDate").text = base_date.strftime('%a, %d %b %Y %H:%M:%S +0800')
+        ET.SubElement(item, "pubDate").text = base_date.strftime('a, %d %b %Y %H:%M:%S +0800')
         ET.SubElement(item, "guid", {"isPermaLink": "false"}).text = guid_list[i]
         ET.SubElement(item, "wa:subject_entities").text = email_minister_str
         ET.SubElement(item, "wa:identifiers").text = f"{email_ident_str},region 8635"

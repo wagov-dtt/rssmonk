@@ -138,7 +138,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert "Subscription successful" == response_json["message"]
 
         # Get the guid from the subscriber attrib in feed and id is the subscriber"s uuid
-        response = admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'test@test.com'"})
+        response = admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email = 'test@test.com'"})
         subscriber = response.json()["data"]["results"][0]
         subscriber_uuid = str(subscriber["uuid"])
         assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" in subscriber["attribs"]
@@ -163,7 +163,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=account_auth, json=confirm_sub_data)
         assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
         # Check the feed attribs in the subscriber to ensure the filter has been set
-        response = admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email = 'test@test.com'"})
+        response = admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email = 'test@test.com'"})
         subscriber = response.json()["data"]["results"][0]
         assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" in subscriber["attribs"]
         feed_attribs = subscriber["attribs"]["091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180"]

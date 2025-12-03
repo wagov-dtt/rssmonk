@@ -69,7 +69,8 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd), json=sub_req)
         assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
-        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email='email@example.com'"})
+        print(response.json()["data"]["results"])
         subscriber = response.json()["data"]["results"][0]
         assert self.FEED_ONE_HASH in subscriber["attribs"]
         feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
@@ -164,7 +165,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert response.json()["unread"] == 1
         
         # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
-        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
         assert self.FEED_ONE_HASH in subscriber["attribs"]
         feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
@@ -173,6 +174,48 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert "filter" not in feed_attribs
         assert "token" not in feed_attribs
         assert len(feed_attribs.keys()) == 1
+
+
+    def test_post_subscribe_admin_subscribe_admin_request_bypass(self):
+        self.initialise_system(UnitTestLifecyclePhase.FEED_ACCOUNT) # Don't need templates yet
+        subscribe_data = {
+            "feed_url": self.FEED_ONE_FEED_URL,
+            "email": "john@example.com",
+            "filter": {
+                "instant" : {
+                    "ministers": [0, 1],
+                    "region": [2, 3],
+                    "portfolio": [2170, 2166]
+                }
+            },
+            "display_text": {
+                "instant" : {
+                    "ministers": ["Minister 1", "Minister 2"],
+                    "region": ["Region 2", "Region 3"],
+                    "portfolio": ["Portfolio 1", "Portfolio 2"]
+                }
+            },
+            "bypass_confirmation": True
+        }
+
+        # Admin credential, feed exist, SubscribeAdminRequest object
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=self.ADMIN_AUTH, json=subscribe_data)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        # - Check mailpit for no email
+        response = requests.get(MAILPIT_URL+"/api/v1/messages?limit=50")
+        assert response.json()["unread"] == 0
+
+        # - Check listmonk for attribs feed with only and token existance
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email='john@example.com'"})
+        subscriber = response.json()["data"]["results"][0]
+        assert self.FEED_ONE_HASH in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
+        # Should only be a single item in here, the key is the guid.
+        assert isinstance(feed_attribs, dict)
+        assert "filter" in feed_attribs
+        assert "token" in feed_attribs
+        assert len(feed_attribs.keys()) == 2, feed_attribs
 
 
     def test_post_subscribe_admin_subscribe_admin_request_with_bypass(self):
@@ -205,7 +248,7 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert response.json()["unread"] == 0
 
         # - Check listmonk for attribs feed with only and token existance
-        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", json={"query": "subscribers.email='john@example.com'"})
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email='john@example.com'"})
         subscriber = response.json()["data"]["results"][0]
         assert self.FEED_ONE_HASH in subscriber["attribs"]
         feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]

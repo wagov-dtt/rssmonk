@@ -22,14 +22,14 @@ RSSMONK_PASS = os.environ.get('RSSMONK_PASS', 'http://localhost:8000')
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python cron <frequency>")
-        print("Frequencies: instant, daily, weekly")
+        print("Frequencies: instant, daily")
         sys.exit(1)
 
     try:
         frequency = Frequency(sys.argv[1])
     except ValueError:
         print(f"Invalid frequency: {sys.argv[1]}")
-        print("Valid frequencies: instant, daily, weekly")
+        print("Valid frequencies: instant, daily")
         sys.exit(1)
 
 

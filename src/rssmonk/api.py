@@ -853,7 +853,6 @@ async def feed_subscribe(
                 # Make filter list, for the subscribe link without email (make user type it in again)
                 subscribe_link = f"{base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
                 transaction = {
-                    "subscriber_emails": [request.email],
                     "subject": None, # Subscription email templates should be set explicitly
                     "subscription_link":  subscribe_link,
                     "frequency": frequency,
@@ -862,7 +861,7 @@ async def feed_subscribe(
                 }
 
                 # Send email out for the user
-                rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
+                rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", [request.email], transaction)
 
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
@@ -960,7 +959,7 @@ async def feed_unsubscribe(
             feed_hash = None
             token = None
             bypass_confirmation = False
-            subscriber_query = ""
+            subscriber_query = None
             is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
             if isinstance(request, UnsubscribeAdminRequest):
                 if not is_valid_admin:
@@ -1025,13 +1024,12 @@ async def feed_unsubscribe(
 
                 subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
                 transaction = {
-                    "subscriber_emails": subscriber_details["email"],
                     "subscription_link": subscribe_link,
                 }
 
                 # Send email out for the user
                 try:
-                    rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", transaction)
+                    rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", [subscriber_details["email"]], transaction)
                 except Exception as e:
                     logger.error("Failed to send an unsubscribe email: %s", e)
                     raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Successfully unsubscribed, Requested email could not be sent") from e
@@ -1241,4 +1239,5 @@ def _get_all_feed_subscribers(client: ListmonkClient, feed_ident: int) -> list[d
 
 if __name__ == "__main__":
     import uvicorn
+    # TODO - Need to clean Listmonk of the pre filled example data (Need to turn it off as the source)
     uvicorn.run(app, port=8000, log_level="info")
