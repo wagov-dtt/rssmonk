@@ -1,7 +1,7 @@
 import hashlib
 from typing import Optional
 
-from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType
+from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType, Frequency
 
 
 # Removes everything except for the one key in the dict, empty if the key is not present in the dict
@@ -40,6 +40,13 @@ def make_list_role_name(hash: str) -> str:
 
 def make_template_name(feed_hash: str, email_type: EmailPhaseType) -> str:
     return f"{feed_hash}-{email_type.value}"
+
+def find_highest_frequency(poll_frequencies: list[Frequency]) -> Frequency | None:
+    priority_order = [Frequency.INSTANT, Frequency.DAILY]
+    for freq in priority_order:
+        if freq in poll_frequencies:
+            return freq
+    return None
 
 def make_filter_url(data: list | dict[str, list[int]]) -> str:
     """Creates a flat URL query string from a list or dictionary of filters."""

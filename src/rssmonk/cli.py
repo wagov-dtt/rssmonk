@@ -1,8 +1,8 @@
 """Simple Typer CLI for RSS Monk."""
 import warnings
 
-from rssmonk.utils import make_url_hash
-warnings.warn("This module will not be supported. Use the API endpoint instead", DeprecationWarning)
+from rssmonk.utils import find_highest_frequency, make_url_hash
+warnings.warn("This module is no longer supported. Please use the API endpoint instead with your preferred API development tool.", DeprecationWarning)
 
 from typing import Optional
 import typer
@@ -166,7 +166,8 @@ def process_feed(
                 console.print(f"[ERROR] Feed not found: {feed_url}", style="red")
                 raise typer.Exit(1)
 
-            campaigns = rss.process_feed(feed, auto_send)
+            lowest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
+            campaigns = rss.process_feed(feed, lowest_freq, auto_send)
             action = "sent" if auto_send else "created"
 
             if campaigns > 0:

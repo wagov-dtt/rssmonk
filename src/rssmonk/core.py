@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType, ErrorMessages
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -177,7 +177,7 @@ class RSSMonk:
                 # Give actual response to admins
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed does not exist")
             else:
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Not permitted to interact with this feed")
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=ErrorMessages.NO_AUTH_FEED)
 
 
     # Account operations
@@ -563,7 +563,7 @@ class RSSMonk:
 
     # Feed processing
 
-    async def process_feed(self, feed: Feed, auto_send: Optional[bool] = None) -> int:
+    async def process_feed(self, feed: Feed, frequency: Frequency, auto_send: Optional[bool] = None) -> int:
         """Process single feed - fetch articles and send tx  using cache."""
         if auto_send is None:
             auto_send = self.settings.rss_auto_send
@@ -579,7 +579,7 @@ class RSSMonk:
             new_articles = self._find_new_articles(feed, articles)
 
             if not new_articles:
-                self._update_poll_time(feed)
+                self._update_poll_time(feed, frequency)
                 return 0
 
             # TODO - This must be changed to be list of subscribers per.
@@ -601,7 +601,7 @@ class RSSMonk:
             # TODO - Remove to here
 
             # Update state
-            self._update_feed_state(feed, new_articles)
+            self._update_feed_state(feed, frequency, new_articles)
             return campaigns
 
         except Exception as e:
@@ -619,7 +619,7 @@ class RSSMonk:
             # TODO - Only handing instant and not the others
             if self._should_poll(frequency, feed):
                 print(f"Processing {frequency.value} {feed.name}")
-                results[feed.name] = await self.process_feed(feed)
+                results[feed.name] = await self.process_feed(feed, frequency)
 
         # TODO - Consider using for loop below if required
         # Form a list of independant processings
@@ -696,8 +696,8 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            if str(tag).startswith(f"last-seen:{feed.poll_frequencies.value}:"):
-                last_guid = tag.split(":", 3)[3]
+            if str(tag).startswith(f"last-seen:"):
+                last_guid = str(tag).split(":", 3)[2]
                 break
 
         if not last_guid:
@@ -724,19 +724,16 @@ class RSSMonk:
 
         last_poll = None
         for tag in tags:
-            print(tag)
-            if str(tag).startswith(f"last-poll:{current_frequency.value}:"):
+            if str(tag).startswith(f"last-process:{current_frequency.value}:"):
                 try:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
                 except (ValueError, IndexError):
                     continue
-
+#int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
 
         # If no last_poll data, allow polling immediately to get the data into the list
         if not last_poll:
             return True
-
-        # TODO - I think these checks need to be more explicit
 
         # Interval-based check (instant)
         if config.get("interval_minutes"):
@@ -748,49 +745,39 @@ class RSSMonk:
             target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
 
             # Increased tolerance for negative drift
-            if config.get("check_day") is not None:  # Weekly
-                if now.weekday() != config["check_day"]:
-                    return False
-                if last_poll and last_poll > now - timedelta(weeks=1, minutes=15):
-                    return False
-            else:  # Daily
-                if last_poll and last_poll > now - timedelta(days=1, minutes=15):
-                    return False
+            if last_poll and last_poll > now - timedelta(weeks=1, minutes=15):
+                return True
+
 
             return now >= target_time
 
         return False
 
-    def _update_poll_time(self, feed: Feed):
+    def _update_poll_time(self, feed: Feed, frequency: Frequency):
         """Update poll time tag."""
-        self._update_feed_state(feed, [])
+        self._update_feed_state(feed, frequency, [])
 
-    def _update_feed_state(self, feed: Feed, articles: list):
+    def _update_feed_state(self, feed: Feed, frequency: Frequency, articles: list):
         """Update feed state in Listmonk tags."""
         lst = self._client.get(f"/api/lists/{feed.id}")
         tags = lst.get("tags", [])
 
-        # Remove old state tags
-        tags = [
-            t for t in tags
-            if not str(t).startswith(f"last-poll:{feed.poll_frequencies.value}:")
-            and not str(t).startswith(f"last-seen:{feed.poll_frequencies.value}:")
-        ]
-
-        # Add new poll time
+        # Replace last-process tag
         now = datetime.now()
-        # TODO - Figure out what this is for 
-        tags.append(f"last-poll:{feed.poll_frequencies.value}:{now.isoformat()}")
+        tags = [ t for t in tags if not str(t).startswith(f"last-process:{frequency.value}:") ]
+        tags.append(f"last-process:{frequency.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
         if articles and len(articles) > 0:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
-            tags.append(f"last-seen:{feed.poll_frequencies.value}:{latest_guid}")
+            # Replace last-seen guid
+            tags = [ t for t in tags if not str(t).startswith(f"last-seen:") ]
+            tags.append(f"last-seen:{frequency.value}:{latest_guid}")
 
         # Update list
         self._client.put(
             f"/api/lists/{feed.id}",
-            {"name": feed.name, "description": feed.description, "tags": tags, "type": "public"},
+            {"name": feed.name, "description": feed.description, "tags": tags},
         )
 
     def _create_campaign(self, feed: Feed, article: dict) -> int:

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 import traceback
-from typing import Annotated
+from typing import Annotated, Optional
 from http import HTTPStatus
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 import uuid
@@ -13,7 +13,7 @@ import httpx
 
 from rssmonk.http_clients import ListmonkClient
 from rssmonk.types import FEED_ACCOUNT_PREFIX, NO_REPLY, ActionsURLSuffix
-from rssmonk.utils import extract_feed_hash, get_feed_hash_from_username, make_api_username, \
+from rssmonk.utils import extract_feed_hash, find_highest_frequency, get_feed_hash_from_username, make_api_username, \
     make_filter_url, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
 
 from .cache import feed_cache
@@ -160,7 +160,7 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
             )
             if response.status_code != HTTPStatus.OK:
                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    status_code=HTTPStatus.UNAUTHORIZED,
                     detail="Invalid credentials",
                     headers={"WWW-Authenticate": "Basic"},
                 )
@@ -266,6 +266,7 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
     if not settings.validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
+    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED) # TODO - Remove when metrics are generated
     try:
         # Return metrics page
         data = generate_latest() # TODO - This appears to also generates extra metrics (such as _created)
@@ -275,7 +276,6 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
         return Response(content=data, media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
         logger.error(f"Metric check failed: {e}")
-    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED) # TODO - Remove with metric implementation
 
 
 @app.get(
@@ -403,7 +403,7 @@ async def delete_feed_template(
         is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
         if isinstance(request, DeleteTemplateAdminRequest):
             if not is_valid_admin:
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
             feed_hash = make_url_hash(str(request.feed_url))
         else:
             if is_valid_admin:
@@ -680,6 +680,7 @@ async def update_feed_configuration(
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
             
+            # TODO - No migrations required
             result = config_manager.update_feed_config(
                 url=request.feed_url,
                 new_frequency=request.poll_frequencies,
@@ -702,9 +703,9 @@ async def update_feed_configuration(
     response_model=FeedProcessResponse,
     tags=["processing"],
     summary="Process Single Feed",
-    description="Process a specific RSS feed and create email campaigns for new articles. Admin only."
+    description="Process a specific RSS feed at the highest frequency configured and create email campaigns for new articles. Admin only."
 )
-async def process_feed(
+async def handle_process_feed(
     request: FeedProcessRequest,
     credentials: Annotated[HTTPBasicCredentials, Depends(security)],
     rss_monk: RSSMonk = Depends(get_rss_monk)
@@ -719,7 +720,9 @@ async def process_feed(
             if not feed:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
-            campaigns = await rss_monk.process_feed(feed, request.auto_send)
+            lowest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
+            
+            campaigns = await rss_monk.process_feed(feed, lowest_freq, request.auto_send)
             return FeedProcessResponse(
                 feed_name=feed.name,
                 campaigns_created=campaigns,
@@ -730,6 +733,7 @@ async def process_feed(
     except Exception as e:
         logger.error("Failed to process feed: %s", e)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Feed processing failed")
+
 
 
 @app.post(
@@ -818,7 +822,7 @@ async def feed_subscribe(
         is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
         if isinstance(request, SubscribeAdminRequest):
             if not is_valid_admin:
-                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
+                raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
             bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
             feed_hash = make_url_hash(str(request.feed_url))
         else:
@@ -963,7 +967,7 @@ async def feed_unsubscribe(
             is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
             if isinstance(request, UnsubscribeAdminRequest):
                 if not is_valid_admin:
-                    raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="")
+                    raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
                 bypass_confirmation = request.bypass_confirmation is not None and request.bypass_confirmation
                 feed_hash = make_url_hash(str(request.feed_url))
                 subscriber_query = f"subscribers.email='{request.email}'"

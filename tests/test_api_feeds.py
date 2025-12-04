@@ -11,7 +11,7 @@ from requests.auth import HTTPBasicAuth
 import uvicorn
 
 from rssmonk.types import FEED_ACCOUNT_PREFIX
-from .mock_feed_gen import external_app
+from .mock_feed_gen import external_mock_app
 
 from tests.conftest import LISTMONK_URL, RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, make_admin_session
 
@@ -20,7 +20,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
     @classmethod
     def setUpClass(cls):
         """Start external FastAPI server on port 10000 before tests."""
-        config = uvicorn.Config(external_app, host="0.0.0.0", port=10000, log_level="info")
+        config = uvicorn.Config(external_mock_app, host="0.0.0.0", port=10000, log_level="info")
         cls.server = uvicorn.Server(config)
         cls.process = Process(target=cls.server.run)
         cls.process.start()
@@ -245,7 +245,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         """
         # - feed_url, email_base_url, poll_frequencies (accessible to fetch name)
         create_feed_data = {
-            "feed_url": "https://localhost:10000/feed-1",
+            "feed_url": "https://localhost:10000/rss",
             "email_base_url": "https://example.com/media",
             "poll_frequencies": ["instant"]
         }
@@ -253,11 +253,11 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
-        assert response_json["feed_url"] == "https://localhost:10000/feed-1", response_json
+        assert response_json["feed_url"] == "https://localhost:10000/rss", response_json
         assert response_json["email_base_url"] == "https://example.com/media", response_json
         assert response_json["poll_frequencies"] == ["instant"], response_json
-        assert response_json["name"] == "https://localhost:10000/feed-1", response_json
-        assert response_json["url_hash"] == "019b873a9357ba2e1a51963aec30bcb911e9f92aff7c21835f0eb187707f35da", response_json
+        assert response_json["name"] == "https://localhost:10000/rss", response_json
+        assert response_json["url_hash"] == "3dde5492de50065208cd49adcd3b66f409e705f7216cd6d3f6d396056e8d6948", response_json
 
 
     def test_create_feeds_no_title_in_feed(self):

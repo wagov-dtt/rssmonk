@@ -9,7 +9,7 @@ from multiprocessing import Process
 import requests
 from requests.auth import HTTPBasicAuth
 import uvicorn
-from .mock_feed_gen import external_app
+from .mock_feed_gen import external_mock_app
 
 from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
 
@@ -18,7 +18,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
     @classmethod
     def setUpClass(cls):
         """Start external FastAPI server on port 10000 before tests."""
-        config = uvicorn.Config(external_app, host="0.0.0.0", port=10000, log_level="info")
+        config = uvicorn.Config(external_mock_app, host="0.0.0.0", port=10000, log_level="info")
         cls.server = uvicorn.Server(config)
         cls.process = Process(target=cls.server.run)
         cls.process.start()

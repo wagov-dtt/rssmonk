@@ -1,26 +1,23 @@
+import warnings
+warnings.warn('This class should be running as standalone', warnings.ImportWarning)
+
 from fastapi import FastAPI
 from fastapi.responses import Response
-import random
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime, timedelta
-import uuid
+
 
 
 # Fixed list of guid for testing
 guid_list = ["0209399a-8fc8-4034-86d0-a8423000",
              "87bad491-5bec-490b-b16a-defde001",
              "34b3e3aa-0975-4ff8-baf0-dd07d002",
-             "bf8a8103-3320-4130-9e2d-8a8f4003",
-             "e72dca4e-4c8e-4fe4-9b86-6ebe1004",
-             "74184377-12d8-4f15-a6dd-7aa0a005",
-             "191dcbc3-e162-4531-bffd-60e69006",
-             "5a94d86a-26f4-49c4-a500-1f370007"]
+             "bf8a8103-3320-4130-9e2d-8a8f4003"]
 
-external_mock_app = FastAPI()
-start_test_time = None
+external_app = FastAPI()
 
-@external_mock_app.get("/rss")
+@external_app.get("/feed-{x}")
 async def ping(x: int):
     return Response(content=make_media_statements_feed(x), media_type="application/xml; charset=utf-8")
 
@@ -28,8 +25,8 @@ async def ping(x: int):
 # Only need to make a few items over a few minutes, or days for testing purposes
 # Edited from CoPilot output for feed generation
 def make_media_statements_feed(items: int) -> str:
-    if items > 8: # Only support 4 items that can be created for the return feed
-        items = 8
+    if items > 4: # Only support 4 items that can be created for the return feed
+        items = 4
 
     # Create the root RSS element
     rss = ET.Element("rss", {
@@ -50,11 +47,11 @@ def make_media_statements_feed(items: int) -> str:
     # Create the channel element
     channel = ET.SubElement(rss, "channel")
     ET.SubElement(channel, "title").text = "Media Statements"
-    ET.SubElement(channel, "link").text = f"https://www.localhost:10000/rss/{items}"
+    ET.SubElement(channel, "link").text = f"https://www.localhost:11000/feed-{items}"
     ET.SubElement(channel, "description").text = "Government media statements from the government."
     ET.SubElement(channel, "language").text = "en"
     ET.SubElement(channel, "atom:link", {
-        "href": f"https://www.localhost:10000/rss/{items}",
+        "href": f"https://www.localhost:11000/feed-{items}",
         "rel": "self",
         "type": "application/rss+xml"
     })
@@ -66,17 +63,16 @@ def make_media_statements_feed(items: int) -> str:
         email_ident_str = ""
         email_portfolio_str = ""
         email_region_str = ""
-        if i == len(minister_list):
+        if i < len(minister_list):
+            email_minister_str = minister_list[i]
+            email_portfolio_str = portfolio_list[i]
+            email_region_str = region_list[i]
+            email_ident_str = minister_code[i] + "," + portfolio_code[i] + "," + region_code[i]
+        else:
             email_minister_str = ", ".join(minister_list)
             email_portfolio_str = ", ".join(portfolio_list)
             email_region_str = ", ".join(region_list)
             email_ident_str = ",".join(minister_code + portfolio_code + region_code)
-        else:
-            index = i % len(minister_list)
-            email_minister_str = minister_list[index]
-            email_portfolio_str = portfolio_list[index]
-            email_region_str = region_list[index]
-            email_ident_str = minister_code[index] + "," + portfolio_code[index] + "," + region_code[index]
 
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = f"Title number {i + 1}"
@@ -102,3 +98,12 @@ def prettify(elem):
     rough_string = ET.tostring(elem, 'utf-8')
     reparsed = minidom.parseString(rough_string)
     return reparsed.toprettyxml(indent="  ")
+
+
+if __name__ == "__main__":
+    """
+    This is for static testing for the system. This should not clash with the unit test at
+    /tests/mock_feed_gen.py as the ports will be different and tests using 11000 should be invalid
+    """
+    import uvicorn
+    uvicorn.run(external_app, port=11000, log_level="info")

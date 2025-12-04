@@ -185,7 +185,7 @@ class ListmonkClientTestBase(unittest.TestCase):
     FEED_TWO_FEED_URL = "https://somewhere.com/rss"
     FEED_TWO_HASH = make_url_hash(FEED_TWO_FEED_URL)
 
-    FEED_THREE_FEED_URL = "https://localhost:10000/feed-1"
+    FEED_THREE_FEED_URL = "https://localhost:10000/rss"
     FEED_THREE_HASH = make_url_hash(FEED_THREE_FEED_URL)
     
     ADMIN_AUTH = HTTPBasicAuth("admin", "admin123") # Default k3d credentials

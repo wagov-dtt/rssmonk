@@ -1,7 +1,8 @@
 import hashlib
 import unittest
 
-from rssmonk.utils import extract_feed_hash, make_filter_url, numberfy_subbed_lists, remove_other_keys
+from rssmonk.types import Frequency
+from rssmonk.utils import extract_feed_hash, find_highest_frequency, make_filter_url, numberfy_subbed_lists, remove_other_keys
 
 """
 Curated generated tests for the utils class for sanity checks
@@ -89,3 +90,18 @@ class TestExtractFeedHash(unittest.TestCase):
     def test_no_hash_no_url(self):
         result = extract_feed_hash("not_an_expected_user_name")
         self.assertEqual(result, "")
+
+
+class TestFindHighestFrequency(unittest.TestCase):
+    def test_returns_none_when_list_empty(self):
+        assert find_highest_frequency([]) is None
+
+    def test_returns_instant_when_present(self):
+        assert find_highest_frequency([Frequency.INSTANT, Frequency.DAILY]) == Frequency.INSTANT
+
+    def test_returns_first_priority_order_agnostic(self):
+        # Instant should always be returned
+        assert find_highest_frequency([Frequency.DAILY, Frequency.INSTANT]) == Frequency.INSTANT
+
+    def test_returns_daily_when_instant_is_not_present(self):
+        assert find_highest_frequency([Frequency.DAILY]) == Frequency.DAILY
