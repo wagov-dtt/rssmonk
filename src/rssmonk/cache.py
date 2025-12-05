@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 import httpx
 import feedparser
 
-from rssmonk.types import FEED_URL_RSSMONK_QUERY
+from rssmonk.types import FEED_URL_RSSMONK_QUERY, FeedItem
 
 from .logging_config import get_logger
 
@@ -67,7 +67,7 @@ class FeedCache:
                 del self.cache[key]
                 logger.debug(f"Evicted cache entry: {key}")
     
-    async def get_feed(self, url: str, user_agent: str, timeout: float = 30.0) -> Tuple[list[dict], Optional[str]]:
+    async def get_feed(self, url: str, user_agent: str, timeout: float = 30.0) -> Tuple[list[FeedItem], Optional[str]]:
         """Get RSS feed with intelligent caching."""
         cache_key = self._get_cache_key(url)
         cached_feed = self.cache.get(cache_key)
@@ -107,22 +107,21 @@ class FeedCache:
                     return cached_feed.articles, cached_feed.feed_title
                 
                 # Parse new content
-                feed = feedparser.parse(content)
+                feed_data = feedparser.parse(content)
                 
-                if feed.bozo: # From feedparser.FeedParserDict
-                    logger.warning(f"Feed has issues: {feed.bozo_exception}")
+                if feed_data.bozo: # From feedparser.FeedParserDict
+                    logger.warning(f"Feed has issues: {feed_data.bozo_exception}")
                 
                 articles = []
-                for entry in feed.entries:
-                    article = {
-                        "title": entry.get("title", ""),
-                        "link": entry.get("link", ""),
-                        "description": entry.get("description", ""),
-                        "published": entry.get("pubDate", ""),
-                        "guid": entry.get("id", entry.get("link", "")),
-                        "wa:subject_entities": entry.get("wa:subject_entities", ""),
-                        "wa:identifiers": entry.get("wa:identifiers", ""),
-                    }
+                for entry in feed_data.entries:
+                    article = FeedItem()
+                    article.title = entry.get("title", ""),
+                    article.link = entry.get("link", ""),
+                    article.description = entry.get("description", ""),
+                    article.published = entry.get("pubDate", ""),
+                    article.guid = entry.get("id", entry.get("link", "")),
+                    article.email_subject_line = entry.get("wa:subject_line", ""),
+                    article.filter_identifiers = entry.get("wa:identifiers", "")
                     articles.append(article)
                 
                 # Create cache entry
@@ -137,7 +136,7 @@ class FeedCache:
                     articles=articles,
                     cached_at=datetime.now(),
                     expires_at=datetime.now() + timedelta(minutes=self.default_ttl_minutes),
-                    feed_title=feed.feed.get("title", url)
+                    feed_title=feed_data.feed.get("title", url)
                 )
                 
                 self.cache[cache_key] = cached_feed

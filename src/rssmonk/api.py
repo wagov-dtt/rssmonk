@@ -607,7 +607,7 @@ async def delete_feed_by_url(
             if feed_data is not None:
                 # Notify subscriber list if it exists
                 # http://localhost:9000/api/subscribers?list_id=1&page=1&per_page=100
-                subscriber_list = _get_all_feed_subscribers(rss_monk._client, feed_data.id)
+                subscriber_list = rss_monk._client.get_all_feed_subscribers(feed_data.id)
 
                 if request.notify:
                     # Send campaign email to announce the closure of a mailing list
@@ -720,13 +720,12 @@ async def handle_process_feed(
             if not feed:
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
-            lowest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
-            
-            campaigns = await rss_monk.process_feed(feed, lowest_freq, request.auto_send)
+            highest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
+            campaigns, articles = await rss_monk.process_feed(feed, highest_freq)
             return FeedProcessResponse(
                 feed_name=feed.name,
                 campaigns_created=campaigns,
-                articles_processed=campaigns  # Assuming 1:1 for now
+                articles_processed=articles
             )
     except HTTPException:
         raise
@@ -1217,28 +1216,6 @@ async def public_listmonk_passthrough(
             status_code=503,
             detail="Listmonk service unavailable"
         )
-
-
-
-def _get_all_feed_subscribers(client: ListmonkClient, feed_ident: int) -> list[dict]:
-    """Fetch all pages and put into a list"""
-    try:
-        subscriber_list = []
-
-        keep_retrieving = True
-        page = 1
-        while keep_retrieving:
-            data = client.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
-            norm_data = client._normalize_results(data)
-            subscriber_list.extend(norm_data)
-            keep_retrieving = (data["page"] * data["per_page"]) < data["total"]
-            # Total here means total number of records extracted by the query, then paginated
-            page += 1
-    except Exception as e:
-        traceback.print_exc()
-        raise
-
-    return subscriber_list
 
 
 if __name__ == "__main__":

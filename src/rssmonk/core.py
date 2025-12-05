@@ -10,7 +10,7 @@ import uuid
 from http import HTTPStatus
 from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 from fastapi.security import HTTPBasicCredentials
 from pydantic import Field
@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType, ErrorMessages
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType, ErrorMessages, FeedItem
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -37,11 +37,6 @@ class Settings(BaseSettings):
     listmonk_admin_password: str = Field(alias="LISTMONK_ADMIN_PASSWORD", description="Listmonk admin token/password")
 
     # RSS processing configuration
-    rss_auto_send: bool = Field(
-        default=False,
-        alias="RSS_AUTO_SEND",
-        description="Automatically send campaigns when created",
-    )
     rss_timeout: float = Field(default=30.0, alias="RSS_TIMEOUT", description="HTTP timeout for RSS feed requests")
     rss_user_agent: str = Field(
         default="RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rssmonk)",
@@ -73,7 +68,7 @@ class Settings(BaseSettings):
     def validate_admin_auth(self, username: str, password: str) -> bool:
         # Only used as a quick check against settings (env vars) before going to work against Listmonk.
         # No real check against Listmonk. Could be done by getting user 1
-        # TODO - Ping against Listmonk?
+        # TODO - Ping against Listmonk. Access it's own user_role and check for Super Admin as it's a reserved role.
         return hmac.compare_digest(password, self.listmonk_admin_password) and username == self.listmonk_admin_username
 
 
@@ -563,10 +558,8 @@ class RSSMonk:
 
     # Feed processing
 
-    async def process_feed(self, feed: Feed, frequency: Frequency, auto_send: Optional[bool] = None) -> int:
+    async def process_feed(self, feed: Feed, frequency: Frequency) -> Tuple[int, int]:
         """Process single feed - fetch articles and send tx  using cache."""
-        if auto_send is None:
-            auto_send = self.settings.rss_auto_send
         try:
             # Fetch articles using cache
             articles, feed_title = await feed_cache.get_feed(
@@ -580,12 +573,14 @@ class RSSMonk:
 
             if not new_articles:
                 self._update_poll_time(feed, frequency)
-                return 0
+                return 0, 0
 
-            # TODO - This must be changed to be list of subscribers per.
+            all_filter_subscribers = []
+            subscribers = self.getClient().get_all_feed_subscribers(feed.id)
+            # TODO - Implement this for feed processing
             # Extract list of subscribers, split into two groups.
             # - All - This is likely to be the majority
-            # - Individual
+            # - Filters that does not request everything
             # Populate - If multiple articles exist, ensure that one email per article is sent out
             # Send out?
             # Create campaigns
@@ -593,8 +588,7 @@ class RSSMonk:
             for article in new_articles:
                 try:
                     campaign_id = self._create_campaign(feed, article)
-                    if auto_send:
-                        self._client.start_campaign(campaign_id)
+                    self._client.start_campaign(campaign_id)
                     campaigns += 1
                 except Exception as e:
                     logger.error(f"Campaign creation failed: {e}")
@@ -602,12 +596,12 @@ class RSSMonk:
 
             # Update state
             self._update_feed_state(feed, frequency, new_articles)
-            return campaigns
+            return campaigns, new_articles
 
         except Exception as e:
             logger.error(f"Feed processing failed for {feed.name}: {e}")
             traceback.print_exc()
-            return 0
+            return 0, 0
 
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
@@ -619,7 +613,7 @@ class RSSMonk:
             # TODO - Only handing instant and not the others
             if self._should_poll(frequency, feed):
                 print(f"Processing {frequency.value} {feed.name}")
-                results[feed.name] = await self.process_feed(feed, frequency)
+                results[feed.name], _ = await self.process_feed(feed, frequency)
 
         # TODO - Consider using for loop below if required
         # Form a list of independant processings
@@ -685,7 +679,7 @@ class RSSMonk:
 
         return Feed(id=lst["id"], name=lst["name"], feed_url=url, poll_frequencies=frequency_list, email_base_url=sub_url, mult_freq=mult_freq)
 
-    def _find_new_articles(self, feed: Feed, articles: list) -> list:
+    def _find_new_articles(self, feed: Feed, articles: list[FeedItem]) -> list[FeedItem]:
         """Find new articles since last poll."""
         if not articles:
             return []
@@ -696,7 +690,7 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            if str(tag).startswith(f"last-seen:"):
+            if str(tag).startswith(f"last-guid:"):
                 last_guid = str(tag).split(":", 3)[2]
                 break
 
@@ -706,7 +700,7 @@ class RSSMonk:
         # Find new articles (those before last seen in chronological order)
         for i, article in enumerate(articles):
             if article.get("guid", article.get("link")) == last_guid:
-                return articles[:i]
+                return articles[:i] # Slice it up to the last guid
 
         return articles
 
@@ -729,7 +723,6 @@ class RSSMonk:
                     last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
                 except (ValueError, IndexError):
                     continue
-#int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
 
         # If no last_poll data, allow polling immediately to get the data into the list
         if not last_poll:
@@ -768,11 +761,12 @@ class RSSMonk:
         tags.append(f"last-process:{frequency.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
+        # TODO - This does not create last-guid
         if articles and len(articles) > 0:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
-            # Replace last-seen guid
-            tags = [ t for t in tags if not str(t).startswith(f"last-seen:") ]
-            tags.append(f"last-seen:{frequency.value}:{latest_guid}")
+            # Replace last-guid guid
+            tags = [ t for t in tags if not str(t).startswith(f"last-guid:") ]
+            tags.append(f"last-guid:{frequency.value}:{latest_guid}")
 
         # Update list
         self._client.put(

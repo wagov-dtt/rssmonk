@@ -1,5 +1,5 @@
 import warnings
-warnings.warn('This class should be running as standalone', warnings.ImportWarning)
+warnings.warn('This class should be running as standalone', ImportWarning)
 
 from fastapi import FastAPI
 from fastapi.responses import Response

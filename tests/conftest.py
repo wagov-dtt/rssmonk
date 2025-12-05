@@ -179,10 +179,10 @@ class UnitTestInitialisedData:
 @pytest.mark.usefixtures("listmonk_setup")
 class ListmonkClientTestBase(unittest.TestCase):
     """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down."""
-    FEED_ONE_FEED_URL = "https://example.com/rss"
+    FEED_ONE_FEED_URL = "https://localhost:50000/rss"
     FEED_ONE_HASH = make_url_hash(FEED_ONE_FEED_URL)
 
-    FEED_TWO_FEED_URL = "https://somewhere.com/rss"
+    FEED_TWO_FEED_URL = "https://localhost:50001/rss"
     FEED_TWO_HASH = make_url_hash(FEED_TWO_FEED_URL)
 
     FEED_THREE_FEED_URL = "https://localhost:10000/rss"

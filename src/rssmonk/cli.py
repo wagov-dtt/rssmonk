@@ -155,8 +155,7 @@ def quick_setup(
 
 @app.command()
 def process_feed(
-    feed_url: str = typer.Argument(help="RSS feed URL"),
-    auto_send: bool = typer.Option(False, "--send", help="Automatically send campaigns"),
+    feed_url: str = typer.Argument(help="RSS feed URL")
 ):
     """Manually process a single feed."""
     try:
@@ -167,11 +166,10 @@ def process_feed(
                 raise typer.Exit(1)
 
             lowest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
-            campaigns = rss.process_feed(feed, lowest_freq, auto_send)
-            action = "sent" if auto_send else "created"
+            campaigns, _ = rss.process_feed(feed, lowest_freq)
 
             if campaigns > 0:
-                console.print(f"[SUCCESS] {campaigns} campaigns {action} for {feed.name}", style="green")
+                console.print(f"[SUCCESS] {campaigns} campaigns {feed.name}", style="green")
             else:
                 console.print(f"[INFO] No new articles for {feed.name}", style="yellow")
     except Exception as e:

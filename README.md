@@ -53,7 +53,6 @@ LISTMONK_ADMIN_PASSWORD=your-token
 # Optional - defaults shown
 LISTMONK_ADMIN_USER=api
 LISTMONK_URL=http://localhost:9000
-RSS_AUTO_SEND=false
 RSS_TIMEOUT=30.0
 RSS_USER_AGENT="RSS Monk/2.0 (Feed Aggregator; +https://github.com/wagov-dtt/rssmonk)"
 LOG_LEVEL=INFO

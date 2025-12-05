@@ -1,6 +1,7 @@
 """HTTP client utilities."""
 
 from enum import StrEnum
+import traceback
 from typing import Optional
 from warnings import deprecated
 from fastapi import HTTPException
@@ -163,6 +164,27 @@ class ListmonkClient:
         params = {"query": query, "page": 1} if query else {}
         data = self.get("/api/subscribers", params=params)
         return self._normalize_results(data)
+
+    def get_all_feed_subscribers(self, feed_ident: int) -> list[dict]:
+        """Fetch all pages and put into a list"""
+        try:
+            subscriber_list = []
+
+            keep_retrieving = True
+            page = 1
+            while keep_retrieving:
+                data = self.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
+                norm_data = self._normalize_results(data)
+                subscriber_list.extend(norm_data)
+                keep_retrieving = (data["page"] * data["per_page"]) < data["total"]
+                # Total here means total number of records extracted by the query, then paginated
+                page += 1
+        except Exception as e:
+            traceback.print_exc()
+            raise
+
+        return subscriber_list
+
 
     def create_subscriber(self, email, name=None, status="enabled", lists=None):
         """Create a new subscriber."""

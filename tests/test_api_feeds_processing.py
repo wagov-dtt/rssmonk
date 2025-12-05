@@ -31,40 +31,6 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         cls.process.terminate()
         cls.process.join()
 
-        
-    def _insert_example_rss(self):
-        create_feed_data = {
-            "feed_url": "https://example.com/rss/example",
-            "email_base_url": "https://example.com/media",
-            "poll_frequencies": ["instant", "daily"],
-            "name": "Example Media Statements"
-        }
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
-        assert (response.status_code == HTTPStatus.CREATED), "Set up failed: "+response.text
-        create_feed_data = {
-            "feed_url": "https://abc.net.example/rss/example",
-            "email_base_url": "https://abc.net.example/subscribe",
-            "poll_frequencies": ["instant", "daily"],
-            "name": "Example ABC Net"
-        }
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
-        assert (response.status_code == HTTPStatus.CREATED),  "Set up failed: "+response.text
-        create_feed_data = {
-            "feed_url": "https://bbc.co.uk.example/rss/example",
-            "email_base_url": "https://bbc.co.uk.example/subscribe",
-            "poll_frequencies": ["instant", "daily"],
-            "name": "Example BBC Co."
-        }
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
-        assert (response.status_code == HTTPStatus.CREATED),  "Set up failed: "+response.text
-
-
-    def _make_feed_account(self, feed_url: str):
-        """
-        These are called when required and should be called after insert_example_rss()
-        """
-
-        return ""
 
     #-------------------------
     # POST /api/feeds/process/ - Process RSS Feed (admin only)

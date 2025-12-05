@@ -42,6 +42,7 @@ def make_template_name(feed_hash: str, email_type: EmailPhaseType) -> str:
     return f"{feed_hash}-{email_type.value}"
 
 def find_highest_frequency(poll_frequencies: list[Frequency]) -> Frequency | None:
+    """Finds the highest polling frequency in the requested list"""
     priority_order = [Frequency.INSTANT, Frequency.DAILY]
     for freq in priority_order:
         if freq in poll_frequencies:

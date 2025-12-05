@@ -96,7 +96,6 @@ class FeedAccountPasswordResetRequest(BaseModel):
 class FeedProcessRequest(BaseModel):
     """Request model for processing a specific feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL to process")
-    auto_send: bool = Field(False, description="Automatically send created campaigns")
 
 class CreateTemplateRequest(BaseModel):
     """Request model for creating a template for a RSS feed."""

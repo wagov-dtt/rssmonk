@@ -74,7 +74,7 @@ just start    # Deploy RSS Monk on k3d cluster
 - **No persistent state files**: All state stored in Listmonk list tags
 - **UUID-based deduplication**: RSS item UUIDs prevent duplicate email campaigns  
 - **URL hashing**: SHA-256 full digest for guaranteed unique feed identification
-- **Frequency isolation**: Separate last-seen tracking per polling frequency
+- **Frequency isolation**: Separate last-guid tracking per polling frequency
 
 ### Error Handling Approach
 - **Fail-fast validation**: Environment variable validation at startup

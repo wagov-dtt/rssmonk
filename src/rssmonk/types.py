@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from enum import StrEnum
 from typing import Any
@@ -90,3 +91,15 @@ class ActionsURLSuffix(StrEnum):
 
 class ErrorMessages:
     NO_AUTH_FEED = "Not authorised to interact with this feed"
+
+class FeedItem:
+    """This stores one item from a parsed feed"""
+    title: str
+    link: str
+    description: str
+    published: datetime
+    guid: str
+    email_subject_line: str
+    """From wa:subject_line"""
+    filter_identifiers: str
+    """From wa:identifiers"""
