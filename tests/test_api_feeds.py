@@ -226,6 +226,20 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response_json["url_hash"] == "3dde5492de50065208cd49adcd3b66f409e705f7216cd6d3f6d396056e8d6948", response_json
 
 
+    def test_create_feeds_empty_frequency(self):
+        # - Feed creation, feed_url, email_base_url, poll_frequencies, name
+        create_feed_data = {
+            "feed_url": "https://localhost:50000/rss",
+            "email_base_url": "https://localhost:50000/media",
+            "poll_frequencies": [],
+            "name": "Random name"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
+        assert (response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT), f"{response.status_code}: {response.text}"
+        assert "poll_frequencies" in response.text
+        assert "List should have at least 1 item after validation" in response.text
+
+
     def test_create_feeds_no_title_in_feed(self):
         # - Feed creation, feed_url, email_base_url, poll_frequencies (not accessible to fetch name)
         create_feed_data = {

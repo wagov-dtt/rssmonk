@@ -3,38 +3,62 @@
 import pytest
 from pydantic import ValidationError
 
-from rssmonk.models import FeedCreateRequest, FeedProcessRequest, PublicSubscribeRequest
+from rssmonk.models import FeedCreateRequest
 from rssmonk.core import Frequency
+from rssmonk.types import ListVisibilityType
 
 
-def test_feed_create_request_valid():
-    """Test valid feed creation request."""
-    request = FeedCreateRequest(
-        feed_url="https://example.com/feed.rss",
-        email_base_url="https://example.com/subscribe",
-        poll_frequencies=[Frequency.DAILY.value],
-        name="Test Feed"
-    )
-    assert str(request.feed_url) == "https://example.com/feed.rss"
-    assert request.poll_frequencies == [Frequency.DAILY.value]
-    assert request.name == "Test Feed"
+def test_valid_feed_create_request():
+    data = {
+        "feed_url": "https://example.com/rss",
+        "email_base_url": "https://example.com/email",
+        "poll_frequencies": [Frequency.DAILY],
+        "filter_groups": ["tech", "news"],
+        "name": "My Feed",
+        "visibility": ListVisibilityType.PRIVATE
+    }
+    model = FeedCreateRequest(**data)
+    assert model.feed_url.encoded_string() == "https://example.com/rss"
+    assert model.visibility == ListVisibilityType.PRIVATE
+    assert model.filter_groups == ["tech", "news"]
 
 
-def test_feed_create_request_invalid_url():
-    """Test invalid URL validation."""
+def test_missing_required_fields():
+    data = {
+        "email_base_url": "https://example.com/email",
+        "poll_frequencies": [Frequency.DAILY]
+    }
     with pytest.raises(ValidationError):
-        FeedCreateRequest(
-            feed_url="not-a-valid-url",
-            poll_frequencies=[Frequency.DAILY.value]
-        )
+        FeedCreateRequest(**data)
 
 
-def test_feed_process_request():
-    """Test feed processing request."""
-    request = FeedProcessRequest(
-        feed_url="https://example.com/feed.rss",
-        auto_send=True
-    )
-    assert str(request.feed_url) == "https://example.com/feed.rss"
-    assert request.auto_send is True
+def test_optional_fields_default():
+    data = {
+        "feed_url": "https://example.com/rss",
+        "email_base_url": "https://example.com/email",
+        "poll_frequencies": [Frequency.DAILY]
+    }
+    model = FeedCreateRequest(**data)
+    assert model.name is None
+    assert model.visibility == ListVisibilityType.PRIVATE
+    assert model.filter_groups is None
 
+
+def test_invalid_url():
+    data = {
+        "feed_url": "not-a-url",
+        "email_base_url": "https://example.com/email",
+        "poll_frequencies": [Frequency.DAILY]
+    }
+    with pytest.raises(ValidationError):
+        FeedCreateRequest(**data)
+
+
+def test_empty_poll_frequencies():
+    data = {
+        "feed_url": "https://example.com/rss",
+        "email_base_url": "https://example.com/email",
+        "poll_frequencies": []
+    }
+    with pytest.raises(ValidationError):
+        FeedCreateRequest(**data)

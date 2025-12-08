@@ -5,7 +5,7 @@ import uuid
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
+from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, TOPICS_TITLE, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
 
 class Feed(BaseModel):
     """RSS feed model."""
@@ -16,6 +16,7 @@ class Feed(BaseModel):
     email_base_url: str
     """Base URL that is used for link generation in emails"""
     poll_frequencies: list[Frequency]
+    filter_groups: Optional[list[str]] = None
     url_hash: str = ""
     mult_freq: bool = False
 
@@ -32,9 +33,12 @@ class Feed(BaseModel):
     @property
     def description(self) -> str:
         """Generate Listmonk description."""
-        return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}"
+        description = f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}"
+        if self.filter_groups:
+            description += f"\n{TOPICS_TITLE} {",".join(self.filter_groups)}"
+        return description
         # TODO - Need to determine how multiple frequency filters are stored. It may never be used. Default to false
-        #return f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
+        #return description + f"\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
 
 class ListmonkTemplate(BaseModel):
     """Template data model for Listmonk. Optional fields are for POST to /api/templates"""
@@ -71,8 +75,9 @@ class EmailTemplate(BaseModel):
 class FeedCreateRequest(BaseModel):
     """Request model for creating an RSS feed."""
     feed_url: HttpUrl = Field(..., description="RSS feed URL")
-    email_base_url: HttpUrl = Field(..., description="Base URL that is used in emails")
-    poll_frequencies: list[Frequency] = Field(..., description="Polling frequency")
+    email_base_url: HttpUrl = Field(..., description="Base URL used in emails")
+    poll_frequencies: list[Frequency] = Field(..., description="Polling frequency options for users", min_length=1)
+    filter_groups: Optional[list[str]] = Field(None, description="Topics that the user can filter against and is present in the feed. None will count as 'all' topics to all users")
     name: Optional[str] = Field(None, description="Feed name (auto-detected if not provided)")
     visibility: Optional[ListVisibilityType] = Field(ListVisibilityType.PRIVATE, description="RSS feed visibility. Default to private")
 
@@ -193,6 +198,7 @@ class FeedResponse(BaseModel):
     feed_url: str = Field(..., description="RSS feed URL")
     email_base_url: HttpUrl = Field(..., description="Base URL that is used in emails")
     poll_frequencies: list[Frequency] = Field(..., description="How often the feed should be polled for new feed items")
+    filter_groups: Optional[list[str]] = Field(None, description="Topics that the user can filter against.")
     url_hash: str = Field(..., description="SHA-256 hash of the URL")
     subscriber_count: Optional[int] = Field(None, description="Number of subscribers")
 
@@ -212,7 +218,7 @@ class FeedListResponse(BaseModel):
 class FeedProcessResponse(BaseModel):
     """Response model for feed processing."""
     feed_name: str = Field(..., description="Name of processed feed")
-    campaigns_created: int = Field(..., description="Number of campaigns created")
+    notifications_sent: int = Field(..., description="Number of notifications created")
     articles_processed: int = Field(..., description="Number of articles processed")
 
 

@@ -40,7 +40,7 @@ class CachedFeed:
 class FeedCache:
     """In-memory RSS feed cache with smart invalidation."""
     
-    def __init__(self, max_entries: int = 1000, default_ttl_minutes: int = 60):
+    def __init__(self, max_entries: int = 200, default_ttl_minutes: int = 60):
         self.cache: dict[str, CachedFeed] = {}
         self.max_entries = max_entries
         self.default_ttl_minutes = default_ttl_minutes
@@ -84,8 +84,6 @@ class FeedCache:
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.get(url + FEED_URL_RSSMONK_QUERY, headers=headers)
-                response.status_code = 200
-
                 
                 # Handle 304 Not Modified
                 if response.status_code == 304 and cached_feed:
@@ -107,21 +105,22 @@ class FeedCache:
                     return cached_feed.articles, cached_feed.feed_title
                 
                 # Parse new content
-                feed_data = feedparser.parse(content)
+                feed_data: feedparser.FeedParserDict = feedparser.parse(content)
                 
                 if feed_data.bozo: # From feedparser.FeedParserDict
                     logger.warning(f"Feed has issues: {feed_data.bozo_exception}")
                 
                 articles = []
                 for entry in feed_data.entries:
-                    article = FeedItem()
-                    article.title = entry.get("title", ""),
-                    article.link = entry.get("link", ""),
-                    article.description = entry.get("description", ""),
-                    article.published = entry.get("pubDate", ""),
-                    article.guid = entry.get("id", entry.get("link", "")),
-                    article.email_subject_line = entry.get("wa:subject_line", ""),
-                    article.filter_identifiers = entry.get("wa:identifiers", "")
+                    article = FeedItem(
+                        title = entry.get("title", ""),
+                        link = entry.get("link", ""),
+                        description = entry.get("description", ""),
+                        published = entry.get("pubDate", ""),
+                        guid = entry.get("id", entry.get("link", "")),
+                        email_subject_line = entry.get("wa:subject_line", ""),
+                        filter_identifiers = entry.get("wa:identifiers", "")
+                    )
                     articles.append(article)
                 
                 # Create cache entry

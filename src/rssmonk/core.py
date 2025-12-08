@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, EmailPhaseType, ErrorMessages, FeedItem
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, TOPICS_TITLE, EmailPhaseType, ErrorMessages, FeedItem
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -317,14 +317,14 @@ class RSSMonk:
 
     # Feed operations
 
-    def add_feed(self, feed_url: str, email_base_url: str, new_frequency: list[Frequency], name: Optional[str] = None,
-                 visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
+    def add_feed(self, feed_url: str, email_base_url: str, new_frequency: list[Frequency], filter_groups: list[str],
+                 name: Optional[str] = None, visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
         """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
             name = self._get_feed_name(feed_url)
 
         # Create return
-        feed = Feed(name=name, feed_url=feed_url, poll_frequencies=new_frequency, email_base_url=email_base_url)
+        feed = Feed(name=name, feed_url=feed_url, poll_frequencies=new_frequency, filter_groups=filter_groups, email_base_url=email_base_url)
 
         # Check for existing feed with same URL
         existing_feed = self.get_feed_by_url(feed_url)
@@ -575,28 +575,37 @@ class RSSMonk:
                 self._update_poll_time(feed, frequency)
                 return 0, 0
 
-            all_filter_subscribers = []
+            feed_hash = make_url_hash(feed.feed_url)
+            notifications_sent = 0 # This counts successful emails sent by unique email addresses
             subscribers = self.getClient().get_all_feed_subscribers(feed.id)
-            # TODO - Implement this for feed processing
-            # Extract list of subscribers, split into two groups.
-            # - All - This is likely to be the majority
-            # - Filters that does not request everything
-            # Populate - If multiple articles exist, ensure that one email per article is sent out
-            # Send out?
-            # Create campaigns
-            campaigns = 0
-            for article in new_articles:
-                try:
-                    campaign_id = self._create_campaign(feed, article)
-                    self._client.start_campaign(campaign_id)
-                    campaigns += 1
-                except Exception as e:
-                    logger.error(f"Campaign creation failed: {e}")
-            # TODO - Remove to here
+
+            # TODO - Generate all inclusive email case to prevent generating it continously
+            # TODO - What to do with multiple instant notifications
+            all_inclusive_email = ""
+
+            # Extract list of subscribers, generate urls for the template and them email out.
+            # Populate - If multiple articles exist and it is instant, ensure that one email per article is sent out
+            # Send out
+            for subscriber in subscribers:
+                if "email" not in subscriber:
+                    continue
+
+                email = subscriber["email"]
+                # If the filter_groups in the feed are present in the subscriber filter and they ask for all, then add to all_filter
+                feed_hash_data = subscriber["attribs"][feed_hash]
+                filter_freq_data = feed_hash_data["filter"][frequency.value]
+                # TODO - The urls can be generated and stored for use later... would be better generated once
+                unsub_url = feed_hash_data["unsub_segment"]
+                subscription_url = feed_hash_data["filter_segment"]
+                if feed.filter_groups is None: # TODO - Add or for having all marked 
+                    # TODO - make dict for these urls and sent it with the data... (are there limits?)
+                    pass
+
+                notifications_sent += 1
 
             # Update state
             self._update_feed_state(feed, frequency, new_articles)
-            return campaigns, new_articles
+            return notifications_sent, new_articles
 
         except Exception as e:
             logger.error(f"Feed processing failed for {feed.name}: {e}")
@@ -615,7 +624,7 @@ class RSSMonk:
                 print(f"Processing {frequency.value} {feed.name}")
                 results[feed.name], _ = await self.process_feed(feed, frequency)
 
-        # TODO - Consider using for loop below if required
+        # TODO - Consider using for loop below if needing to handle each feed on a thread
         # Form a list of independant processings
         #tasks = {}
         #async with asyncio.TaskGroup() as tg:
@@ -640,9 +649,9 @@ class RSSMonk:
         except Exception:
             return url
 
-    def _parse_feed_from_list(self, lst: dict) -> Feed:
+    def _parse_feed_from_list(self, data: dict) -> Feed:
         """Parse feed from Listmonk list."""
-        tags = lst.get("tags", [])
+        tags = data.get("tags", [])
 
         # Extract frequencies
         frequency_list: list[Frequency] = []
@@ -651,33 +660,38 @@ class RSSMonk:
                 try:
                     frequency_list.append(Frequency(tag.replace("freq:", "")))
                 except ValueError:
-                    logger.error(f"Invalid frequency in tag {tag} for list ID {lst.get("id"), "unknown"}")
+                    logger.error(f"Invalid frequency in tag {tag} for list ID {data.get("id"), "unknown"}")
         if len(frequency_list) == 0:
             raise ValueError("No frequency tag found in existing list")
 
-        # Extract URL from description
-        desc = lst.get("description", "")
+        # Extract details from the description
+        desc = data.get("description", "")
         mult_freq = False
         url = None
         sub_url = None
+        topics = None
 
         for line in desc.split("\n"):
             if line.startswith(LIST_DESC_FEED_URL):
                 url = line.replace(LIST_DESC_FEED_URL, "").strip()
             if line.startswith(SUB_BASE_URL):
                 sub_url = line.replace(SUB_BASE_URL, "").strip()
+            if line.startswith(TOPICS_TITLE):
+                topics = line.replace(TOPICS_TITLE, "").strip().split(',')
             if line.startswith(MULTIPLE_FREQ):
                 mult_freq = (line.replace(MULTIPLE_FREQ, "").strip() == str(True))
             if url and sub_url:
                 break
 
-        # TODO - These should be raising error reports somewhere
+        # These will raise error reports up the processing chain
         if not url:
             raise ValueError("No URL in description")
         if not sub_url:
             raise ValueError("No Subscription URL in description")
 
-        return Feed(id=lst["id"], name=lst["name"], feed_url=url, poll_frequencies=frequency_list, email_base_url=sub_url, mult_freq=mult_freq)
+        return Feed(id=data["id"], name=data["name"], feed_url=url, poll_frequencies=frequency_list,
+                    filter_groups=topics, email_base_url=sub_url, mult_freq=mult_freq)
+
 
     def _find_new_articles(self, feed: Feed, articles: list[FeedItem]) -> list[FeedItem]:
         """Find new articles since last poll."""

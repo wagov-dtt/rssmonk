@@ -327,13 +327,15 @@ async def create_feed(
 
     try:
         with rss_monk:
-            feed = rss_monk.add_feed(str(request.feed_url), str(request.email_base_url), request.poll_frequencies, request.name, request.visibility)
+            feed = rss_monk.add_feed(str(request.feed_url), str(request.email_base_url), request.poll_frequencies,
+                                     request.filter_groups, request.name, request.visibility)
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
                 feed_url=feed.feed_url,
                 email_base_url=feed.email_base_url,
                 poll_frequencies=feed.poll_frequencies,
+                filter_groups=feed.filter_groups,
                 url_hash=feed.url_hash
             )
     except ValueError as e:
@@ -721,10 +723,10 @@ async def handle_process_feed(
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
             highest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
-            campaigns, articles = await rss_monk.process_feed(feed, highest_freq)
+            notifications, articles = await rss_monk.process_feed(feed, highest_freq)
             return FeedProcessResponse(
                 feed_name=feed.name,
-                campaigns_created=campaigns,
+                notifications_sent=notifications,
                 articles_processed=articles
             )
     except HTTPException:

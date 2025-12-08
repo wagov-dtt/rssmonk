@@ -140,8 +140,7 @@ class IntegrationTestSuite:
             response = await client.post(
                 f"{self.base_url}/api/feeds/process",
                 json={
-                    "url": feed["url"],
-                    "auto_send": True
+                    "url": feed["url"]
                 },
                 auth=self.auth
             )

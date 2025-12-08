@@ -53,6 +53,7 @@ ROLE_PREFIX = "list_role_"
 # Feed description modifiers
 LIST_DESC_FEED_URL = "RSS Feed:"
 SUB_BASE_URL = "Subscription URL:"
+TOPICS_TITLE = "Topics:"
 
 # Enables different filters per frequency. Default to false to only have one frequency type in the filter
 MULTIPLE_FREQ = "Multiple freq:" # TODO - Currently not in use
