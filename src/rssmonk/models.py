@@ -5,7 +5,7 @@ import uuid
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from rssmonk.types import LIST_DESC_FEED_URL, SUB_BASE_URL, TOPICS_TITLE, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
+from rssmonk.types import ALL_FILTER, LIST_DESC_FEED_URL, SUB_BASE_URL, TOPICS_TITLE, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
 
 class Feed(BaseModel):
     """RSS feed model."""
@@ -125,19 +125,41 @@ class PublicSubscribeRequest(BaseModel):
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
 
+
+def subscribe_request_filter_value_check_common(value):
+    """
+    After model validation. Value check for the filter in SubscribeRequest and SubscribeAdminRequest
+    
+    :param value: The value to check
+    """
+    for _, freq_item in dict(value).items(): # freq_item is FrequencyFilterType, don't need to check key (frequency) again
+        if isinstance(freq_item, str) and freq_item != ALL_FILTER:
+            raise ValueError(f"Filter must be a dict or '{ALL_FILTER}': {freq_item}")
+        elif isinstance(freq_item, dict):
+            for _, item in freq_item.items(): # Key here is a category, and is up to the system to handle
+                if isinstance(item, str) and item != ALL_FILTER:
+                    raise ValueError(f"Category string must be a dict or '{ALL_FILTER}': {item}")
+    return value
+
 class SubscribeRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
     display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The text for the filter above for email")
+    @field_validator("filter", mode="after")
+    def subscriber_filter_check(cls, value):
+        return subscribe_request_filter_value_check_common(value)
 
 class SubscribeAdminRequest(BaseModel):
     """Request model for a subscription endpoint with a filter and email confirmation."""
     email: str = Field(..., description="Subscriber email address")
     feed_url: HttpUrl = Field(..., description="RSS feed URL to subscribe to")
-    filter: dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
+    filter: str | dict[Frequency, FrequencyFilterType] = Field(..., description="The filter as JSON")
     display_text: Optional[dict[Frequency, DisplayTextFilterType]] = Field(..., description="The text for the filter above for email")
     bypass_confirmation: Optional[bool] = Field(False, description="Bypass the temporary filter and email for confirmation.")
+    @field_validator("filter", mode="after")
+    def subscriber_filter_check(cls, value):
+        return subscribe_request_filter_value_check_common(value)
 
 class SubscriptionPreferencesRequest(BaseModel):
     """Request model for a subscription endpoint with filters for the feed."""

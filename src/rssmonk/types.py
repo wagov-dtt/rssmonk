@@ -6,8 +6,27 @@ from typing import Any
 
 # RSS Feed types
 
-FrequencyFilterType = list[int] | dict[str, list[int]]
-DisplayTextFilterType = list[str] | dict[str, list[str]]
+class ListVisibilityType(StrEnum):
+    """List visibility type."""
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+class Frequency(StrEnum):
+    """Polling frequencies."""
+    INSTANT = "instant"
+    DAILY = "daily"
+    #WEEKLY = "weekly"
+
+FrequencyFilterType = str | list[int] | dict[str, str | list[int]]
+"""
+Covers the following scenarios
+- "all" topics
+- A list of topics to be selected that have no category
+- A dictionary of categories with either
+  - A list of topics
+  - "all" topics of a category
+"""
+DisplayTextFilterType = str | list[str] | dict[str, str | list[str]]
 
 # Feed frequency configurations
 def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
@@ -33,17 +52,6 @@ def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
         #},
     }
 
-class ListVisibilityType(StrEnum):
-    """List visibility type."""
-    PUBLIC = "public"
-    PRIVATE = "private"
-
-class Frequency(StrEnum):
-    """Polling frequencies."""
-    INSTANT = "instant"
-    DAILY = "daily"
-    #WEEKLY = "weekly"
-
 
 # Account prefixes
 
@@ -62,8 +70,10 @@ MULTIPLE_FREQ = "Multiple freq:" # TODO - Currently not in use
 FEED_URL_RSSMONK_QUERY = "?rssmonk=true" # TODO - Refine?
 
 ALL_FILTER = "all"
-"""The keyword for every option in a filter"""
+"""This keyword is the expected flag to either be all filter types, or all for a category/topic"""
+
 NO_REPLY = os.environ.get("NO_REPLY_EMAIL", "noreply@noreply (No reply location)")
+"""The keyword for every option in a filter"""
  
 class EmailPhaseType(StrEnum):
     """

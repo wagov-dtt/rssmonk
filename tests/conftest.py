@@ -18,9 +18,10 @@ def make_admin_session() -> requests.Session:
     # Create the session into Listmonk
     admin_session = requests.Session()
 
-    response = admin_session.get(f"{LISTMONK_URL}/admin/login")
+    admin_session.get(f"{LISTMONK_URL}/admin/login")
     nonce = admin_session.cookies.get("nonce")
     assert nonce, "Nonce not found in cookies"
+    
     login_data={
         "username": "admin",
         "password": "admin123", # Taken from /workspaces/rssmonk/kustomize/base/secrets.yaml

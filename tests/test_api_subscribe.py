@@ -45,6 +45,25 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
+    def test_post_subscribe_no_credentials_bad_request(self):
+        # No credential, feed exist, SubscribeAdminRequest object that should fail value checks
+        sub_req = {
+            "email": "email@example.com",
+            "filter": "everything",
+            "display_text": "everything"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=None, json=sub_req)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+        sub_req = {
+            "email": "email@example.com",
+            "filter": {"instant": "everything"},
+            "display_text": {"instant": "everything"}
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=None, json=sub_req)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
+
+
     def test_post_subscribe_non_admin_no_object(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
@@ -81,6 +100,58 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert 1 == len(feed_attribs.keys())
 
 
+    def test_post_subscribe_non_admin_subscribe_request_all_category(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
+        pwd = init_data.accounts[user]
+
+        # Non admin credential, feed exist, SubscribeRequest object
+        sub_req = {
+            "email": "email@example.com",
+            "filter": {"instant": {"region": "all"}},
+            "display_text": {"instant": {"region": "Everything"}}
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd), json=sub_req)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+        # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email='email@example.com'"})
+        print(response.json()["data"]["results"])
+        subscriber = response.json()["data"]["results"][0]
+        assert self.FEED_ONE_HASH in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
+        # Should only be a single item in here, the key is the guid.
+        assert isinstance(feed_attribs, dict)
+        assert "filter" not in feed_attribs
+        assert "token" not in feed_attribs
+        assert 1 == len(feed_attribs.keys())
+
+
+    def test_post_subscribe_non_admin_subscribe_request_all_filter(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
+        pwd = init_data.accounts[user]
+
+        # Non admin credential, feed exist, SubscribeRequest object with the 'all' filter
+        sub_req = {
+            "email": "email@example.com",
+            "filter": {"instant": "all"},
+            "display_text": {"instant": "Everything"}
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd), json=sub_req)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+        # - Check listmonk for attribs feed without filter (but there's one entry in the feed dict) and no token existance
+        response = self.admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email='email@example.com'"})
+        print(response.json()["data"]["results"])
+        subscriber = response.json()["data"]["results"][0]
+        assert self.FEED_ONE_HASH in subscriber["attribs"]
+        feed_attribs = subscriber["attribs"][self.FEED_ONE_HASH]
+        # Should only be a single item in here, the key is the guid.
+        assert isinstance(feed_attribs, dict)
+        assert "filter" not in feed_attribs
+        assert "token" not in feed_attribs
+        assert 1 == len(feed_attribs.keys())
+
+
     def test_post_subscribe_non_admin_subscribe_admin_request(self):
         init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
         user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
@@ -97,6 +168,31 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
 
+    def test_post_subscribe_non_admin_bad_request(self):
+        init_data = self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+        user = FEED_ACCOUNT_PREFIX + self.FEED_ONE_HASH
+        pwd = init_data.accounts[user]
+
+        # Non admin credential, feed exist, SubscribeAdminRequest object that should fail value checks
+        sub_req = {
+            "email": "email@example.com",
+            "filter": "everything",
+            "display_text": "everything"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd), json=sub_req)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Input should be a valid dictionary" in response.text
+
+        sub_req = {
+            "email": "email@example.com",
+            "filter": {"instant": "everything"},
+            "display_text": {"instant": "everything"}
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=HTTPBasicAuth(user, pwd), json=sub_req)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Value error, Filter must be a dict or 'all'" in response.text
+
+
     def test_post_subscribe_admin_no_object(self):
         self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
 
@@ -104,6 +200,29 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Field required" in response.text
+
+
+    def test_post_subscribe_admin_bad_request(self):
+        self.initialise_system(UnitTestLifecyclePhase.FEED_TEMPLATES)
+
+        # Non admin credential, feed exist, SubscribeAdminRequest object that should fail value checks
+        sub_req = {
+            "email": "email@example.com",
+            "filter": "everything",
+            "display_text": "everything"
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=self.ADMIN_AUTH, json=sub_req)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Input should be a valid dictionary" in response.text
+
+        sub_req = {
+            "email": "email@example.com",
+            "filter": {"instant": "everything"},
+            "display_text": {"instant": "everything"}
+        }
+        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=self.ADMIN_AUTH, json=sub_req)
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
+        assert "Value error, Filter must be a dict or 'all'" in response.text
 
 
     def test_post_subscribe_admin_subscribe_request(self):
