@@ -1,5 +1,5 @@
 import warnings
-warnings.warn("This module should not be imported for use. It is solely for mass api endpoint calls as a test", DeprecationWarning)
+warnings.warn("This module should not be imported for use. It is solely for mass api endpoint calls as a test", ImportWarning)
 
 # This script is a scrap to quickly populate items in Listmonk
 from typing import Optional
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     if session:
         with session:
             # Make limited user role for feed accounts
-            for item in range(2):
+            for item in range(63252):
                 #_set_up_transactional_template(session)
                 #response = session.delete(f"{_URL}/api/templates/{item}")
                 _make_subscriber(f"daniel{item}@wagov.au")

@@ -21,8 +21,8 @@ spec:
             memory: "128Mi"
             cpu: "100m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "2Gi"
+            cpu: "2000m"
         env:
         - name: LISTMONK_app__address
           value: "0.0.0.0:9000"

@@ -53,7 +53,7 @@ def make_filter_url(data: list | dict[str, list[int]]) -> str:
     """Creates a flat URL query string from a list or dictionary of filters."""
     if isinstance(data, list):
         # A flat list not part of a dict needs a default keyword
-        return f"filter={",".join(str(x) for x in data)}" if len(data) > 0 else ""
+        return f"{",".join(str(x) for x in data)}" if len(data) > 0 else ""
     elif isinstance(data, dict):
         value_list = []
         for key, value in data.items():

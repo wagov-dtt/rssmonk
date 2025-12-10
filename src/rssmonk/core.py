@@ -17,8 +17,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
-from rssmonk.utils import make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, TOPICS_TITLE, EmailPhaseType, ErrorMessages, FeedItem
+from rssmonk.utils import make_filter_url, make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, TOPICS_TITLE, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -522,6 +522,10 @@ class RSSMonk:
             url_dict = {"filter": sub_filter}
             # Generate the token that will be used in email to help validate the removal of the subscription
             url_dict["token"] = uuid.uuid4().hex
+            # Make the subscribe query and unsubscribe query for the email
+            url_dict["subscribe_query"] = f"/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(sub_filter)}"
+            url_dict["unsubscribe_query"] = f"/{ActionsURLSuffix.UNSUBSCRIBE.value}?id={subs["uuid"]}&token={url_dict["token"]}"
+
         attribs[feed_hash] = url_dict
 
         # Have to covert the extracted lists to be a list of numbers to retain subscriptions

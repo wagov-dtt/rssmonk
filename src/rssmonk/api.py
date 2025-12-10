@@ -862,7 +862,7 @@ async def feed_subscribe(
                     "subscription_link":  subscribe_link,
                     "frequency": frequency,
                     "filter": request.display_text[frequency] if request.display_text and (frequency in request.display_text) else {},
-                    "confirmation_link": f"{base_url}?id={subscriber_uuid}&guid={pending_uuid}"
+                    "confirmation_link": f"{base_url}/{ActionsURLSuffix.CONFIRM.value}?id={subscriber_uuid}&guid={pending_uuid}"
                 }
 
                 # Send email out for the user
@@ -906,8 +906,8 @@ async def feed_subscribe_confirm(
             rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
             feed_hash = extract_feed_hash(credentials.username)
 
-            subscriber_id = request.subscriber_id
-            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid='{subscriber_id}'")
+            subscriber_uuid = request.subscriber_id
+            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid='{subscriber_uuid}'")
 
             req_uuid = request.guid
             subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
@@ -919,11 +919,12 @@ async def feed_subscribe_confirm(
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
             feed_attribs = subs["attribs"][feed_hash]
+            # Search for the uuid in the feed area
             if req_uuid not in feed_attribs:
                 # React as if it has expired
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
 
-            # Expired links is removed from the attributes for one feed
+            # Expired links is normally removed from the attributes after a day
             if feed_attribs[req_uuid]['expires'] < datetime.now(timezone.utc).timestamp():
                 # No deletion will occur here, there will be a cronjob to remove expired pending filters
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Link has expired")
@@ -932,6 +933,11 @@ async def feed_subscribe_confirm(
             feed_attribs["filter"] = feed_attribs[req_uuid]["filter"]
             # Generate the token that will be used in email to help validate the removal of the subscription
             feed_attribs["token"] = uuid.uuid4().hex
+
+            # Make the subscribe query and unsubscribe query for the email
+            feed_attribs["subscribe_query"] = f"/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(feed_attribs["filter"])}"
+            feed_attribs["unsubscribe_query"] = f"/{ActionsURLSuffix.UNSUBSCRIBE.value}?id={subscriber_uuid}&token={feed_attribs["token"]}"
+
             del subs["attribs"][feed_hash][req_uuid]
             # Have to covert the extracted lists to be a plain list of numbers to retain subscriptions
             subs["lists"] = numberfy_subbed_lists(subs["lists"])

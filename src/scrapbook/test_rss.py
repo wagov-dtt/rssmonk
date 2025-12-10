@@ -1,6 +1,6 @@
 import uuid
 import warnings
-warnings.warn("This module should not be imported for use. It is solely for a test", DeprecationWarning)
+warnings.warn("This module should not be imported for use. It is solely for a test", ImportWarning)
 
 # This script is to test for access
 import requests

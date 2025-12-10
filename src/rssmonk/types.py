@@ -97,6 +97,7 @@ class EmailPhaseType(StrEnum):
 class ActionsURLSuffix(StrEnum):
     """Standardised URL patterns to append to base urls to perform actions"""
     SUBSCRIBE = "subscribe"
+    CONFIRM = "subscribe-confirm"
     UNSUBSCRIBE = "unsubscribe"
     EDIT_PREFERENCES = "preferences" # This should be used sparingly
 
