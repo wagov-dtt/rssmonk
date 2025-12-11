@@ -334,7 +334,9 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert isinstance(feed_attribs, dict)
         assert "filter" in feed_attribs
         assert "token" in feed_attribs
-        assert len(feed_attribs.keys()) == 2, feed_attribs
+        assert "subscribe_query" in feed_attribs
+        assert "unsubscribe_query" in feed_attribs
+        assert len(feed_attribs.keys()) == 4, feed_attribs
 
 
     def test_post_subscribe_admin_subscribe_admin_request_with_bypass(self):
@@ -375,7 +377,9 @@ class TestRSSMonkSubscribe(ListmonkClientTestBase):
         assert isinstance(feed_attribs, dict)
         assert "filter" in feed_attribs
         assert "token" in feed_attribs
-        assert len(feed_attribs.keys()) == 2, feed_attribs
+        assert "subscribe_query" in feed_attribs
+        assert "unsubscribe_query" in feed_attribs
+        assert len(feed_attribs.keys()) == 4, feed_attribs
 
 
     # -------------------------

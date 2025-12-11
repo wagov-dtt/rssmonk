@@ -317,14 +317,14 @@ class RSSMonk:
 
     # Feed operations
 
-    def add_feed(self, feed_url: str, email_base_url: str, new_frequency: list[Frequency], filter_groups: list[str],
+    def add_feed(self, feed_url: str, email_base_url: str, new_frequency: list[Frequency],
                  name: Optional[str] = None, visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
         """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
             name = self._get_feed_name(feed_url)
 
         # Create return
-        feed = Feed(name=name, feed_url=feed_url, poll_frequencies=new_frequency, filter_groups=filter_groups, email_base_url=email_base_url)
+        feed = Feed(name=name, feed_url=feed_url, poll_frequencies=new_frequency, email_base_url=email_base_url)
 
         # Check for existing feed with same URL
         existing_feed = self.get_feed_by_url(feed_url)
@@ -561,6 +561,44 @@ class RSSMonk:
 
 
     # Feed processing
+    def _create_instant_email_payload(self, feed: Feed, template_id: int, subject: str,
+                                from_email: str, email: str | list[str], item: dict[str, str]):
+        payload = {
+            "from_email": from_email,
+            "subject": subject,
+            "template_id": template_id,
+            "data": {
+                "item": item,
+                "feed_hash": feed.url_hash,
+                "base_url": feed.email_base_url,
+            },
+            "content_type": "html"
+        }
+        if isinstance(email, str):
+            payload["subscriber_email"] = email
+        else:
+            payload["subscriber_emails"] = email
+        return payload
+
+
+    def _create_daily_email_payload(self, feed: Feed, template_id: int, from_email: str,
+                              email: str | list[str], items: list[dict[str, str]]):
+        payload = {
+            "from_email": from_email,
+            "template_id": template_id,
+            "data": {
+                "items": items,
+                "feed_hash": feed.url_hash,
+                "base_url": feed.email_base_url,
+            },
+            "content_type": "html"
+        }
+        if isinstance(email, str):
+            payload["subscriber_email"] = email
+        else:
+            payload["subscriber_emails"] = email
+        return payload
+
 
     async def process_feed(self, feed: Feed, frequency: Frequency) -> Tuple[int, int]:
         """Process single feed - fetch articles and send tx  using cache."""
@@ -583,29 +621,33 @@ class RSSMonk:
             notifications_sent = 0 # This counts successful emails sent by unique email addresses
             subscribers = self.getClient().get_all_feed_subscribers(feed.id)
 
-            # TODO - Generate all inclusive email case to prevent generating it continously
-            # TODO - What to do with multiple instant notifications
-            all_inclusive_email = ""
+            # List of emails that are will get all updates in the feed
+            all_inclusive_email_list = []
 
             # Extract list of subscribers, generate urls for the template and them email out.
             # Populate - If multiple articles exist and it is instant, ensure that one email per article is sent out
             # Send out
             for subscriber in subscribers:
                 if "email" not in subscriber:
+                    # TODO - Should this be logged? This is a weird thing to happen
                     continue
 
-                email = subscriber["email"]
-                # If the filter_groups in the feed are present in the subscriber filter and they ask for all, then add to all_filter
+                sub_email = subscriber["email"]
+                # If ask for all, then add to all_inclusive_email_list
                 feed_hash_data = subscriber["attribs"][feed_hash]
                 filter_freq_data = feed_hash_data["filter"][frequency.value]
-                # TODO - The urls can be generated and stored for use later... would be better generated once
-                unsub_url = feed_hash_data["unsub_segment"]
-                subscription_url = feed_hash_data["filter_segment"]
-                if feed.filter_groups is None: # TODO - Add or for having all marked 
-                    # TODO - make dict for these urls and sent it with the data... (are there limits?)
-                    pass
+
+                if isinstance(filter_freq_data, str) and filter_freq_data == "all":
+                    all_inclusive_email_list.append(sub_email)
+                    continue
+
+                # TODO - Individual item here
 
                 notifications_sent += 1
+
+            if len(all_inclusive_email_list) > 0:
+                # TODO - Send the everything email.
+                pass
 
             # Update state
             self._update_feed_state(feed, frequency, new_articles)
@@ -694,7 +736,7 @@ class RSSMonk:
             raise ValueError("No Subscription URL in description")
 
         return Feed(id=data["id"], name=data["name"], feed_url=url, poll_frequencies=frequency_list,
-                    filter_groups=topics, email_base_url=sub_url, mult_freq=mult_freq)
+                    email_base_url=sub_url, mult_freq=mult_freq)
 
 
     def _find_new_articles(self, feed: Feed, articles: list[FeedItem]) -> list[FeedItem]:

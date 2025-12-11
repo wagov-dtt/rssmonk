@@ -13,14 +13,12 @@ def test_valid_feed_create_request():
         "feed_url": "https://example.com/rss",
         "email_base_url": "https://example.com/email",
         "poll_frequencies": [Frequency.DAILY],
-        "filter_groups": ["tech", "news"],
         "name": "My Feed",
         "visibility": ListVisibilityType.PRIVATE
     }
     model = FeedCreateRequest(**data)
     assert model.feed_url.encoded_string() == "https://example.com/rss"
     assert model.visibility == ListVisibilityType.PRIVATE
-    assert model.filter_groups == ["tech", "news"]
 
 
 def test_missing_required_fields():
@@ -41,7 +39,6 @@ def test_optional_fields_default():
     model = FeedCreateRequest(**data)
     assert model.name is None
     assert model.visibility == ListVisibilityType.PRIVATE
-    assert model.filter_groups is None
 
 
 def test_invalid_url():

@@ -328,14 +328,13 @@ async def create_feed(
     try:
         with rss_monk:
             feed = rss_monk.add_feed(str(request.feed_url), str(request.email_base_url), request.poll_frequencies,
-                                     request.filter_groups, request.name, request.visibility)
+                                     request.name, request.visibility)
             return FeedResponse(
                 id=feed.id,
                 name=feed.name,
                 feed_url=feed.feed_url,
                 email_base_url=feed.email_base_url,
                 poll_frequencies=feed.poll_frequencies,
-                filter_groups=feed.filter_groups,
                 url_hash=feed.url_hash
             )
     except ValueError as e:
