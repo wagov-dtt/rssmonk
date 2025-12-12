@@ -5,7 +5,7 @@ import uuid
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from rssmonk.types import ALL_FILTER, LIST_DESC_FEED_URL, SUB_BASE_URL, TOPICS_TITLE, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
+from rssmonk.types import ALL_FILTER, LIST_DESC_FEED_URL, SUB_BASE_URL, DisplayTextFilterType, FrequencyFilterType, EmailPhaseType, Frequency, ListVisibilityType
 
 class Feed(BaseModel):
     """RSS feed model."""
@@ -235,6 +235,7 @@ class FeedListResponse(BaseModel):
 class FeedProcessResponse(BaseModel):
     """Response model for feed processing."""
     feed_name: str = Field(..., description="Name of processed feed")
+    frequency: Frequency = Field(..., description="The frequency processed for the feed")
     notifications_sent: int = Field(..., description="Number of notifications created")
     articles_processed: int = Field(..., description="Number of articles processed")
 

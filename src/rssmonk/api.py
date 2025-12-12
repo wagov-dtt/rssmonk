@@ -12,7 +12,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import httpx
 
 from rssmonk.http_clients import ListmonkClient
-from rssmonk.types import FEED_ACCOUNT_PREFIX, NO_REPLY, ActionsURLSuffix
+from rssmonk.types import FEED_ACCOUNT_PREFIX, NO_REPLY_EMAIL, ActionsURLSuffix
 from rssmonk.utils import extract_feed_hash, find_highest_frequency, get_feed_hash_from_username, make_api_username, \
     make_filter_url, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
 
@@ -722,9 +722,14 @@ async def handle_process_feed(
                 raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Feed not found")
             
             highest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
+
+            if not highest_freq:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="No feed frequencies supported")
+
             notifications, articles = await rss_monk.process_feed(feed, highest_freq)
             return FeedProcessResponse(
                 feed_name=feed.name,
+                frequency=highest_freq,
                 notifications_sent=notifications,
                 articles_processed=articles
             )
@@ -733,7 +738,6 @@ async def handle_process_feed(
     except Exception as e:
         logger.error("Failed to process feed: %s", e)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Feed processing failed")
-
 
 
 @app.post(
@@ -847,7 +851,7 @@ async def feed_subscribe(
                 feed_data = rss_monk.get_feed_by_hash(feed_hash)
                 base_url = feed_data.email_base_url
 
-                template = rss_monk.get_template(feed_hash, EmailPhaseType.SUBSCRIBE)
+                template = rss_monk.get_template_metadata(feed_hash, EmailPhaseType.SUBSCRIBE)
                 if template is None:
                     logger.error("No subscribe template found for %s", feed_hash)
                     # Cronjob should remove the attribs in the next day
@@ -865,7 +869,7 @@ async def feed_subscribe(
                 }
 
                 # Send email out for the user
-                rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", [request.email], transaction)
+                rss_monk.getClient().send_transactional(NO_REPLY_EMAIL, template.id, "html", [request.email], transaction)
 
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
@@ -966,11 +970,13 @@ async def feed_unsubscribe(
     """Feed subscription confirmation endpoint."""
     try:
         with rss_monk:
+            remove_subscriber = False
             feed_hash = None
             token = None
             bypass_confirmation = False
             subscriber_query = None
             is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
+
             if isinstance(request, UnsubscribeAdminRequest):
                 if not is_valid_admin:
                     raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
@@ -1017,32 +1023,33 @@ async def feed_unsubscribe(
                     raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="Incorrect token")
                 del subscriber_details["attribs"][feed_hash]
 
+            # If the subscribed lists are empty, the subscriber should be removed from the system
             if len(subs_lists) == 0:
-                # If the subscribed lists are empty, the subscriber should be removed from the system
-                rss_monk.getAdminClient().delete_subscriber(subscriber_details["id"])
-            else:
-                rss_monk.getClient().update_subscriber(subscriber_details["id"], subscriber_details)
-            
+                remove_subscriber = True
+
+            # Always update the subscriber regardless. If it crashes, then it can be manually or auto cleaned out
+            rss_monk.getClient().update_subscriber(subscriber_details["id"], subscriber_details)
+
             # Send emails
             if not bypass_confirmation:
-                template = rss_monk.get_template(feed_hash, EmailPhaseType.UNSUBSCRIBE)
+                template = rss_monk.get_template_metadata(feed_hash, EmailPhaseType.UNSUBSCRIBE)
                 if template is None:
-                    logger.error("No unsubscribe template found for feed %s. Skipping", feed_hash)
-                    # TODO - Add option in list description for optional email, or for confirm unsubscribe link(?), when feature is requrested
                     # Currently okay to return empty. User is unsubscribed, the notification is a courtesy
+                    logger.error("No unsubscribe template found for feed %s. Skipping", feed_hash)
                     return
-
-                subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
-                transaction = {
-                    "subscription_link": subscribe_link,
-                }
 
                 # Send email out for the user
                 try:
-                    rss_monk.getClient().send_transactional(NO_REPLY, template.id, "html", [subscriber_details["email"]], transaction)
+                    subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
+                    rss_monk.getClient().send_transactional(NO_REPLY_EMAIL, template.id, "html", [subscriber_details["email"]], {"subscription_link": subscribe_link})
                 except Exception as e:
-                    logger.error("Failed to send an unsubscribe email: %s", e)
-                    raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Successfully unsubscribed, Requested email could not be sent") from e
+                    logger.error("Failed to send an unsubscribe email: %s. Subscriber with email %s will be changed", e, subscriber_details["email"])
+                    raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Requested email could not be sent") from e
+
+            # This is needed here because Listmonk does require the subscriber to exist to send emails, otherwise it will be 400
+            if remove_subscriber:
+                rss_monk.getAdminClient().delete_subscriber(subscriber_details["id"])
+
 
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e

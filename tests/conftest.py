@@ -51,9 +51,9 @@ def listmonk_setup():
         "app.check_updates": True,
         "app.lang": "en",
         "app.batch_size": 1000,
-        "app.concurrency": 10,
+        "app.concurrency": 20,
         "app.max_send_errors": 1000,
-        "app.message_rate": 10,
+        "app.message_rate": 100,
         "app.cache_slow_queries": False,
         "app.cache_slow_queries_interval": "0 3 * * *",
         "app.message_sliding_window": False,
@@ -108,7 +108,7 @@ def listmonk_setup():
                 "username": "username",
                 "password": "",
                 "email_headers": [],
-                "max_conns": 10,
+                "max_conns": 20,
                 "max_msg_retries": 2,
                 "idle_timeout": "15s",
                 "wait_timeout": "5s",
@@ -408,7 +408,7 @@ class ListmonkClientTestBase(unittest.TestCase):
         """Creating templates used for testing. Independant of the feed list creation"""
         template_data = {
             "name": self.FEED_ONE_HASH+"-subscribe",
-            "subject": "Subscribed Subject Line",
+            "subject": "Subject Line: You requested to be subscribed",
             "type": "tx",
             "body": "<html><body></body></html>"
         }
@@ -416,7 +416,7 @@ class ListmonkClientTestBase(unittest.TestCase):
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed template: "+response.text
         template_two_data = {
             "name": self.FEED_ONE_HASH+"-unsubscribe",
-            "subject": "Unsubscribed Subject Line",
+            "subject": "Subject Line: You are now unsubscribed",
             "type": "tx",
             "body": "<html><body></body></html>"
         }

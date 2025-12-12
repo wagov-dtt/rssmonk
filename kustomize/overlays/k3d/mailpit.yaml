@@ -26,8 +26,8 @@ spec:
             memory: "64Mi"
             cpu: "50m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "512Mi"
+            cpu: "1000m"
         env:
         - name: MP_UI_BIND_ADDR
           value: "0.0.0.0:8025"

@@ -1,4 +1,5 @@
 
+from multiprocessing import Process
 import asyncio
 from datetime import datetime
 import threading
@@ -189,22 +190,22 @@ async def main_send(clients, template_id):
 
 def threading_send(clients, template_id):
     for i in range(10):
-        threads = []
-        for j in range(10):
-            iteration = i*10+j
-            emails = [f"example{i}@example.com" for i in range(100)]
-            t = threading.Thread(target=send_instant_email, args=(clients[j], template_id, emails, iteration,), kwargs={})
-            threads.append(t)
+        process: list[Process] = []
+        for j in range(100):
+            iteration = i*100+j
+            emails = [f"example{i}@example.com" for i in range(10)]
+            t = Process(target=send_instant_email, args=(clients[j], template_id, emails, iteration,), kwargs={})
+            process.append(t)
 
         # Start each thread
-        for t in threads:
+        for t in process:
             t.start() # Start immediately ?
 
         # Wait for all threads to finish
-        for t in threads:
+        for t in process:
             t.join()
 
-        threads.clear()
+        process.clear()
 
 
 def using_array_emails_instant_send(clients, template_id):
@@ -215,14 +216,15 @@ def using_array_emails_instant_send(clients, template_id):
 
 def using_array_emails_daily_send(clients, template_id):
     iteration = 0
-    emails = [f"example{i}@example.com" for i in range(10000)]
-    send_daily_email(clients[0], template_id, emails, iteration)
+    for i in range(10):
+        emails = [f"example{j}@example.com" for j in range(i*1000, (i+1)*1000)]
+        send_daily_email(clients[0], template_id, emails, iteration)
 
 
 # Quick create tens of thousands of api calls to mail
 if __name__ == "__main__":
     clients = []
-    for i in range(10):
+    for i in range(100):
         # Make 10 clients
         clients.append(make_session())
 
@@ -235,7 +237,7 @@ if __name__ == "__main__":
     start = datetime.now().timestamp()
 
     #main_send(clients, template_id)
-    #threading_send(clients, template_id)
+    #threading_send(clients, instant_template_id)
     #using_array_emails_instant_send(clients, instant_template_id)
     using_array_emails_daily_send(clients, daily_template_id)
 

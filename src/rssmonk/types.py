@@ -61,7 +61,6 @@ ROLE_PREFIX = "list_role_"
 # Feed description modifiers
 LIST_DESC_FEED_URL = "RSS Feed:"
 SUB_BASE_URL = "Subscription URL:"
-TOPICS_TITLE = "Topics:"
 
 # Enables different filters per frequency. Default to false to only have one frequency type in the filter
 MULTIPLE_FREQ = "Multiple freq:" # TODO - Currently not in use
@@ -72,7 +71,7 @@ FEED_URL_RSSMONK_QUERY = "?rssmonk=true" # TODO - Refine?
 ALL_FILTER = "all"
 """This keyword is the expected flag to either be all filter types, or all for a category/topic"""
 
-NO_REPLY = os.environ.get("NO_REPLY_EMAIL", "noreply@noreply (No reply location)")
+NO_REPLY_EMAIL = os.environ.get("NO_REPLY_EMAIL", "noreply@noreply (No reply location)")
 """The keyword for every option in a filter"""
  
 class EmailPhaseType(StrEnum):

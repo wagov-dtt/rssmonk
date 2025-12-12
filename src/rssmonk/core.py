@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import make_filter_url, make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, SUB_BASE_URL, LIST_DESC_FEED_URL, TOPICS_TITLE, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, NO_REPLY_EMAIL, SUB_BASE_URL, LIST_DESC_FEED_URL, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -390,15 +390,19 @@ class RSSMonk:
 
     # Template operations
     # TODO - Set up map, name to template id, if there are many, for caching
+    def get_template_metadata(self, feed_hash: str, phase_type: EmailPhaseType):
+        """Get a template metedata associated with a feed and template type (excludes template body)"""
+        # TODO - Future cache here
+        return self._admin.find_template(feed_hash, phase_type, True)
 
     def get_template(self, feed_hash: str, phase_type: EmailPhaseType):
         """Get a template associated with a feed and template type"""
         # TODO - Future cache here
-        return self._admin.find_email_template(feed_hash, phase_type)
+        return self._admin.find_template(feed_hash, phase_type)
 
     def add_update_template(self, feed_hash: str, phase_type: EmailPhaseType, new_template: EmailTemplate):
         """Insert or update an email template for a feed"""
-        template = self._admin.find_email_template(feed_hash, phase_type)
+        template = self._admin.find_template(feed_hash, phase_type)
         if template is None:
             return self._admin.create_email_template(new_template)
         else:
@@ -407,7 +411,7 @@ class RSSMonk:
     def delete_template(self, feed_hash: str, phase_type: EmailPhaseType):
         """Delete singular templates associated with the feed"""
         template_name = make_template_name(feed_hash, phase_type)
-        templates = self._admin.get_templates()
+        templates = self._admin.get_templates(no_body=True) # Don't need body
         for template in templates:
             if template_name == template["name"]:
                 return self._admin.delete_email_template(template["id"])
@@ -415,7 +419,7 @@ class RSSMonk:
 
     def delete_feed_templates(self, feed_url: str):
         """Delete all templates associated with the feed"""
-        templates = self._admin.get_templates()
+        templates = self._admin.get_templates(no_body=True)
         url_hash = make_url_hash(str(feed_url))
         for template in templates:
             if url_hash in template["name"]:
@@ -602,6 +606,7 @@ class RSSMonk:
 
     async def process_feed(self, feed: Feed, frequency: Frequency) -> Tuple[int, int]:
         """Process single feed - fetch articles and send tx  using cache."""
+        notifications_sent = 0 # This counts successful emails sent by unique email addresses
         try:
             # Fetch articles using cache
             articles, feed_title = await feed_cache.get_feed(
@@ -609,6 +614,13 @@ class RSSMonk:
                 user_agent=self.settings.rss_user_agent,
                 timeout=self.settings.rss_timeout
             )
+            # Get the template with the frequency
+            digest_type = EmailPhaseType.INSTANT_DIGEST
+            if frequency == Frequency.DAILY:
+                digest_type = EmailPhaseType.DAILY_DIGEST
+            template = self.get_template(feed.url_hash, digest_type)
+            if not template:
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail=f"Template does not exist for {frequency.value}")
 
             # Get new articles (check against last poll tag)
             new_articles = self._find_new_articles(feed, articles)
@@ -618,36 +630,91 @@ class RSSMonk:
                 return 0, 0
 
             feed_hash = make_url_hash(feed.feed_url)
-            notifications_sent = 0 # This counts successful emails sent by unique email addresses
             subscribers = self.getClient().get_all_feed_subscribers(feed.id)
 
-            # List of emails that are will get all updates in the feed
-            all_inclusive_email_list = []
 
-            # Extract list of subscribers, generate urls for the template and them email out.
-            # Populate - If multiple articles exist and it is instant, ensure that one email per article is sent out
-            # Send out
-            for subscriber in subscribers:
-                if "email" not in subscriber:
-                    # TODO - Should this be logged? This is a weird thing to happen
-                    continue
+            # TODO - Instant and Daily vary enough to have two functions to handle the processing
+            if frequency == Frequency.INSTANT:
+                # List of emails that are will get all updates in the feed. Each item will have it's own list of emails as separate items
+                all_inclusive_email_list = dict[int, list[str]] = {}
 
-                sub_email = subscriber["email"]
-                # If ask for all, then add to all_inclusive_email_list
-                feed_hash_data = subscriber["attribs"][feed_hash]
-                filter_freq_data = feed_hash_data["filter"][frequency.value]
+                for subscriber in subscribers:
+                    sub_email = subscriber["email"]
+                    # If ask for all, then add to all_inclusive_email_list
+                    feed_hash_data = subscriber["attribs"][feed_hash]
+                    filter_freq_data = feed_hash_data["filter"][frequency.value]
 
-                if isinstance(filter_freq_data, str) and filter_freq_data == "all":
-                    all_inclusive_email_list.append(sub_email)
-                    continue
+                    if isinstance(filter_freq_data, str) and filter_freq_data == "all":
+                        all_inclusive_email_list.append(sub_email)
+                        continue
+                    else:
+                        # Go through the indidivual items and match
+                        matching_feed_items = self.find_all_matching_feed_items(feed, filter_freq_data)
+                        # TODO - If daily, and there is only one item, add it to all_inclusive_email_list
+                        #      - If multiple and all items match, add it to all_inclusive_email_list
+                        #      - Else, send it individually...  
+                        pass
 
-                # TODO - Individual item here
+                    # TODO - Individual item here
 
-                notifications_sent += 1
+                    # TODO - Change to be per email sent out
+                    notifications_sent += 1
 
-            if len(all_inclusive_email_list) > 0:
-                # TODO - Send the everything email.
-                pass
+                # May need to split into multiple emails
+                for item in new_articles:
+                    payload = {
+                        "from_email": NO_REPLY_EMAIL,
+                        "template_id": template.id,
+                        "data": {
+                            "item": {
+                                "title": item.title,
+                                "link": item.link,
+                                "description": item.description # TODO - 
+                            },
+                            "base_url": feed.email_base_url,
+                        },
+                        "content_type": "html"
+                    }
+                    # TODO - Send the everything email.
+            else:
+                # List of emails that are will get all updates in the feed, there's only one feed item set here
+                all_inclusive_email_list = []
+
+                # Extract list of subscribers, generate urls for the template and them email out.
+                # Populate - If multiple articles exist and it is instant, ensure that one email per article is sent out
+                for subscriber in subscribers:
+                    sub_email = subscriber["email"]
+                    # If ask for all, then add to all_inclusive_email_list
+                    feed_hash_data = subscriber["attribs"][feed_hash]
+                    filter_freq_data = feed_hash_data["filter"][frequency.value]
+
+                    if isinstance(filter_freq_data, str) and filter_freq_data == "all":
+                        all_inclusive_email_list.append(sub_email)
+                        continue
+                    else:
+                        # Go through the indidivual items and match
+                        matching_feed_items = self.find_all_matching_feed_items(feed, filter_freq_data)
+                        # TODO - If daily, and there is only one item, add it to all_inclusive_email_list
+                        #      - If multiple and all items match, add it to all_inclusive_email_list
+                        #      - Else, send it individually...  
+                        pass
+
+                    # TODO - Individual item here
+
+                    # TODO - Change to be per email sent out
+                    notifications_sent += 1
+                
+                if len(all_inclusive_email_list) > 0:
+                    payload = {
+                        "from_email": NO_REPLY_EMAIL,
+                        "template_id": template.id,
+                        "data": {
+                            "items": [],
+                            "base_url": feed.email_base_url,
+                        },
+                        "content_type": "html"
+                    }
+                    # TODO - Send the everything email.
 
             # Update state
             self._update_feed_state(feed, frequency, new_articles)
@@ -656,7 +723,7 @@ class RSSMonk:
         except Exception as e:
             logger.error(f"Feed processing failed for {feed.name}: {e}")
             traceback.print_exc()
-            return 0, 0
+            return notifications_sent, 0
 
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
@@ -671,6 +738,7 @@ class RSSMonk:
                 results[feed.name], _ = await self.process_feed(feed, frequency)
 
         # TODO - Consider using for loop below if needing to handle each feed on a thread
+        # TODO - Or perhaps multiprocessing library?
         # Form a list of independant processings
         #tasks = {}
         #async with asyncio.TaskGroup() as tg:
@@ -722,8 +790,6 @@ class RSSMonk:
                 url = line.replace(LIST_DESC_FEED_URL, "").strip()
             if line.startswith(SUB_BASE_URL):
                 sub_url = line.replace(SUB_BASE_URL, "").strip()
-            if line.startswith(TOPICS_TITLE):
-                topics = line.replace(TOPICS_TITLE, "").strip().split(',')
             if line.startswith(MULTIPLE_FREQ):
                 mult_freq = (line.replace(MULTIPLE_FREQ, "").strip() == str(True))
             if url and sub_url:

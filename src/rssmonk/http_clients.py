@@ -258,25 +258,38 @@ class ListmonkClient:
         self.put(f"/api/campaigns/{campaign_id}/status", {"status": "running"})
         return True
 
-    def get_templates(self):
+    def get_templates(self, no_body: bool = False):
         """Get all templates."""
-        data = self.get("/api/templates")
+        data = self.get(f"/api/templates?no_body={str(no_body).lower()}")
         return self._normalize_results(data)
 
-    def find_email_template(self, feed_hash: str, template_type: EmailPhaseType) -> ListmonkTemplate | None:
+    def get_template_by_id(self, template_id: int):
+        """Get all templates."""
+        data = self.get(f"/api/templates/{template_id}")
+        template = self._normalize_results(data)
+        return template[0] if len(template) > 0 else {}
+
+    def find_template_metadata(self, feed_hash: str, template_type: EmailPhaseType) -> ListmonkTemplate | None:
+        """Find a single email template, excluding the body."""
+        return self.find_template(feed_hash, template_type, True)
+
+    def find_template(self, feed_hash: str, template_type: EmailPhaseType, meta_data_only: bool = False) -> ListmonkTemplate | None:
         """Find a single email template."""
         template_name = make_template_name(feed_hash, template_type)
-        templates = self.get_templates()
-        for template in templates:
-            if template["name"] == template_name:
+        templates_meta = self.get_templates(no_body=not meta_data_only)
+        for template_meta in templates_meta:
+            if template_meta["name"] == template_name:
+                template = self.get_template_by_id(template_meta["id"])
                 lmTemplate = ListmonkTemplate(
                     id = template["id"],
                     name = template["name"],
                     subject = template["subject"],
                     type = template["type"],
-                    body = template["body"],
+                    body = "",
                     body_source = template["body_source"],
                     is_default = template["is_default"])
+                if not meta_data_only:
+                    lmTemplate.body = template["body"] # This is used for GET /api/feeds/templates
                 return lmTemplate
         return None
 
@@ -308,11 +321,14 @@ class ListmonkClient:
         payload = {
             "subscriber_emails": subscriber_emails,
             "from_email": reply_email,
-            "subject": subject,
             "template_id": template_id,
             "data": data,
             "content_type": content_type
         }
+        if subject:
+            payload["subject"] = subject
+
+        print(payload)
         return self.post("/api/tx", payload)
 
     def get_users(self) -> list | None:
