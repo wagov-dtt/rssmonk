@@ -55,7 +55,7 @@ def make_instant_template(admin_session):
 </div>
 
 <strong>About this email</strong>
-{{ $feed_attribs := index .Subscriber.Attribs "2653364234567542344343" }}
+{{ $feed_attribs := index .Subscriber.Attribs .Tx.Data.feed_hash }}
 <p>You received this email because you subscribed.
  If at any time you would like to stop please click <a href=\"{{ .Tx.Data.base_url }}{{ $feed_attribs.unsubscribe_query }}\"
  target=\"_blank\" rel=\"noopener noreferrer\">unsubscribe</a></p>
@@ -84,7 +84,7 @@ def make_daily_template(admin_session):
 {{end}}
 
 <strong>About this email</strong>
-{{ $feed_attribs := index .Subscriber.Attribs "2653364234567542344343" }}
+{{ $feed_attribs := index .Subscriber.Attribs .Tx.Data.feed_hash }}
 <p>You received this email because you subscribed.
  If at any time you would like to stop please click <a href=\"{{ .Tx.Data.base_url }}{{ $feed_attribs.unsubscribe_query }}\"
  target=\"_blank\" rel=\"noopener noreferrer\">unsubscribe</a></p>
@@ -113,6 +113,7 @@ Person: Peron doing the running<br>
 Area: Running<br>
 Regions: State wide""",
             },
+            "feed_hash": "2653364234567542344343",
             "base_url": "http://sub",
         },
         "content_type": "html"
@@ -158,6 +159,7 @@ Person: Tourist head<br>
 Area: Tourism<br>
 Regions: City""",
             }],
+            "feed_hash": "2653364234567542344343",
             "base_url": "http://sub",
         },
         "content_type": "html"
@@ -210,21 +212,28 @@ def threading_send(clients, template_id):
 
 def using_array_emails_instant_send(clients, template_id):
     iteration = 0
-    emails = [f"example{i}@example.com" for i in range(10000)]
-    send_instant_email(clients[0], template_id, emails, iteration)
+    for i in range(10):
+        start = datetime.now().timestamp()
+        emails = [f"example{j}@example.com" for j in range(i*1000, (i+1)*1000)]
+        send_instant_email(clients[0], template_id, emails, iteration)
+        time = datetime.now().timestamp() - start
+        print(f"{i*1000} to {(i+1)*1000 - 1} took {time}s")
 
 
 def using_array_emails_daily_send(clients, template_id):
     iteration = 0
     for i in range(10):
+        start = datetime.now().timestamp()
         emails = [f"example{j}@example.com" for j in range(i*1000, (i+1)*1000)]
         send_daily_email(clients[0], template_id, emails, iteration)
+        time = datetime.now().timestamp() - start
+        print(f"{i*1000} to {(i+1)*1000 - 1} took {time}s")
 
 
 # Quick create tens of thousands of api calls to mail
 if __name__ == "__main__":
     clients = []
-    for i in range(100):
+    for i in range(10):
         # Make 10 clients
         clients.append(make_session())
 

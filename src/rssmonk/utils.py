@@ -1,5 +1,5 @@
 import hashlib
-from typing import Optional
+from typing import Optional, Tuple
 
 from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType, Frequency
 
@@ -75,3 +75,13 @@ def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
     if value is not None:
         return value
     return make_url_hash(feed_url) if feed_url else ""
+
+def expand_filter_identifiers(filter_freq_data: dict) -> Tuple[set[str], list[str]]:
+    returnSet: set[str] = set()
+    all_list: list[str] = []
+    for key, item in filter_freq_data.items():
+        if isinstance(item, str) and item == "all":
+            all_list.append(key)
+        elif isinstance(item, list):
+            returnSet.update({f"{key} {point}" for point in item})
+    return returnSet, all_list

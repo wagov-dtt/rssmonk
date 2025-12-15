@@ -316,7 +316,8 @@ class ListmonkClient:
     def delete_email_template(self, template_id: int):
         return self.delete(f"/api/templates/{template_id}")
 
-    def send_transactional(self, reply_email: str, template_id: int, content_type: str, subscriber_emails: list[str], data: dict, subject: str | None = None):
+    def send_transactional(self, reply_email: str, template_id: int, content_type: str, 
+                           subscriber_emails: list[str], data: dict, subject: str | None = None):
         """Send transactional email."""
         payload = {
             "subscriber_emails": subscriber_emails,

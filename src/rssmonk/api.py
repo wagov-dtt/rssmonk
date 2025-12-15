@@ -724,7 +724,7 @@ async def handle_process_feed(
             highest_freq: Optional[Frequency] = find_highest_frequency(feed.poll_frequencies)
 
             if not highest_freq:
-                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="No feed frequencies supported")
+                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail="No feed frequencies found or supported")
 
             notifications, articles = await rss_monk.process_feed(feed, highest_freq)
             return FeedProcessResponse(

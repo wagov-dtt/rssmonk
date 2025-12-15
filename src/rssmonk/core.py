@@ -3,7 +3,6 @@
 import os
 import hmac
 import traceback
-from warnings import deprecated
 import httpx
 import uuid
 
@@ -17,7 +16,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
-from rssmonk.utils import make_filter_url, make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
+from rssmonk.utils import expand_filter_identifiers, make_filter_url, make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, numberfy_subbed_lists
 from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, NO_REPLY_EMAIL, SUB_BASE_URL, LIST_DESC_FEED_URL, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
 
 from .cache import feed_cache
@@ -629,92 +628,12 @@ class RSSMonk:
                 self._update_poll_time(feed, frequency)
                 return 0, 0
 
-            feed_hash = make_url_hash(feed.feed_url)
-            subscribers = self.getClient().get_all_feed_subscribers(feed.id)
-
-
             # TODO - Instant and Daily vary enough to have two functions to handle the processing
+            subscribers = self.getClient().get_all_feed_subscribers(feed.id)
             if frequency == Frequency.INSTANT:
-                # List of emails that are will get all updates in the feed. Each item will have it's own list of emails as separate items
-                all_inclusive_email_list = dict[int, list[str]] = {}
-
-                for subscriber in subscribers:
-                    sub_email = subscriber["email"]
-                    # If ask for all, then add to all_inclusive_email_list
-                    feed_hash_data = subscriber["attribs"][feed_hash]
-                    filter_freq_data = feed_hash_data["filter"][frequency.value]
-
-                    if isinstance(filter_freq_data, str) and filter_freq_data == "all":
-                        all_inclusive_email_list.append(sub_email)
-                        continue
-                    else:
-                        # Go through the indidivual items and match
-                        matching_feed_items = self.find_all_matching_feed_items(feed, filter_freq_data)
-                        # TODO - If daily, and there is only one item, add it to all_inclusive_email_list
-                        #      - If multiple and all items match, add it to all_inclusive_email_list
-                        #      - Else, send it individually...  
-                        pass
-
-                    # TODO - Individual item here
-
-                    # TODO - Change to be per email sent out
-                    notifications_sent += 1
-
-                # May need to split into multiple emails
-                for item in new_articles:
-                    payload = {
-                        "from_email": NO_REPLY_EMAIL,
-                        "template_id": template.id,
-                        "data": {
-                            "item": {
-                                "title": item.title,
-                                "link": item.link,
-                                "description": item.description # TODO - 
-                            },
-                            "base_url": feed.email_base_url,
-                        },
-                        "content_type": "html"
-                    }
-                    # TODO - Send the everything email.
+                self.perform_instant_email_check(feed, frequency, template.id, new_articles, subscribers)
             else:
-                # List of emails that are will get all updates in the feed, there's only one feed item set here
-                all_inclusive_email_list = []
-
-                # Extract list of subscribers, generate urls for the template and them email out.
-                # Populate - If multiple articles exist and it is instant, ensure that one email per article is sent out
-                for subscriber in subscribers:
-                    sub_email = subscriber["email"]
-                    # If ask for all, then add to all_inclusive_email_list
-                    feed_hash_data = subscriber["attribs"][feed_hash]
-                    filter_freq_data = feed_hash_data["filter"][frequency.value]
-
-                    if isinstance(filter_freq_data, str) and filter_freq_data == "all":
-                        all_inclusive_email_list.append(sub_email)
-                        continue
-                    else:
-                        # Go through the indidivual items and match
-                        matching_feed_items = self.find_all_matching_feed_items(feed, filter_freq_data)
-                        # TODO - If daily, and there is only one item, add it to all_inclusive_email_list
-                        #      - If multiple and all items match, add it to all_inclusive_email_list
-                        #      - Else, send it individually...  
-                        pass
-
-                    # TODO - Individual item here
-
-                    # TODO - Change to be per email sent out
-                    notifications_sent += 1
-                
-                if len(all_inclusive_email_list) > 0:
-                    payload = {
-                        "from_email": NO_REPLY_EMAIL,
-                        "template_id": template.id,
-                        "data": {
-                            "items": [],
-                            "base_url": feed.email_base_url,
-                        },
-                        "content_type": "html"
-                    }
-                    # TODO - Send the everything email.
+                self.perform_daily_email_check(feed, frequency, template.id, new_articles, subscribers)
 
             # Update state
             self._update_feed_state(feed, frequency, new_articles)
@@ -724,6 +643,127 @@ class RSSMonk:
             logger.error(f"Feed processing failed for {feed.name}: {e}")
             traceback.print_exc()
             return notifications_sent, 0
+
+
+    def perform_instant_email_check(self, feed: Feed, frequency: Frequency, template_id: int, new_articles: list[FeedItem],
+                                    subscribers: list[dict[str, str]]) -> tuple[int, int]:
+        """
+        Sends instant email notifications for new articles based on subscriber filters.
+
+        Returns the number of new articles set out and the number of notifications sent
+        """
+        # List of emails that are will get all updates in the feed.
+        # Each item will have it's own list of emails as separate items
+        feed_list_individual_items: list[list[str]] = [[] for _ in range(len(new_articles))]
+
+        for subscriber in subscribers:
+            sub_email = subscriber["email"]
+            # If ask for all, then add to all_inclusive_email_list
+            feed_hash_data = subscriber["attribs"][feed.url_hash]
+            filter_freq_data = feed_hash_data["filter"][frequency.value]
+
+            if isinstance(filter_freq_data, str) and filter_freq_data == "all":
+                for i in range(len(new_articles)):
+                    feed_list_individual_items[i].append(sub_email)
+            elif isinstance(filter_freq_data, dict):
+                # Create expanded list of filter identifiers
+                expanded_subscriber_filter, all_in_filter_list = expand_filter_identifiers(filter_freq_data)
+
+                for index, article in enumerate(new_articles):
+                    article_identifiers_set = {x.strip() for x in article.filter_identifiers.split(",")}
+
+                    # Go through the individual items and match
+                    if set(all_in_filter_list).issubset(article_identifiers_set) \
+                       or (expanded_subscriber_filter & article_identifiers_set):
+                        feed_list_individual_items[index].append(sub_email)
+            else:
+                # This should never trigger
+                logger.warning(f"Subscriber with email {sub_email} has invalid filter data for {frequency.value}: {filter_freq_data}")
+
+        # Send out multiple emails for each new article
+        notifications_sent = 0
+        for index, article in enumerate(new_articles):
+            data = {
+                "item": {
+                    "title": article.title,
+                    "link": article.link,
+                    "description": article.description # TODO - 
+                },
+                "base_url": feed.email_base_url,
+            }
+            # Send the email to all subscribers who wanted it
+            if feed_list_individual_items[index]:
+                self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html",
+                                               feed_list_individual_items[index], data,
+                                               new_articles[index].email_subject_line)
+                notifications_sent += len(feed_list_individual_items[index])
+        return len(new_articles), notifications_sent
+
+
+    def perform_daily_email_check(self, feed: Feed, frequency: Frequency, template_id: int,
+                                  new_articles: list[FeedItem], subscribers: list[dict[str, str]]) -> tuple[int, int]:
+        """
+        Sends daily email notifications for new articles based on subscriber filters.
+
+        Returns the number of new articles set out and the number of notifications sent
+        """
+        # List of emails that are will get all updates in the feed.
+        # Each item will have it's own list of emails as separate items
+        users_full_items_list: list[str] = []
+        notifications_sent = 0
+
+        for subscriber in subscribers:
+            sub_email = subscriber["email"]
+            # If ask for all, then add to all_inclusive_email_list
+            feed_hash_data = subscriber["attribs"][feed.url_hash]
+            filter_freq_data = feed_hash_data["filter"][frequency.value]
+
+            # Scenarios
+            # 1. filter says all - add to feed_list_all_items
+            # 2. Make the items list for the user's tastes and email
+            if isinstance(filter_freq_data, str) and filter_freq_data == "all":
+                users_full_items_list.append(sub_email)
+            else:
+                feed_items_to_send_out: list[FeedItem] = []
+                # Create expanded list of filter identifiers
+                expanded_subscriber_filter, all_in_filter_list = expand_filter_identifiers(filter_freq_data)
+
+                for article in new_articles:
+                    article_identifiers_set = {x.strip() for x in article.filter_identifiers.split(",")}
+
+                    # Go through the individual articles that are requested
+                    if set(all_in_filter_list).issubset(article_identifiers_set) \
+                       or (expanded_subscriber_filter & article_identifiers_set):
+                        feed_items_to_send_out.append(article)
+
+                # Send transaction
+                if feed_items_to_send_out:
+                    data = {
+                        "items": [{
+                            "title": article.title,
+                            "link": article.link,
+                            "description": article.description # TODO - Convert new lines to <br> 
+                        } for article in feed_items_to_send_out],
+                        "base_url": feed.email_base_url,
+                    }
+                    self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html",
+                                                    [subscriber["email"]], data)
+                    notifications_sent += 1
+
+        # Send the email to all subscribers who wanted it
+        if users_full_items_list:
+            data = {
+                "items": [{
+                    "title": article.title,
+                    "link": article.link,
+                    "description": article.description # TODO - Convert new lines to <br> 
+                } for article in new_articles],
+                "base_url": feed.email_base_url,
+            }
+            self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html",
+                                            users_full_items_list, data)
+            notifications_sent += len(users_full_items_list)
+        return len(new_articles), notifications_sent
 
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
@@ -750,6 +790,7 @@ class RSSMonk:
         #    results[name] = asyncio.Task(task).result()
 
         return results
+
 
     # Helper methods
 

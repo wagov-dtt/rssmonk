@@ -17,6 +17,7 @@ class Feed(BaseModel):
     """Base URL that is used for link generation in emails"""
     poll_frequencies: list[Frequency]
     url_hash: str = ""
+    """This should be populated after getting the feed from the DB"""
     mult_freq: bool = False
 
     def __init__(self, **data):

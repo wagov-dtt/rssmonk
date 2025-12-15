@@ -2,7 +2,7 @@ import hashlib
 import unittest
 
 from rssmonk.types import Frequency
-from rssmonk.utils import extract_feed_hash, find_highest_frequency, make_filter_url, numberfy_subbed_lists, remove_other_keys
+from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, find_highest_frequency, make_filter_url, numberfy_subbed_lists, remove_other_keys
 
 """
 Curated generated tests for the utils class for sanity checks
@@ -94,14 +94,51 @@ class TestExtractFeedHash(unittest.TestCase):
 
 class TestFindHighestFrequency(unittest.TestCase):
     def test_returns_none_when_list_empty(self):
-        assert find_highest_frequency([]) is None
+        self.assertIsNone(find_highest_frequency([]))
 
     def test_returns_instant_when_present(self):
-        assert find_highest_frequency([Frequency.INSTANT, Frequency.DAILY]) == Frequency.INSTANT
+        self.assertEqual(find_highest_frequency([Frequency.INSTANT, Frequency.DAILY]), Frequency.INSTANT)
 
     def test_returns_first_priority_order_agnostic(self):
         # Instant should always be returned
-        assert find_highest_frequency([Frequency.DAILY, Frequency.INSTANT]) == Frequency.INSTANT
+        self.assertEqual(find_highest_frequency([Frequency.DAILY, Frequency.INSTANT]), Frequency.INSTANT)
 
     def test_returns_daily_when_instant_is_not_present(self):
-        assert find_highest_frequency([Frequency.DAILY]) == Frequency.DAILY
+        self.assertEqual(find_highest_frequency([Frequency.DAILY]), Frequency.DAILY)
+
+
+class TestExpandFilterIdentifiers(unittest.TestCase):
+    def test_empty_dict(self):
+        result_set, all_list = expand_filter_identifiers({})
+        self.assertEqual(result_set, set())
+        self.assertEqual(all_list, [])
+
+    def test_all_string(self):
+        data = {"topic1": "all", "topic2": "all"}
+        result_set, all_list = expand_filter_identifiers(data)
+        self.assertEqual(result_set, set())
+        self.assertEqual(all_list, ["topic1", "topic2"])
+
+    def test_list_values_characters(self):
+        data = {"topic1": ["a", "b"], "topic2": ["x"]}
+        result_set, all_list = expand_filter_identifiers(data)
+        self.assertEqual(result_set, {"topic1 a", "topic1 b", "topic2 x"})
+        self.assertEqual(all_list, [])
+
+    def test_list_values_numbers(self):
+        data = {"topic1": [1, 2], "topic2": [3]}
+        result_set, all_list = expand_filter_identifiers(data)
+        self.assertEqual(result_set, {"topic1 1", "topic1 2", "topic2 3"})
+        self.assertEqual(all_list, [])
+
+    def test_mixed_values_characters(self):
+        data = {"topic1": ["a"], "topic2": "all", "topic3": ["x", "y"]}
+        result_set, all_list = expand_filter_identifiers(data)
+        self.assertEqual(result_set, {"topic1 a", "topic3 x", "topic3 y"})
+        self.assertEqual(all_list, ["topic2"])
+
+    def test_mixed_values_numbers(self):
+        data = {"topic1": [1], "topic2": "all", "topic3": [3, 4]}
+        result_set, all_list = expand_filter_identifiers(data)
+        self.assertEqual(result_set, {"topic1 1", "topic3 3", "topic3 4"})
+        self.assertEqual(all_list, ["topic2"])
