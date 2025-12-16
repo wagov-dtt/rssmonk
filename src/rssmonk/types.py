@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 import os
 from enum import StrEnum
@@ -103,6 +104,7 @@ class ActionsURLSuffix(StrEnum):
 class ErrorMessages:
     NO_AUTH_FEED = "Not authorised to interact with this feed"
 
+@dataclass
 class FeedItem:
     """This stores one item from a parsed feed"""
     title: str

@@ -1,5 +1,6 @@
 """RSS feed caching system for optimized polling."""
 
+import asyncio
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -23,7 +24,7 @@ class CachedFeed:
     content_hash: str
     etag: Optional[str]
     last_modified: Optional[str]
-    articles: list[dict]
+    articles: list[FeedItem]
     cached_at: datetime
     expires_at: datetime
     feed_title: Optional[str] = None
@@ -110,7 +111,7 @@ class FeedCache:
                 if feed_data.bozo: # From feedparser.FeedParserDict
                     logger.warning(f"Feed has issues: {feed_data.bozo_exception}")
                 
-                articles = []
+                articles: list[FeedItem] = []
                 for entry in feed_data.entries:
                     article = FeedItem(
                         title = entry.get("title", ""),

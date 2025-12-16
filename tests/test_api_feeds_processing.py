@@ -3,6 +3,7 @@ Test Feed API endpoints
 - /api/feeds
 """
 
+from datetime import datetime, timedelta
 import time
 from http import HTTPStatus
 from multiprocessing import Process
@@ -164,51 +165,75 @@ class TestPerformInstantEmailCheck(unittest.TestCase):
         mock_send.return_value = None  # No actual sending
         rssmonk = RSSMonk(local_creds=HTTPBasicCredentials(username="admin", password="admin123"))
 
-        feed = Feed(email_base_url="https://example.com", url_hash="hash123")
+        feed = Feed(email_base_url = "https://example.com", url_hash = "hash123", name = "Example",
+                    feed_url = "https://example.com/rss", poll_frequencies = [Frequency.INSTANT])
         frequency = Frequency.INSTANT
         template_id = 101
 
         new_articles = [
-            FeedItem(title="Article 1", link="https://example.com/1", description="Desc 1",
-                     email_subject_line="Subject 1", filter_identifiers="m 0,p 143"),
-            FeedItem(title="Article 2", link="https://example.com/2", description="Desc 2",
-                     email_subject_line="Subject 2", filter_identifiers="m 1,p 565")
+            FeedItem(title = "Article 1", link = "https://example.com/1", description = "Desc 1",
+                     email_subject_line = "Subject 1", filter_identifiers = "min 0,port 143",
+                     published = datetime.now(), guid = "guid 1"),
+            FeedItem(title = "Article 2", link = "https://example.com/2", description = "Desc 2",
+                     email_subject_line = "Subject 2", filter_identifiers = "min 1,port 565",
+                     published = datetime.now() - timedelta(minutes=2), guid = "guid 2"),
+            FeedItem(title = "Article 3", link = "https://example.com/3", description = "Desc 3",
+                     email_subject_line = "Subject 3", filter_identifiers = "port 778",
+                     published = datetime.now() - timedelta(minutes=4), guid = "guid 3")
         ]
 
         subscribers = [
             {
-                "email": "user@example.com",
-                "attribs": {
-                    "hash123": {
-                        "filter": {
-                            "instant": "all"
-                        }
-                    }
-                }
+                "email": "all@example.com",
+                "attribs": { "hash123": { "filter": { "instant": "all" } } }
+            },
+            {
+                "email": "one@example.com",
+                "attribs": { "hash123": { "filter": { "instant": { "min" : [0] } } } }
+            },
+            {
+                "email": "two@example.com",
+                "attribs": { "hash123": { "filter": { "instant": { "min" : [1] } } } }
+            },
+            {
+                "email": "three@example.com",
+                "attribs": { "hash123": { "filter": { "instant": { "port" : "all" } } } }
             }
         ]
 
-        # Act
-        articles_sent, notifications_sent = rssmonk.perform_instant_email_check(feed, frequency, template_id, new_articles, subscribers)
+        # Method under test
+        notifications_sent = rssmonk.perform_instant_email_check(feed, frequency, template_id, new_articles, subscribers)
 
-        # Assert return values
-        self.assertEqual(articles_sent, 2)
-        self.assertEqual(notifications_sent, 2)
+        # Check notifications sent and call count
+        self.assertEqual(notifications_sent, 8) 
+        self.assertEqual(mock_send.call_count, 3) # Daily sending is one per each new article
 
-        # Assert send_transactional was called twice
-        self.assertEqual(mock_send.call_count, 2)
-
-        # Inspect arguments passed to send_transactional
+        # Inspect arguments passed to send_transactional for first article
         first_call_args = mock_send.call_args_list[0][0]  # Positional args of first call
-        self.assertEqual(first_call_args[0], "no-reply@example.com")  # NO_REPLY_EMAIL
+        self.assertEqual(first_call_args[0], "noreply@noreply (No reply location)")
         self.assertEqual(first_call_args[1], template_id)
         self.assertEqual(first_call_args[2], "html")
-        self.assertEqual(first_call_args[3], ["user@example.com"])  # Recipients list
-        self.assertIn("item", first_call_args[4])  # Data dict contains 'item'
-
-        # Check subject line
+        self.assertEqual(first_call_args[3], ["all@example.com", "one@example.com", "three@example.com"])
+        self.assertIn("item", first_call_args[4])
         self.assertEqual(first_call_args[5], "Subject 1")
 
+        # Inspect second call (second article)
+        second_call_args = mock_send.call_args_list[1][0]
+        self.assertEqual(second_call_args[0], "noreply@noreply (No reply location)")
+        self.assertEqual(second_call_args[1], template_id)
+        self.assertEqual(second_call_args[2], "html")
+        self.assertEqual(second_call_args[3], ["all@example.com", "two@example.com", "three@example.com"])
+        self.assertIn("item", second_call_args[4])
+        self.assertEqual(second_call_args[5], "Subject 2")
+
+        # Inspect third call to send_transactional
+        third_call_args = mock_send.call_args_list[2][0]
+        self.assertEqual(third_call_args[0], "noreply@noreply (No reply location)")
+        self.assertEqual(third_call_args[1], template_id)
+        self.assertEqual(third_call_args[2], "html")
+        self.assertEqual(third_call_args[3], ["all@example.com", "three@example.com"])
+        self.assertIn("item", third_call_args[4])
+        self.assertEqual(third_call_args[5], "Subject 3")
 
 class TestPerformDailyEmailCheck(unittest.TestCase):
     @patch("rssmonk.http_clients.ListmonkClient.send_transactional")
@@ -216,61 +241,108 @@ class TestPerformDailyEmailCheck(unittest.TestCase):
         mock_send.return_value = None  # No actual sending
         rssmonk = RSSMonk(local_creds=HTTPBasicCredentials(username="admin", password="admin123"))
 
-        feed = Feed(email_base_url="https://example.com", url_hash="hash123")
+        feed = Feed(email_base_url = "https://example.com", url_hash = "hash123", name = "Example",
+                    feed_url = "https://example.com/rss", poll_frequencies = [Frequency.INSTANT])
         frequency = Frequency.DAILY
         template_id = 101
 
-        new_articles: List[FeedItem] = [
-            FeedItem(title="Article 1", link="https://example.com/1", description="Desc 1",
-                     email_subject_line="Subject 1", filter_identifiers="m 0,p 143"),
-            FeedItem(title="Article 2", link="https://example.com/2", description="Desc 2",
-                     email_subject_line="Subject 2", filter_identifiers="m 1,p 565")
+        new_articles = [
+            FeedItem(title = "Article 1", link = "https://example.com/1", description = "Desc 1",
+                     email_subject_line = "Subject 1", filter_identifiers = "min 0,port 143",
+                     published = datetime.now(), guid = "guid 1"),
+            FeedItem(title = "Article 2", link = "https://example.com/2", description = "Desc 2",
+                     email_subject_line = "Subject 2", filter_identifiers = "min 1,port 565",
+                     published = datetime.now() - timedelta(minutes=2), guid = "guid 2"),
+            FeedItem(title = "Article 3", link = "https://example.com/3", description = "Desc 3",
+                     email_subject_line = "Subject 3", filter_identifiers = "min 2,port 565",
+                     published = datetime.now() - timedelta(minutes=4), guid = "guid 3")
         ]
 
         subscribers = [
             {
                 "email": "user@example.com",
-                "attribs": {
-                    "hash123": {
-                        "filter": {
-                            "daily": "all"
-                        }
-                    }
-                }
+                "attribs": { "hash123": { "filter": { "daily": "all" } } }
             },
             {
-                "email": "filtered@example.com",
-                "attribs": {
-                    "hash123": {
-                        "filter": {
-                            "daily": {
-                                "topic1": ["m 0"]
-                            }
-                        }
-                    }
-                }
+                "email": "all@example.com",
+                "attribs": { "hash123": { "filter": { "daily": "all" } } }
+            },
+            {
+                "email": "one@example.com",
+                "attribs": { "hash123": { "filter": { "daily": { "min" : [0] } } } }
+            },
+            {
+                "email": "second@example.com",
+                "attribs": { "hash123": { "filter": { "daily": { "port" : [143] } } } }
+            },
+            {
+                "email": "three@example.com",
+                "attribs": { "hash123": { "filter": { "daily": { "min" : [0, 1] } } } }
+            },
+            {
+                "email": "four@example.com",
+                "attribs": { "hash123": { "filter": { "daily": { "min" : "all" } } } }
             }
         ]
 
-        # Act
-        articles_sent, notifications_sent = rssmonk.perform_daily_email_check(feed, frequency, template_id, new_articles, subscribers)
+        # Method under test
+        notifications_sent = rssmonk.perform_daily_email_check(feed, frequency, template_id, new_articles, subscribers)
 
-        # Assert return values
-        self.assertEqual(articles_sent, 2)
-        self.assertEqual(notifications_sent, 3)  # 1 for filtered user + 2 for "all" user
+        # Check notifications sent and call count
+        self.assertEqual(notifications_sent, 6)  # One for each user
+        self.assertEqual(mock_send.call_count, 5)  # One for each user and 1 which covers all
 
-        # Assert send_transactional was called correct number of times
-        self.assertEqual(mock_send.call_count, 2)  # One for filtered user, one for all users
-
-        # Inspect first call (filtered user)
+        # Inspect first filtered user call to send_transactional
         first_call_args = mock_send.call_args_list[0][0]
-        self.assertEqual(first_call_args[0], "no-reply@example.com")  # NO_REPLY_EMAIL
+        self.assertEqual(first_call_args[0], "noreply@noreply (No reply location)")
         self.assertEqual(first_call_args[1], template_id)
         self.assertEqual(first_call_args[2], "html")
-        self.assertEqual(first_call_args[3], ["filtered@example.com"])  # Single recipient
-        self.assertIn("items", first_call_args[4])  # Data dict contains 'items'
+        self.assertEqual(first_call_args[3], ["one@example.com"])  # Single recipient
+        self.assertIn("items", first_call_args[4])  # 'items' is present
+        self.assertEqual(len(first_call_args[4]["items"]), 1, first_call_args[4]["items"]) # One article
+        self.assertEqual(first_call_args[4]["items"][0]["title"], "Article 1") # Correct article that matches "min 0"
 
-        # Inspect second call (all users)
+        # Inspect second filtered user call to send_transactional
         second_call_args = mock_send.call_args_list[1][0]
-        self.assertEqual(second_call_args[3], ["user@example.com"])  # All-inclusive list
-        self.assertEqual(second_call_args[5], "Daily Digest")  # Subject line
+        self.assertEqual(second_call_args[0], "noreply@noreply (No reply location)")
+        self.assertEqual(second_call_args[1], template_id)
+        self.assertEqual(second_call_args[2], "html")
+        self.assertEqual(second_call_args[3], ["second@example.com"])  # All-inclusive list
+        self.assertIn("items", second_call_args[4])  # 'items' is present
+        self.assertEqual(len(second_call_args[4]["items"]), 1, second_call_args[4]["items"]) # One article
+        self.assertEqual(second_call_args[4]["items"][0]["title"], "Article 1") # Correct article that matches "port 143"
+
+        # Inspect third filtered user call to send_transactional
+        third_call_args = mock_send.call_args_list[2][0]
+        self.assertEqual(third_call_args[0], "noreply@noreply (No reply location)")
+        self.assertEqual(third_call_args[1], template_id)
+        self.assertEqual(third_call_args[2], "html")
+        self.assertEqual(third_call_args[3], ["three@example.com"])  # All-inclusive list
+        self.assertIn("items", third_call_args[4])  # 'items' is present
+        self.assertEqual(len(third_call_args[4]["items"]), 2, third_call_args[4]["items"]) # One article
+        self.assertEqual(third_call_args[4]["items"][0]["title"], "Article 1") # Correct article that matches "min 0, min 1"
+        self.assertEqual(third_call_args[4]["items"][1]["title"], "Article 2") # Correct article that matches "min 0, min 1"
+
+        # Inspect fouth user call to send_transactional
+        fourth_call_args = mock_send.call_args_list[3][0]
+        self.assertEqual(fourth_call_args[0], "noreply@noreply (No reply location)")
+        self.assertEqual(fourth_call_args[1], template_id)
+        self.assertEqual(fourth_call_args[2], "html")
+        self.assertEqual(fourth_call_args[3], ["four@example.com"])
+        self.assertIn("items", fourth_call_args[4])  # 'items' is present
+        self.assertEqual(len(fourth_call_args[4]["items"]), 3, fourth_call_args[4]["items"]) # Three articles for category min
+        self.assertEqual(fourth_call_args[4]["items"][0]["title"], "Article 1")
+        self.assertEqual(fourth_call_args[4]["items"][1]["title"], "Article 2")
+        self.assertEqual(fourth_call_args[4]["items"][2]["title"], "Article 3")
+
+        # Inspect fifth user call to send_transactional, which is for all
+        fifth_call_args = mock_send.call_args_list[4][0]
+        self.assertEqual(fifth_call_args[0], "noreply@noreply (No reply location)")
+        self.assertEqual(fifth_call_args[1], template_id)
+        self.assertEqual(fifth_call_args[2], "html")
+        self.assertEqual(fifth_call_args[3], ["user@example.com", "all@example.com"])  # All-inclusive list
+        self.assertIn("items", fifth_call_args[4])  # 'items' is present
+        self.assertEqual(len(fifth_call_args[4]["items"]), 3, fifth_call_args[4]["items"]) # Two articles for all
+        self.assertEqual(fifth_call_args[4]["items"][0]["title"], "Article 1")
+        self.assertEqual(fifth_call_args[4]["items"][1]["title"], "Article 2")
+        self.assertEqual(fifth_call_args[4]["items"][2]["title"], "Article 3")

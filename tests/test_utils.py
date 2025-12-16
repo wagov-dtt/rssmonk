@@ -2,7 +2,7 @@ import hashlib
 import unittest
 
 from rssmonk.types import Frequency
-from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, find_highest_frequency, make_filter_url, numberfy_subbed_lists, remove_other_keys
+from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, find_highest_frequency, make_filter_url, matches_filter, numberfy_subbed_lists, remove_other_keys
 
 """
 Curated generated tests for the utils class for sanity checks
@@ -10,19 +10,19 @@ Curated generated tests for the utils class for sanity checks
 
 class TestRemoveOtherKeys(unittest.TestCase):
     def test_key_present(self):
-        self.assertEqual(remove_other_keys({'a': 1, 'b': 2}, 'a'), {'a': 1})
+        self.assertEqual(remove_other_keys({"min": 1, "port": 2}, "min"), {"min": 1})
 
     def test_key_not_present(self):
-        self.assertEqual(remove_other_keys({'a': 1, 'b': 2}, 'c'), {})
+        self.assertEqual(remove_other_keys({"min": 1, "port": 2}, "reg"), {})
 
     def test_empty_dict(self):
-        self.assertEqual(remove_other_keys({}, 'a'), {})
+        self.assertEqual(remove_other_keys({}, "reg"), {})
 
     def test_single_key_match(self):
-        self.assertEqual(remove_other_keys({'x': 42}, 'x'), {'x': 42})
+        self.assertEqual(remove_other_keys({"min": 42}, "min"), {"min": 42})
 
     def test_single_key_no_match(self):
-        self.assertEqual(remove_other_keys({'x': 42}, 'y'), {})
+        self.assertEqual(remove_other_keys({"min": 42}, "max"), {})
 
 
 class TestNumberfySubbedLists(unittest.TestCase):
@@ -109,36 +109,76 @@ class TestFindHighestFrequency(unittest.TestCase):
 
 class TestExpandFilterIdentifiers(unittest.TestCase):
     def test_empty_dict(self):
-        result_set, all_list = expand_filter_identifiers({})
-        self.assertEqual(result_set, set())
-        self.assertEqual(all_list, [])
+        categories, topics = expand_filter_identifiers({})
+        self.assertEqual(categories, [])
+        self.assertEqual(topics, [])
 
     def test_all_string(self):
         data = {"topic1": "all", "topic2": "all"}
-        result_set, all_list = expand_filter_identifiers(data)
-        self.assertEqual(result_set, set())
-        self.assertEqual(all_list, ["topic1", "topic2"])
+        categories, topics = expand_filter_identifiers(data)
+        self.assertEqual(categories, ["topic1", "topic2"])
+        self.assertEqual(topics, [])
 
     def test_list_values_characters(self):
         data = {"topic1": ["a", "b"], "topic2": ["x"]}
-        result_set, all_list = expand_filter_identifiers(data)
-        self.assertEqual(result_set, {"topic1 a", "topic1 b", "topic2 x"})
-        self.assertEqual(all_list, [])
+        categories, topics = expand_filter_identifiers(data)
+        self.assertEqual(categories, [])
+        self.assertEqual(topics, ["topic1 a", "topic1 b", "topic2 x"])
 
     def test_list_values_numbers(self):
         data = {"topic1": [1, 2], "topic2": [3]}
-        result_set, all_list = expand_filter_identifiers(data)
-        self.assertEqual(result_set, {"topic1 1", "topic1 2", "topic2 3"})
-        self.assertEqual(all_list, [])
+        categories, topics = expand_filter_identifiers(data)
+        self.assertEqual(categories, [])
+        self.assertEqual(topics, ["topic1 1", "topic1 2", "topic2 3"])
 
     def test_mixed_values_characters(self):
         data = {"topic1": ["a"], "topic2": "all", "topic3": ["x", "y"]}
-        result_set, all_list = expand_filter_identifiers(data)
-        self.assertEqual(result_set, {"topic1 a", "topic3 x", "topic3 y"})
-        self.assertEqual(all_list, ["topic2"])
+        categories, topics = expand_filter_identifiers(data)
+        self.assertEqual(categories, ["topic2"])
+        self.assertEqual(topics, ["topic1 a", "topic3 x", "topic3 y"])
 
     def test_mixed_values_numbers(self):
         data = {"topic1": [1], "topic2": "all", "topic3": [3, 4]}
-        result_set, all_list = expand_filter_identifiers(data)
-        self.assertEqual(result_set, {"topic1 1", "topic3 3", "topic3 4"})
-        self.assertEqual(all_list, ["topic2"])
+        categories, topics = expand_filter_identifiers(data)
+        self.assertEqual(categories, ["topic2"])
+        self.assertEqual(topics, ["topic1 1", "topic3 3", "topic3 4"])
+
+
+
+class TestMatchesFilter(unittest.TestCase):
+    def test_group_filter_matches(self):
+        # Category "min" is in article_identifiers
+        self.assertTrue(matches_filter(['min'], [], ['min 1', 'reg 3', 'other 3']))
+
+    def test_expanded_filter_matches(self):
+        # Individual topic "min 2" matches article_identifiers
+        self.assertTrue(matches_filter(['reg'], ['min 1', 'min 2'], ['min 2', 'other 523']))
+
+    def test_no_match(self):
+        # No matches
+        self.assertFalse(matches_filter(['min'], ['reg 1', 'reg 2'], ['other 33', 'misc 446']))
+
+    def test_empty_group_filter(self):
+        # Empty group filter, but expanded filter matches
+        self.assertTrue(matches_filter([], ['min 1'], ['min 1', 'other 23']))
+
+    def test_empty_group_filter_no_individual_match(self):
+        # Empty group filter, but expanded filter matches, but no match
+        self.assertFalse(matches_filter([], ['min 1'], ['min 5', 'other 23']))
+
+    def test_empty_expanded_filter(self):
+        # Empty expanded filter, but group filter matches
+        self.assertTrue(matches_filter(['reg'], [], ['reg 44', 'other 345']))
+
+    def test_empty_expanded_filter_no_category_match(self):
+        # Empty expanded filter, but group filter should not matches
+        self.assertFalse(matches_filter(['reg'], [], ['port 44', 'other 345']))
+
+    def test_empty_filters(self):
+        # No filters selected
+        self.assertFalse(matches_filter([], [], ["reg 1", "reg 2"]))
+
+    def test_all_empty(self):
+        # Everything empty
+        self.assertFalse(matches_filter([], [], []))
+

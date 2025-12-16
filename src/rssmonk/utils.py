@@ -5,6 +5,8 @@ from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType, Freq
 
 
 # Removes everything except for the one key in the dict, empty if the key is not present in the dict
+# TODO - This is to used to get subscriber filters for a feed hash but removing all other feed hashes.
+#      - Will be created after MVP
 def remove_other_keys(attr: dict, key: str) -> dict:
     if key in attr:
         return {key: attr[key]}
@@ -76,12 +78,24 @@ def extract_feed_hash(username: str, feed_url: Optional[str] = None) -> str:
         return value
     return make_url_hash(feed_url) if feed_url else ""
 
-def expand_filter_identifiers(filter_freq_data: dict) -> Tuple[set[str], list[str]]:
-    returnSet: set[str] = set()
-    all_list: list[str] = []
+def expand_filter_identifiers(filter_freq_data: dict) -> Tuple[list[str], list[str]]:
+    expanded_topics: list[str] = []
+    topic_categories_list: list[str] = []
     for key, item in filter_freq_data.items():
         if isinstance(item, str) and item == "all":
-            all_list.append(key)
+            topic_categories_list.append(key)
         elif isinstance(item, list):
-            returnSet.update({f"{key} {point}" for point in item})
-    return returnSet, all_list
+            expanded_topics.extend([f"{key} {point}" for point in item])
+    return topic_categories_list, expanded_topics
+
+
+def matches_filter(categories_list: list[str], individual_topics_list: list[str], article_identifiers: list[str]) -> bool:
+    # Check if any category is present in article identifiers
+    category_match = any(
+        any(article.startswith(category) for article in article_identifiers)
+        for category in categories_list
+    )
+
+    # Check if any individual topic matches exactly
+    individual_match = bool(set(individual_topics_list) & set(article_identifiers))
+    return category_match or individual_match
