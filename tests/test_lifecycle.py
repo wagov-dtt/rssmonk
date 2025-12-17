@@ -76,7 +76,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert (response.status_code == HTTPStatus.BAD_REQUEST), f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
-        assert "Pending subscription added, but template dependancy missing for subscribe" == response_json["error"]
+        assert "Pending subscription added, but template dependency missing for subscribe" == response_json["error"]
 
         # - Feed template insertions
         sub_template_data = {
