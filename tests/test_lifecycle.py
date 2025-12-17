@@ -222,7 +222,7 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         lists_data = response.json()["data"]
         assert len(lists_data) == 0
 
-        # - Check the users if left with only admin (only role left)
+        # - Check only admin and rssmonk-api test fixture user remain
         response = admin_session.get(f"{LISTMONK_URL}/api/users")
-        lists_data = response.json()["data"]
-        assert len(lists_data) == 1
+        users_data = response.json()["data"]
+        assert len(users_data) == 2

@@ -110,9 +110,21 @@ just check
 
 # Run all pytest
 just test
+
+# Build container image
+just build
 ```
 
-## TODO
+## Container Build
 
-- **Container build**: Set up a [Railpack](https://railpack.io/) build to create a production container that can run adjacent to Listmonk in a Kubernetes cluster
-- **End-to-end tests**: Create external (non-Python) integration tests that the justfile can run against a fully configured k3d stack. These tests should simulate real API user workflows as documented in this README, providing confidence that the documented quick-start instructions work correctly
+RSS Monk uses [Railpack](https://railpack.com) for zero-config container builds. Railpack automatically detects the Python/uv project and builds an optimised container image.
+
+```bash
+# Build with Railpack (requires BuildKit)
+just build
+
+# Or manually
+railpack build . --name rssmonk
+```
+
+The `railpack.json` configures Python 3.13 and the uvicorn start command.

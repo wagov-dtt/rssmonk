@@ -1,29 +1,11 @@
 import hashlib
 import unittest
 
-from rssmonk.types import Frequency
-from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, find_highest_frequency, make_filter_url, matches_filter, numberfy_subbed_lists, remove_other_keys
+from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, make_filter_url, matches_filter, numberfy_subbed_lists
 
 """
 Curated generated tests for the utils class for sanity checks
 """
-
-class TestRemoveOtherKeys(unittest.TestCase):
-    def test_key_present(self):
-        self.assertEqual(remove_other_keys({"min": 1, "port": 2}, "min"), {"min": 1})
-
-    def test_key_not_present(self):
-        self.assertEqual(remove_other_keys({"min": 1, "port": 2}, "reg"), {})
-
-    def test_empty_dict(self):
-        self.assertEqual(remove_other_keys({}, "reg"), {})
-
-    def test_single_key_match(self):
-        self.assertEqual(remove_other_keys({"min": 42}, "min"), {"min": 42})
-
-    def test_single_key_no_match(self):
-        self.assertEqual(remove_other_keys({"min": 42}, "max"), {})
-
 
 class TestNumberfySubbedLists(unittest.TestCase):
     def test_with_ids(self):
@@ -90,21 +72,6 @@ class TestExtractFeedHash(unittest.TestCase):
     def test_no_hash_no_url(self):
         result = extract_feed_hash("not_an_expected_user_name")
         self.assertEqual(result, "")
-
-
-class TestFindHighestFrequency(unittest.TestCase):
-    def test_returns_none_when_list_empty(self):
-        self.assertIsNone(find_highest_frequency([]))
-
-    def test_returns_instant_when_present(self):
-        self.assertEqual(find_highest_frequency([Frequency.INSTANT, Frequency.DAILY]), Frequency.INSTANT)
-
-    def test_returns_first_priority_order_agnostic(self):
-        # Instant should always be returned
-        self.assertEqual(find_highest_frequency([Frequency.DAILY, Frequency.INSTANT]), Frequency.INSTANT)
-
-    def test_returns_daily_when_instant_is_not_present(self):
-        self.assertEqual(find_highest_frequency([Frequency.DAILY]), Frequency.DAILY)
 
 
 class TestExpandFilterIdentifiers(unittest.TestCase):

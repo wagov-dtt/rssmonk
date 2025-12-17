@@ -3,11 +3,11 @@
 from enum import StrEnum
 import traceback
 from typing import Optional
-from warnings import deprecated
+
 from fastapi import HTTPException
 from http import HTTPMethod, HTTPStatus
 import httpx
-import feedparser
+
 import requests
 
 from rssmonk.models import EmailTemplate, ListmonkTemplate
@@ -336,53 +336,3 @@ class ListmonkClient:
         """Get the user list."""
         data = self.get("/api/users")
         return self._normalize_results(data)
-
-
-@deprecated("Should not be used.")
-def fetch_feed(feed_url: str, timeout: float = 30.0, user_agent: str = "RSS Monk/2.0"):
-    """Deprecarted - Fetch and parse RSS feed. """
-    try:
-        logger.info("Fetching feed: %s", feed_url)
-
-        with httpx.Client(timeout=timeout, headers={"User-Agent": user_agent}) as client:
-            #response = client.get(feed_url + FEED_URL_RSSMONK_QUERY)
-            response = client.get(feed_url)
-
-            if response.status_code == 304:
-                logger.info("Feed unchanged (304): %s", feed_url)
-                return [], None
-
-            response.raise_for_status()
-
-            # Parse feed
-            feed = feedparser.parse(response.content)
-
-            if feed.bozo:
-                logger.warning(f"Feed has issues: {feed.bozo_exception}")
-
-            articles = []
-            latest_guid = None
-
-            for entry in feed.entries:
-                guid = entry.get("id", entry.get("link", ""))
-                if not latest_guid:
-                    latest_guid = guid
-
-                article = {
-                    "title": entry.get("title", ""),
-                    "link": entry.get("link", ""),
-                    "description": entry.get("description", ""),
-                    "published": entry.get("pubDate", ""),
-                    "guid": guid,
-                    "dc:creator": entry.get("dc:creator", ""),
-                    "wa:identifiers": entry.get("wa:identifiers", ""),
-                }
-                # TODO - RSS feed may, or may not supply old articles, this must be cleaned out to ensure duplication does not occur
-                articles.append(article)
-
-            logger.info(f"Found {len(articles)} articles from {feed_url}")
-            return articles, latest_guid
-
-    except Exception as e:
-        logger.error(f"Error fetching feed {feed_url}: {e}")
-        return [], None

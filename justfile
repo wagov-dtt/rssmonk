@@ -7,7 +7,7 @@ default:
 
 # Deploy to k3d cluster (primary method)
 start: prereqs
-  docker build -t local/listmonk-proxy .
+  just build
   @echo "Starting RSS Monk on k3d..."
   just deploy-k3d
 
@@ -83,10 +83,10 @@ _test-cluster quick:
     sleep 30; \
   fi
 
-# Run integration tests (requires running k3d cluster)
-test-integration:
-  @echo "Running integration tests against k3d cluster..."
-  uv run --extra test pytest tests/test_integration.py -v
+# Run lifecycle tests (requires running k3d cluster)
+test-lifecycle:
+  @echo "Running lifecycle tests against k3d cluster..."
+  uv run --extra test pytest tests/test_lifecycle.py -v
 
 # Start API server in development mode (with test routes if RSSMONK_TESTING=1)
 api: start install
@@ -110,7 +110,8 @@ setup: prereqs install check
 analyze:
   scc --exclude-dir .git --by-file .
 
-# Docker build to test
-docker:
-  docker build -t wagov-dtt/rssmonk:dev .
-  docker images
+# Build container image with Railpack and import to k3d
+build:
+  @docker start buildkit 2>/dev/null || docker run --rm --privileged -d --name buildkit moby/buildkit
+  BUILDKIT_HOST=docker-container://buildkit railpack build . --name rssmonk-api
+  @k3d cluster list rssmonk >/dev/null 2>&1 && k3d image import rssmonk-api -c rssmonk || true

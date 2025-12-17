@@ -17,7 +17,7 @@ from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import expand_filter_identifiers, make_filter_url, make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, matches_filter, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, MULTIPLE_FREQ, NO_REPLY_EMAIL, SUB_BASE_URL, LIST_DESC_FEED_URL, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
+from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, NO_REPLY_EMAIL, SUB_BASE_URL, LIST_DESC_FEED_URL, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -832,8 +832,7 @@ class RSSMonk:
                 url = line.replace(LIST_DESC_FEED_URL, "").strip()
             if line.startswith(SUB_BASE_URL):
                 sub_url = line.replace(SUB_BASE_URL, "").strip()
-            if line.startswith(MULTIPLE_FREQ):
-                mult_freq = (line.replace(MULTIPLE_FREQ, "").strip() == str(True))
+
             if url and sub_url:
                 break
 

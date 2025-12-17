@@ -10,7 +10,7 @@ just start    # Deploy RSS Monk on k3d cluster
 **Setup:** `prereqs` `install` `setup`  
 **Development:** `api` `check` `lint` `format` `type-check`  
 **Deployment:** `start` `status` `logs` `clean` `health`  
-**Testing:** `test` (full restart) or `test quick` (reuse cluster), `test-integration`  
+**Testing:** `test` (full restart) or `test quick` (reuse cluster), `test-lifecycle`  
 
 **IMPORTANT FOR AGENTS:** Do NOT execute justfile recipes directly. Instead, ASK THE HUMAN to run them. Long-running commands like `just test` or `just start` will timeout or be cancelled. The human should run these in their terminal.  
 

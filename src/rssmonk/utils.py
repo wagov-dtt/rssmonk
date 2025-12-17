@@ -1,16 +1,8 @@
 import hashlib
 from typing import Optional, Tuple
 
-from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType, Frequency
+from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType
 
-
-# Removes everything except for the one key in the dict, empty if the key is not present in the dict
-# TODO - This is to used to get subscriber filters for a feed hash but removing all other feed hashes.
-#      - Will be created after MVP
-def remove_other_keys(attr: dict, key: str) -> dict:
-    if key in attr:
-        return {key: attr[key]}
-    return {}
 
 def numberfy_subbed_lists(subs : list[dict]):
     subbed_lists : list[int] = []
@@ -42,14 +34,6 @@ def make_list_role_name(hash: str) -> str:
 
 def make_template_name(feed_hash: str, email_type: EmailPhaseType) -> str:
     return f"{feed_hash}-{email_type.value}"
-
-def find_highest_frequency(poll_frequencies: list[Frequency]) -> Frequency | None:
-    """Finds the highest polling frequency in the requested list"""
-    priority_order = [Frequency.INSTANT, Frequency.DAILY]
-    for freq in priority_order:
-        if freq in poll_frequencies:
-            return freq
-    return None
 
 def make_filter_url(data: list | dict[str, list[int]]) -> str:
     """Creates a flat URL query string from a list or dictionary of filters."""

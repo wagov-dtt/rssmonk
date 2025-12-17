@@ -63,11 +63,8 @@ ROLE_PREFIX = "list_role_"
 LIST_DESC_FEED_URL = "RSS Feed:"
 SUB_BASE_URL = "Subscription URL:"
 
-# Enables different filters per frequency. Default to false to only have one frequency type in the filter
-MULTIPLE_FREQ = "Multiple freq:" # TODO - Currently not in use
-
-# This is to ask the feed to give details specific to email processing
-FEED_URL_RSSMONK_QUERY = "?rssmonk=true" # TODO - Refine?
+# Query param to ask feed for email-specific details
+FEED_URL_RSSMONK_QUERY = "?rssmonk=true"
 
 ALL_FILTER = "all"
 """This keyword is the expected flag to either be all filter types, or all for a category/topic"""

@@ -35,8 +35,6 @@ class Feed(BaseModel):
         """Generate Listmonk description."""
         description = f"{LIST_DESC_FEED_URL} {self.feed_url}\n{SUB_BASE_URL} {self.email_base_url}"
         return description
-        # TODO - Need to determine how multiple frequency filters are stored. It may never be used. Default to false
-        #return description + f"\n{MULTIPLE_FREQ} {str(self.mult_freq)}"
 
 class ListmonkTemplate(BaseModel):
     """Template data model for Listmonk. Optional fields are for POST to /api/templates"""
