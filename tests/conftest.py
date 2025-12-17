@@ -405,16 +405,6 @@ class ListmonkClientTestBase(unittest.TestCase):
         cls.ADMIN_AUTH = HTTPBasicAuth(api_creds.username, api_creds.password)
         # Create admin session lazily (services must be running)
         cls.admin_session = make_admin_session()
-        # Empty lists, subscribers, templates and list roles.
-        cls.delete_list_roles()
-        cls.delete_user_roles()
-        cls.delete_users()
-        cls.delete_lists()
-        cls.delete_subscribers()
-        cls.delete_templates()
-        cls.clear_mailpit_messages()
-        cls.__limited_user_role_id = -1
-        cls.__feed_list_id = {}
 
     def setUp(self):
         # Clean state before each test - use the full cleanup

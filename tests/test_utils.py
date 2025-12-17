@@ -1,11 +1,28 @@
 import hashlib
 import unittest
 
-from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, make_filter_url, matches_filter, numberfy_subbed_lists
+from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, make_filter_url, matches_filter, numberfy_subbed_lists, remove_other_keys
 
 """
 Curated generated tests for the utils class for sanity checks
 """
+
+class TestRemoveOtherKeys(unittest.TestCase):
+    def test_key_present(self):
+        self.assertEqual(remove_other_keys({"min": 1, "port": 2}, "min"), {"min": 1})
+
+    def test_key_not_present(self):
+        self.assertEqual(remove_other_keys({"min": 1, "port": 2}, "reg"), {})
+
+    def test_empty_dict(self):
+        self.assertEqual(remove_other_keys({}, "reg"), {})
+
+    def test_single_key_match(self):
+        self.assertEqual(remove_other_keys({"min": 42}, "min"), {"min": 42})
+
+    def test_single_key_no_match(self):
+        self.assertEqual(remove_other_keys({"min": 42}, "max"), {})
+
 
 class TestNumberfySubbedLists(unittest.TestCase):
     def test_with_ids(self):

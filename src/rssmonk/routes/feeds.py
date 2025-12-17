@@ -413,14 +413,12 @@ async def reset_feed_account_password(
                     detail=f"{request.account_name} not found."
                 )
 
-            # Delete existing user first (Listmonk only returns token on creation)
-            rss_monk.delete_api_user(request.account_name)
-
             user_role_id = rss_monk.ensure_limited_user_role_exists()
-            list_role_id = rss_monk.ensure_list_role_by_hash(
-                request.account_name.replace(FEED_ACCOUNT_PREFIX, "")
-            )
+            list_role_id = rss_monk.ensure_list_role_by_hash(request.account_name.replace(FEED_ACCOUNT_PREFIX, ""))
 
+            # Delete existing user first (Listmonk only returns token on creation)
+            # TODO - Update when listmonk provides and API token reset mechanism
+            rss_monk.delete_api_user(request.account_name)
             api_user = rss_monk.create_api_user(request.account_name, user_role_id, list_role_id)
             return ApiAccountResponse(
                 id=api_user["id"],

@@ -4,6 +4,14 @@ from typing import Optional, Tuple
 from rssmonk.types import FEED_ACCOUNT_PREFIX, ROLE_PREFIX, EmailPhaseType
 
 
+# TODO - This is to used to get subscriber filters for a feed hash but removing all other feed hashes.
+#      - Will be created after MVP
+def remove_other_keys(attr: dict, key: str) -> dict:
+    """Removes everything except for the one key in the dict, empty if the key is not present in the dict"""
+    if key in attr:
+        return {key: attr[key]}
+    return {}
+
 def numberfy_subbed_lists(subs : list[dict]):
     subbed_lists : list[int] = []
     for sub_list in subs:

@@ -21,15 +21,20 @@ from .mock_feed_gen import external_mock_app
 
 from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase
 
+def run_mock_server():
+    # Create config and server inside the subprocess
+    config = uvicorn.Config("tests.mock_feed_gen:external_mock_app", host="0.0.0.0", port=10000, log_level="info")
+    server = uvicorn.Server(config)
+    server.run()
+
+
 
 class TestRSSMonkFeeds(ListmonkClientTestBase):
     @classmethod
     def setUpClass(cls):
         """Start external FastAPI server on port 10000 before tests."""
         super().setUpClass()
-        config = uvicorn.Config(external_mock_app, host="0.0.0.0", port=10000, log_level="info")
-        cls.server = uvicorn.Server(config)
-        cls.process = Process(target=cls.server.run)
+        cls.process = Process(target=run_mock_server)
         cls.process.start()
         time.sleep(2)  # Blocking wait to give server time to start
 
