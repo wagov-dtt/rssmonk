@@ -2,3 +2,4 @@
 "pipx:mypy" = "latest"
 "pipx:pytest" = "latest"
 ruff = "latest"
+"ubi:railwayapp/railpack" = "latest"

@@ -1,7 +1,7 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
 	"name": "rssmonk debian:trixie devcontainer",
-	"image": "ghcr.io/wagov-dtt/devcontainer-base:v2025.2",
+	"image": "ghcr.io/wagov-dtt/devcontainer-base",
 	"privileged": true,
 	"runArgs": ["--cgroupns=host"],
 	"mounts": [

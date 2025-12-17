@@ -1,6 +1,5 @@
 """RSS feed caching system for optimized polling."""
 
-import asyncio
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta

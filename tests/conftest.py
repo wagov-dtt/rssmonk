@@ -1,4 +1,6 @@
-import json
+import os
+import signal
+import subprocess
 import time
 import pytest
 import requests
@@ -6,6 +8,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from enum import IntEnum
 from http import HTTPStatus
+from pathlib import Path
 from requests.auth import HTTPBasicAuth
 
 from rssmonk.utils import make_url_hash
@@ -14,17 +17,211 @@ RSSMONK_URL = "http://localhost:8000"
 LISTMONK_URL = "http://localhost:9000"
 MAILPIT_URL = "http://localhost:8025"
 
+REQUEST_TIMEOUT = 5  # Fast fail timeout for test requests
+SERVICE_CHECK_TIMEOUT = 2  # Faster timeout for initial service availability check
+
+# API user created by fixture for RSS Monk API access
+RSSMONK_API_USERNAME = "rssmonk-api"
+PID_FILE = Path("/tmp/rssmonk-api.pid")
+LOG_FILE = Path("/tmp/rssmonk-api.log")
+
+# Runtime state - populated by api_server fixture
+class ApiCredentials:
+    """Holder for API credentials set by fixture."""
+    username: str = ""
+    password: str = ""
+
+api_creds = ApiCredentials()
+
+# Listmonk login credentials for session auth (k3d defaults)
+LISTMONK_LOGIN_USER = "admin"
+LISTMONK_LOGIN_PASSWORD = "admin123"
+
+
+# Patch requests to use timeout by default
+_original_request = requests.Session.request
+
+def _request_with_timeout(self, method, url, **kwargs):
+    kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+    return _original_request(self, method, url, **kwargs)
+
+requests.Session.request = _request_with_timeout
+
+# Also patch the module-level functions
+_original_get = requests.get
+_original_post = requests.post
+_original_put = requests.put
+_original_delete = requests.delete
+
+def _get_with_timeout(url, **kwargs):
+    kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+    return _original_get(url, **kwargs)
+
+def _post_with_timeout(url, **kwargs):
+    kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+    return _original_post(url, **kwargs)
+
+def _put_with_timeout(url, **kwargs):
+    kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+    return _original_put(url, **kwargs)
+
+def _delete_with_timeout(url, **kwargs):
+    kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+    return _original_delete(url, **kwargs)
+
+requests.get = _get_with_timeout
+requests.post = _post_with_timeout
+requests.put = _put_with_timeout
+requests.delete = _delete_with_timeout
+
+
+def check_service_available(url: str, name: str) -> bool:
+    """Check if a service is available."""
+    try:
+        resp = _original_get(url, timeout=SERVICE_CHECK_TIMEOUT)
+        return resp.status_code in (200, 401, 403)
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        return False
+
+
+def wait_for_listmonk() -> bool:
+    """Wait for Listmonk to be ready."""
+    for _ in range(60):
+        if check_service_available(f"{LISTMONK_URL}/api/health", "Listmonk"):
+            return True
+        time.sleep(1)
+    return False
+
+
+def get_or_create_api_token(session: requests.Session) -> str:
+    """Create API user in Listmonk and return the token.
+    
+    Listmonk only returns the API token on user creation, so if the user
+    already exists, we delete and recreate to get a new token.
+    """
+    response = session.get(f"{LISTMONK_URL}/api/users", timeout=10)
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to get users: {response.text}")
+    
+    users = response.json().get("data", [])
+    for user in users:
+        if user.get("username") == RSSMONK_API_USERNAME:
+            # Delete existing user to get a fresh token
+            del_response = session.delete(f"{LISTMONK_URL}/api/users/{user['id']}", timeout=10)
+            if del_response.status_code != 200:
+                raise RuntimeError(f"Failed to delete API user: {del_response.text}")
+            break
+    
+    # Create new API user with Super Admin role (role_id=1)
+    user_data = {
+        "username": RSSMONK_API_USERNAME,
+        "email": "",
+        "name": "RSS Monk API",
+        "type": "api",
+        "status": "enabled",
+        "password": None,
+        "password_login": False,
+        "user_role_id": 1,
+        "list_role_id": None
+    }
+    response = session.post(f"{LISTMONK_URL}/api/users", json=user_data, timeout=10)
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to create API user: {response.text}")
+    
+    return response.json()["data"]["password"]
+
+
+def stop_api() -> None:
+    """Stop any running API server."""
+    subprocess.run(["pkill", "-f", "fastapi.*src/rssmonk/api.py"], capture_output=True)
+    subprocess.run(["pkill", "-f", "uvicorn.*rssmonk"], capture_output=True)
+    subprocess.run(["fuser", "-k", "8000/tcp"], capture_output=True)
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+        except (ValueError, ProcessLookupError):
+            pass
+        PID_FILE.unlink(missing_ok=True)
+    time.sleep(1)
+
+
+def start_api(api_password: str) -> bool:
+    """Start API server and wait for ready."""
+    print(f"Starting API with user={RSSMONK_API_USERNAME}, password={api_password[:10]}...")
+    stop_api()
+    
+    # Write credentials to .env file (API loads from .env on startup)
+    env_file = Path(".env")
+    env_content = f"""# Test credentials - auto-generated by conftest.py
+LISTMONK_URL="{LISTMONK_URL}"
+LISTMONK_ADMIN_USER="{RSSMONK_API_USERNAME}"
+LISTMONK_ADMIN_PASSWORD="{api_password}"
+"""
+    env_file.write_text(env_content)
+    
+    env = os.environ.copy()
+    env["RSSMONK_TESTING"] = "1"
+    env["LISTMONK_URL"] = LISTMONK_URL
+    env["LISTMONK_ADMIN_USER"] = RSSMONK_API_USERNAME
+    env["LISTMONK_ADMIN_PASSWORD"] = api_password
+    
+    workspace_root = Path(__file__).parent.parent
+    with open(LOG_FILE, "w") as log:
+        proc = subprocess.Popen(
+            ["uv", "run", "fastapi", "run", "src/rssmonk/api.py", "--port", "8000", "--workers", "2"],
+            env=env,
+            stdout=log,
+            stderr=log,
+            start_new_session=True,
+            cwd=workspace_root,
+        )
+    
+    PID_FILE.write_text(str(proc.pid))
+    print(f"API process started with PID {proc.pid}")
+    
+    for _ in range(30):
+        if check_service_available(f"{RSSMONK_URL}/health", "RSS Monk API"):
+            print("API is ready")
+            return True
+        time.sleep(1)
+    
+    return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def api_server():
+    """Start API server with fresh API token, yield credentials, then cleanup."""
+    # Wait for Listmonk (k3d cluster)
+    if not wait_for_listmonk():
+        pytest.fail("Listmonk is not running. Start it with: just start")
+    
+    # Create API token via Listmonk admin session
+    admin_session = make_admin_session()
+    api_creds.password = get_or_create_api_token(admin_session)
+    api_creds.username = RSSMONK_API_USERNAME
+    
+    # Start API server
+    if not start_api(api_creds.password):
+        pytest.fail("Failed to start API server. Check /tmp/rssmonk-api.log")
+    
+    yield
+    
+    # Cleanup
+    stop_api()
+
+
 def make_admin_session() -> requests.Session:
-    # Create the session into Listmonk
+    """Create authenticated session to Listmonk using login credentials."""
     admin_session = requests.Session()
 
     admin_session.get(f"{LISTMONK_URL}/admin/login")
     nonce = admin_session.cookies.get("nonce")
     assert nonce, "Nonce not found in cookies"
     
-    login_data={
-        "username": "admin",
-        "password": "admin123", # Taken from /workspaces/rssmonk/kustomize/base/secrets.yaml
+    login_data = {
+        "username": LISTMONK_LOGIN_USER,
+        "password": LISTMONK_LOGIN_PASSWORD,
         "nonce": nonce,
         "next": "/admin"
     }
@@ -177,20 +374,24 @@ class UnitTestInitialisedData:
     subscribers = {} # Subscriber's UUID + TOKEN as pair
 
 
-@pytest.mark.usefixtures("listmonk_setup")
+@pytest.mark.usefixtures("api_server", "listmonk_setup")
 class ListmonkClientTestBase(unittest.TestCase):
     """This is the base of the testing with RSSMonk and downstream Listmonk, setting them up and tear down."""
-    FEED_ONE_FEED_URL = "https://localhost:50000/rss"
+    # Test feed URL - served by the API at /test/feed
+    TEST_FEED_URL = f"{RSSMONK_URL}/test/feed"
+
+    # Feed URLs for multi-feed tests (FEED_ONE uses the real test feed)
+    FEED_ONE_FEED_URL = TEST_FEED_URL
     FEED_ONE_HASH = make_url_hash(FEED_ONE_FEED_URL)
 
-    FEED_TWO_FEED_URL = "https://localhost:50001/rss"
+    FEED_TWO_FEED_URL = f"{TEST_FEED_URL}?items=2"
     FEED_TWO_HASH = make_url_hash(FEED_TWO_FEED_URL)
 
-    FEED_THREE_FEED_URL = "https://localhost:10000/rss"
+    FEED_THREE_FEED_URL = f"{TEST_FEED_URL}?items=5"
     FEED_THREE_HASH = make_url_hash(FEED_THREE_FEED_URL)
     
-    ADMIN_AUTH = HTTPBasicAuth("admin", "admin123") # Default k3d credentials
-    admin_session = make_admin_session()
+    ADMIN_AUTH: HTTPBasicAuth = None  # type: ignore[assignment]  # Set in setUpClass from env
+    admin_session: requests.Session = None  # type: ignore[assignment]
     one_feed_subscriber_uuid = ""
     two_feed_subscriber_uuid = ""
     __limited_user_role_id = -1
@@ -199,6 +400,11 @@ class ListmonkClientTestBase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Set up auth from credentials set by api_server fixture
+        print(f"DEBUG: api_creds.username={api_creds.username!r}, api_creds.password={api_creds.password[:10] if api_creds.password else 'EMPTY'}...")
+        cls.ADMIN_AUTH = HTTPBasicAuth(api_creds.username, api_creds.password)
+        # Create admin session lazily (services must be running)
+        cls.admin_session = make_admin_session()
         # Empty lists, subscribers, templates and list roles.
         cls.delete_list_roles()
         cls.delete_user_roles()
@@ -210,8 +416,8 @@ class ListmonkClientTestBase(unittest.TestCase):
         cls.__limited_user_role_id = -1
         cls.__feed_list_id = {}
 
-    def tearDown(self):
-        # Empty lists, subscribers, templates and list roles.
+    def setUp(self):
+        # Clean state before each test - use the full cleanup
         self.delete_list_roles()
         self.delete_user_roles()
         self.delete_users()
@@ -219,58 +425,93 @@ class ListmonkClientTestBase(unittest.TestCase):
         self.delete_subscribers()
         self.delete_templates()
         self.clear_mailpit_messages()
+        self.__limited_user_role_id = -1
+        self.__feed_list_id = {}
+
+    @classmethod
+    def reset_listmonk_state(cls):
+        """Reset Listmonk to clean state - optimised to minimise API calls."""
+        # Delete in dependency order: subscribers -> lists -> templates -> roles -> users
+        # Get all data in parallel-ish (fewer round trips)
+        lists_resp = cls.admin_session.get(f"{LISTMONK_URL}/api/lists?per_page=all")
+        subs_resp = cls.admin_session.get(f"{LISTMONK_URL}/api/subscribers?per_page=all")
+        templates_resp = cls.admin_session.get(f"{LISTMONK_URL}/api/templates")
+        list_roles_resp = cls.admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
+        user_roles_resp = cls.admin_session.get(f"{LISTMONK_URL}/api/roles/users")
+        users_resp = cls.admin_session.get(f"{LISTMONK_URL}/api/users")
+
+        # Delete subscribers
+        for sub in (subs_resp.json().get("data", {}).get("results") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{sub['id']}")
+
+        # Delete lists
+        for lst in (lists_resp.json().get("data", {}).get("results") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/lists/{lst['id']}")
+
+        # Delete templates
+        for tpl in (templates_resp.json().get("data") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/templates/{tpl['id']}")
+
+        # Delete list roles
+        for role in (list_roles_resp.json().get("data") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/roles/{role['id']}")
+
+        # Delete user roles (skip id=1 which is Super Admin)
+        for role in (user_roles_resp.json().get("data") or []):
+            if role["id"] != 1:
+                cls.admin_session.delete(f"{LISTMONK_URL}/api/roles/{role['id']}")
+
+        # Delete users (skip id=1 which is admin, and the rssmonk-api user)
+        for user in (users_resp.json().get("data") or []):
+            if user["id"] != 1 and user.get("username") != RSSMONK_API_USERNAME:
+                cls.admin_session.delete(f"{LISTMONK_URL}/api/users/{user['id']}")
+
+        # Clear mailpit
+        requests.delete(f"{MAILPIT_URL}/api/v1/messages", timeout=REQUEST_TIMEOUT)
 
     @classmethod
     def delete_lists(cls):
-        # Testing purposes assume low counts
         response = cls.admin_session.get(f"{LISTMONK_URL}/api/lists")
-        lists_data = dict(response.json()).get("data", {}).get("results", [])
-        for list_data in lists_data:
-            cls.admin_session.delete(f"{LISTMONK_URL}/api/lists/{list_data['id']}")
+        for lst in (response.json().get("data", {}).get("results") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/lists/{lst['id']}")
 
     @classmethod
     def delete_subscribers(cls):
         cls.admin_session.delete(f"{LISTMONK_URL}/api/maintenance/subscribers/orphan")
-        response = cls.admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
-        lists_data = dict(response.json()).get("data", {}).get("results", [])
-        for list_data in lists_data:
-            cls.admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{list_data['id']}")
+        response = cls.admin_session.get(f"{LISTMONK_URL}/api/subscribers?per_page=all")
+        for sub in (response.json().get("data", {}).get("results") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/subscribers/{sub['id']}")
 
     @classmethod
     def delete_templates(cls):
         response = cls.admin_session.get(f"{LISTMONK_URL}/api/templates")
-        lists_data = response.json()["data"]
-        for list_data in lists_data:
-            cls.admin_session.delete(f"{LISTMONK_URL}/api/templates/{list_data['id']}")
+        for tpl in (response.json().get("data") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/templates/{tpl['id']}")
 
     @classmethod
     def delete_list_roles(cls):
         response = cls.admin_session.get(f"{LISTMONK_URL}/api/roles/lists")
-        lists_data = response.json()["data"]
-        for list_data in lists_data:
-            cls.admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
+        for role in (response.json().get("data") or []):
+            cls.admin_session.delete(f"{LISTMONK_URL}/api/roles/{role['id']}")
 
     @classmethod
     def delete_user_roles(cls):
         response = cls.admin_session.get(f"{LISTMONK_URL}/api/roles/users")
-        lists_data = response.json()["data"]
-        for list_data in lists_data:
-            cls.admin_session.delete(f"{LISTMONK_URL}/api/roles/{list_data['id']}")
+        for role in (response.json().get("data") or []):
+            if role["id"] != 1:
+                cls.admin_session.delete(f"{LISTMONK_URL}/api/roles/{role['id']}")
 
     @classmethod
     def delete_users(cls):
         response = cls.admin_session.get(f"{LISTMONK_URL}/api/users")
-        lists_data = response.json()["data"]
-        for list_data in lists_data:
-            if list_data['id'] != 1:
-                cls.admin_session.delete(f"{LISTMONK_URL}/api/users/{list_data['id']}")
+        for user in (response.json().get("data") or []):
+            # Skip admin (id=1) and the rssmonk-api user used for API auth
+            if user["id"] != 1 and user.get("username") != RSSMONK_API_USERNAME:
+                cls.admin_session.delete(f"{LISTMONK_URL}/api/users/{user['id']}")
 
     @classmethod
     def clear_mailpit_messages(cls):
-        # Clean up mailpit
-        sessions = requests.Session()
-        sessions.get(MAILPIT_URL)
-        sessions.delete(MAILPIT_URL+"/api/v1/messages") # Either 200 or 302
+        requests.delete(f"{MAILPIT_URL}/api/v1/messages", timeout=REQUEST_TIMEOUT)
 
     #-------------------------
     # Helper functions to set up functionality
@@ -305,7 +546,7 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "freq:daily",
                 "url:"+self.FEED_ONE_HASH
             ],
-            "description": f"RSS Feed: {self.FEED_ONE_FEED_URL}\nSubscription URL: {self.FEED_ONE_FEED_URL}/media-statements"
+            "description": f"RSS Feed: {self.FEED_ONE_FEED_URL}\nSubscription URL: https://example.com/subscribe"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
@@ -319,7 +560,7 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "freq:instant",
                 "url:"+self.FEED_TWO_HASH
             ],
-            "description": f"RSS Feed: {self.FEED_TWO_FEED_URL}\nSubscription URL: {self.FEED_TWO_FEED_URL}/media-statements"
+            "description": f"RSS Feed: {self.FEED_TWO_FEED_URL}\nSubscription URL: https://example.com/subscribe2"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_two_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
@@ -333,7 +574,7 @@ class ListmonkClientTestBase(unittest.TestCase):
                 "freq:daily",
                 "url:"+self.FEED_THREE_HASH
             ],
-            "description": f"RSS Feed: {self.FEED_THREE_FEED_URL}\nSubscription URL: {self.FEED_THREE_FEED_URL}/media-statements"
+            "description": f"RSS Feed: {self.FEED_THREE_FEED_URL}\nSubscription URL: https://example.com/subscribe3"
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/lists", json=create_feed_three_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed: "+response.text
@@ -405,7 +646,8 @@ class ListmonkClientTestBase(unittest.TestCase):
 
 
     def _make_feed_templates(self):
-        """Creating templates used for testing. Independant of the feed list creation"""
+        """Creating templates used for testing. Independent of the feed list creation"""
+        # Subscribe/unsubscribe templates
         template_data = {
             "name": self.FEED_ONE_HASH+"-subscribe",
             "subject": "Subject Line: You requested to be subscribed",
@@ -422,6 +664,25 @@ class ListmonkClientTestBase(unittest.TestCase):
         }
         response = self.admin_session.post(LISTMONK_URL+"/api/templates", json=template_two_data)
         assert (response.status_code == HTTPStatus.OK), "Set up failed. Make feed template: "+response.text
+
+        # Digest templates required for feed processing (use underscore: instant_digest, daily_digest)
+        instant_digest_data = {
+            "name": self.FEED_ONE_HASH+"-instant_digest",
+            "subject": "{{ .Tx.Data.subject }}",
+            "type": "tx",
+            "body": "<html><body>{{ .Tx.Data.item.title }}</body></html>"
+        }
+        response = self.admin_session.post(LISTMONK_URL+"/api/templates", json=instant_digest_data)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed. Make instant digest template: "+response.text
+
+        daily_digest_data = {
+            "name": self.FEED_ONE_HASH+"-daily_digest",
+            "subject": "Daily Digest",
+            "type": "tx",
+            "body": "<html><body>{{ range .Tx.Data.items }}{{ .title }}{{ end }}</body></html>"
+        }
+        response = self.admin_session.post(LISTMONK_URL+"/api/templates", json=daily_digest_data)
+        assert (response.status_code == HTTPStatus.OK), "Set up failed. Make daily digest template: "+response.text
 
 
     def _make_feed_subscriber(self, confirmed: bool) -> dict[str, str]:

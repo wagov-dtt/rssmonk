@@ -39,7 +39,6 @@ test = [
 ]
 
 [project.scripts]
-rssmonk = "rssmonk.cli:app"
 rssmonk-api = "rssmonk.api:app"
 rssmonk-cron = "rssmonk.cron:main"
 

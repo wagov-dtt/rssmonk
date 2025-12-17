@@ -179,7 +179,7 @@ class ListmonkClient:
                 keep_retrieving = (data["page"] * data["per_page"]) < data["total"]
                 # Total here means total number of records extracted by the query, then paginated
                 page += 1
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             raise
 

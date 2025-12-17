@@ -82,8 +82,6 @@ class FeedConfigManager:
         # TODO = This one should be renamed copy and not migrate as they're left in the old one
         # TODO - Attributes are lost in this, since feed ids and urls have changed. Might be worth doing SQL here
         try:
-            # Get subscriber IDs from the source list
-            source_list = self.rss_monk.getClient().get(f"/api/lists/{from_feed.id}")
             subscriber_ids = []
             
             # Get subscribers for this list

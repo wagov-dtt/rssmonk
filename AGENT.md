@@ -8,9 +8,11 @@ just start    # Deploy RSS Monk on k3d cluster
 
 ## Commands
 **Setup:** `prereqs` `install` `setup`  
-**Development:** `api` `check` `lint` `format` `type-check` `test` `validate`  
+**Development:** `api` `check` `lint` `format` `type-check`  
 **Deployment:** `start` `status` `logs` `clean` `health`  
-**Testing:** `test-integration` - Run against k3d cluster with Mailpit verification  
+**Testing:** `test` (full restart) or `test quick` (reuse cluster), `test-integration`  
+
+**IMPORTANT FOR AGENTS:** Do NOT execute justfile recipes directly. Instead, ASK THE HUMAN to run them. Long-running commands like `just test` or `just start` will timeout or be cancelled. The human should run these in their terminal.  
 
 ## Local Access
 - **Listmonk:** http://localhost:9000 (admin/admin123)
@@ -91,5 +93,4 @@ just start    # Deploy RSS Monk on k3d cluster
 - **"Nothing happening"** - Check `just logs` and `just status`
 - **"Emails not arriving"** - Verify RSS feed URL, check Mailpit at :8025
 - **"Want to start over"** - Run `just clean && just start`
-- **"How to add feeds"** - Use `just feeds add-feed https://www.abc.net.au/news/feed/10719986/rss.xml daily`
-- **"What frequencies work"** - 5min, daily
+- **"What frequencies work"** - instant, daily

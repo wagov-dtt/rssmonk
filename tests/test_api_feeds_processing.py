@@ -26,6 +26,7 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
     @classmethod
     def setUpClass(cls):
         """Start external FastAPI server on port 10000 before tests."""
+        super().setUpClass()
         config = uvicorn.Config(external_mock_app, host="0.0.0.0", port=10000, log_level="info")
         cls.server = uvicorn.Server(config)
         cls.process = Process(target=cls.server.run)

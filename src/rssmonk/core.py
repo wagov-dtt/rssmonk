@@ -128,16 +128,14 @@ class RSSMonk:
             base_url=self.settings.listmonk_url,
             username=self.local_creds.username if self.local_creds is not None else "",
             password=self.local_creds.password if self.local_creds is not None else "",
-            auth_type=AuthType.SESSION if self.settings.validate_admin_auth(
-                self.local_creds.username if self.local_creds is not None else "",
-                self.local_creds.password if self.local_creds is not None else "") else AuthType.BASIC,
+            auth_type=AuthType.BASIC,
             timeout=self.settings.rss_timeout
         )
         self._admin = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.settings.listmonk_admin_username,
             password=self.settings.listmonk_admin_password,
-            auth_type=AuthType.SESSION,
+            auth_type=AuthType.BASIC,
             timeout=self.settings.rss_timeout
         )
 
@@ -308,9 +306,8 @@ class RSSMonk:
         if role_id > 0:
             try:
                 self._client.delete(f"/api/roles/{role_id}")
-            except:
-                # Log on failure, will try to fix later
-                logger.error("Failed to delete list role {role_id}")
+            except Exception:
+                logger.error(f"Failed to delete list role {role_id}")
         return True
 
 
@@ -829,7 +826,6 @@ class RSSMonk:
         mult_freq = False
         url = None
         sub_url = None
-        topics = None
 
         for line in desc.split("\n"):
             if line.startswith(LIST_DESC_FEED_URL):
@@ -862,7 +858,7 @@ class RSSMonk:
 
         last_guid = None
         for tag in tags:
-            if str(tag).startswith(f"last-guid:"):
+            if str(tag).startswith("last-guid:"):
                 last_guid = str(tag).split(":", 3)[2]
                 break
 
@@ -937,7 +933,7 @@ class RSSMonk:
         if articles and len(articles) > 0:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
             # Replace last-guid guid
-            tags = [ t for t in tags if not str(t).startswith(f"last-guid:") ]
+            tags = [ t for t in tags if not str(t).startswith("last-guid:") ]
             tags.append(f"last-guid:{frequency.value}:{latest_guid}")
 
         # Update list

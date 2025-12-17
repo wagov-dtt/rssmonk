@@ -2,7 +2,6 @@
 from multiprocessing import Process
 import asyncio
 from datetime import datetime
-import threading
 import warnings
 
 import requests

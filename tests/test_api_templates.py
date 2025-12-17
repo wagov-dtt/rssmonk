@@ -104,7 +104,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         admin_session = make_admin_session()
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")
         templates_list = response.json()["data"]
-        assert len(templates_list) == 3, templates_list
+        assert len(templates_list) == 5, templates_list  # 1 default + 2 subscribe/unsubscribe + 2 digest
         for template in templates_list:
             if template["name"] == "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-subscribe":
                 assert template["subject"] == "Very special template"
@@ -140,7 +140,7 @@ class TestRSSMonkFeedTemplates(ListmonkClientTestBase):
         admin_session = make_admin_session()
         response = admin_session.get(f"{LISTMONK_URL}/api/templates")
         templates_list = response.json()["data"]
-        assert len(templates_list) == 3, templates_list
+        assert len(templates_list) == 5, templates_list  # 1 default + 2 subscribe/unsubscribe + 2 digest
         for template in templates_list:
             if template["name"] == "0cb1e00d5415d57f19b547084a93900a558caafbd04fc10f18aa20e0c46a02a8-subscribe":
                 assert template["subject"] == "Very special template"

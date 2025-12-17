@@ -16,41 +16,55 @@ just setup
 just install     # Install dependencies
 just test        # Run tests
 just lint        # Check code style
-just feeds --help # Try the CLI
+just api         # Start API server
 ```
 
 ## Project Structure
 
-RSS Monk has a minimal structure:
+RSS Monk uses modular route handlers for easy discovery:
 
 ```
 src/rssmonk/
-├── __init__.py         # Package init
-├── rssmonk.py          # All-in-one: CLI, API, Core logic
-└── tests/              # Simple tests
+├── api.py              # FastAPI app setup and router registration
+├── core.py             # RSSMonk service and Settings
+├── routes/             # Endpoint modules (organized by resource)
+│   ├── feeds.py        # Feed CRUD, templates, accounts
+│   ├── subscriptions.py # Subscribe, confirm, unsubscribe
+│   └── operations.py   # Processing, health, metrics, cache
+├── models.py           # Pydantic request/response models
+├── http_clients.py     # Listmonk HTTP client
+├── cache.py            # Feed caching
+├── types.py            # Constants and enums
+├── utils.py            # Utility functions
+└── tests/              # Tests
 ```
 
 ## Design Principles
 
-1. **One file for most functionality** - Keep it simple
+1. **Modular routes** - One module per resource domain (feeds, subscriptions, operations)
 2. **Pydantic for validation** - Type safety without complexity  
 3. **ASCII only** - No Unicode/emoji in code (tool compatibility)
 4. **Stateless** - Use Listmonk for all state storage
 5. **Environment config** - No config files
+6. **Single responsibility** - Each route module handles ~80-120 lines
 
 ## Making Changes
 
-### Adding a CLI Command
-1. Add function to `rssmonk.py` 
-2. Decorate with `@app.command()`
-3. Use existing patterns for error handling
-4. Test with `uv run rssmonk your-command`
-
 ### Adding an API Endpoint  
-1. Add function to `rssmonk.py`
-2. Decorate with `@app.post()` etc
-3. Use existing request/response models
-4. Test with `uvicorn rssmonk:api_app --reload`
+1. Identify the resource: feeds, subscriptions, or operations
+2. Add function to the appropriate module in `routes/`
+3. Use `@router.post()`, `@router.get()` etc
+4. Use existing request/response models from `models.py`
+5. Test with `uvicorn rssmonk.api:app --reload`
+
+Example - adding a feed endpoint:
+```python
+# In routes/feeds.py
+@router.get("/{feed_id}")
+async def get_feed(feed_id: int, ...):
+    """Get a single feed by ID."""
+    ...
+```
 
 ### Adding Tests
 1. Create test in `tests/`
@@ -76,21 +90,17 @@ just type-check
 # Run all quality checks
 just check
 
-# Run locally with Listmonk
-just start
-
-# Test CLI commands
-export LISTMONK_ADMIN_PASSWORD=test123
-just feeds health
-
-# Test API server
+# Run API server locally
 just api
+
+# Test endpoints
 curl http://localhost:8000/health
+curl -u api:your-token http://localhost:8000/api/feeds
 ```
 
 ## Code Style
 
-- Use ASCII text instead of Unicode: `[SUCCESS]` not `✅`
+- Use ASCII text instead of Unicode: [SUCCESS] not ✅
 - Keep functions small and focused
 - Use type hints with Pydantic models
 - Follow existing error handling patterns

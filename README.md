@@ -39,8 +39,26 @@ RSS Monk acts as a proxy to Listmonk with three areas of endpoints:
 - `GET /docs` - Interactive API documentation with passthrough info
 - `GET /openapi.json` - OpenAPI spec including Listmonk integration
 
-## CLI Tool
-A CLI tool built with typer that closely mimics the HTTP API will be made available for test simplification. In production, use the HTTP endpoints directly.
+## API Endpoints
+
+RSS Monk provides a RESTful API with the following resource groups:
+
+**Feed Management** (`/api/feeds`):
+- Feed operations: create, list, delete, templates, accounts
+- All operations require HTTP Basic Auth
+
+**Subscriptions** (`/api/feeds`):
+- `POST /subscribe` - Subscribe email to feed
+- `POST /subscribe-confirm` - Confirm subscription  
+- `POST /unsubscribe` - Unsubscribe from feed
+- `GET /subscribe-preferences` - Get user preferences
+
+**Operations** (health, processing, monitoring):
+- `GET /health` - Health check
+- `POST /api/feeds/process` - Process single feed
+- `POST /api/feeds/process/bulk/{frequency}` - Process all feeds of frequency
+- `GET /api/cache/stats` - Cache statistics
+- `DELETE /api/cache` - Clear feed cache
 
 ## Configuration
 
@@ -93,3 +111,8 @@ just check
 # Run all pytest
 just test
 ```
+
+## TODO
+
+- **Container build**: Set up a [Railpack](https://railpack.io/) build to create a production container that can run adjacent to Listmonk in a Kubernetes cluster
+- **End-to-end tests**: Create external (non-Python) integration tests that the justfile can run against a fully configured k3d stack. These tests should simulate real API user workflows as documented in this README, providing confidence that the documented quick-start instructions work correctly
