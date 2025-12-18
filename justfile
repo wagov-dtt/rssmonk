@@ -115,3 +115,7 @@ build:
   @docker start buildkit 2>/dev/null || docker run --rm --privileged -d --name buildkit moby/buildkit
   BUILDKIT_HOST=docker-container://buildkit railpack build . --name rssmonk-api
   @k3d cluster list rssmonk >/dev/null 2>&1 && k3d image import rssmonk-api -c rssmonk || true
+
+# Update the dependancies
+update:
+  uv lock --upgrade

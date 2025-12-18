@@ -5,9 +5,10 @@ import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasicCredentials
+from ..shared import security
 
-from rssmonk.core import RSSMonk, Settings
+from rssmonk.core import RSSMonk
 from rssmonk.logging_config import get_logger
 from rssmonk.models import (
     SubscribeAdminRequest,
@@ -20,6 +21,7 @@ from rssmonk.models import (
     UnsubscribeRequest,
     EmailPhaseType,
 )
+from rssmonk.shared import security, get_settings
 from rssmonk.types import NO_REPLY_EMAIL, ActionsURLSuffix
 from rssmonk.utils import (
     extract_feed_hash,
@@ -31,7 +33,6 @@ from rssmonk.utils import (
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
-security = HTTPBasic()
 
 
 @router.get(
@@ -75,12 +76,11 @@ async def subscribe(
     credentials: HTTPBasicCredentials = Depends(security)
 ) -> SubscriptionResponse:
     """Subscribe email to a feed."""
-    settings = Settings()
     rss_monk = RSSMonk(local_creds=credentials)
     with rss_monk:
         bypass_confirmation = False
         feed_hash = None
-        is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
+        is_valid_admin = get_settings().validate_admin_auth(credentials.username, credentials.password)
         if isinstance(request, SubscribeAdminRequest):
             if not is_valid_admin:
                 raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
@@ -157,11 +157,10 @@ async def confirm_subscription(
     credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Confirm feed subscription."""
-    settings = Settings()
     rss_monk = RSSMonk(local_creds=credentials)
     try:
         with rss_monk:
-            if settings.validate_admin_auth(credentials.username, credentials.password):
+            if get_settings().validate_admin_auth(credentials.username, credentials.password):
                 raise HTTPException(
                     status_code=HTTPStatus.FORBIDDEN,
                     detail="Administrators must use the bypass when subscribing"
@@ -217,7 +216,6 @@ async def unsubscribe(
     credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Unsubscribe from a feed."""
-    settings = Settings()
     rss_monk = RSSMonk(local_creds=credentials)
     try:
         with rss_monk:
@@ -226,7 +224,7 @@ async def unsubscribe(
             token = None
             bypass_confirmation = False
             subscriber_query = None
-            is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
+            is_valid_admin = get_settings().validate_admin_auth(credentials.username, credentials.password)
 
             if isinstance(request, UnsubscribeAdminRequest):
                 if not is_valid_admin:

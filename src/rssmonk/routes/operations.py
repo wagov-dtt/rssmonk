@@ -1,12 +1,14 @@
 """Operational endpoints - feed processing, health checks, metrics, cache management."""
 
 from http import HTTPStatus
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.security import HTTPBasicCredentials
+from rssmonk.shared import Settings, security, get_settings
 import httpx
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from rssmonk.cache import feed_cache
-from rssmonk.core import RSSMonk, Settings
+from rssmonk.core import RSSMonk
 from rssmonk.logging_config import get_logger
 from rssmonk.models import (
     BulkProcessResponse,
@@ -18,7 +20,6 @@ from rssmonk.models import (
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["health", "processing"])
-security = HTTPBasic()
 
 
 @router.get(
@@ -47,16 +48,23 @@ async def health_check() -> HealthResponse:
 @router.get(
     "/metrics",
     response_model=str,
-    summary="Obtain metrics (Admin only)",
-    description="Obtain metrics about RSSMonk (Admin only)"
+    summary="Obtain metrics (Admin)",
+    description="Obtain metrics about RSSMonk (Admin)"
 )
 async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> str:
     """Get Prometheus metrics."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
-    raise HTTPException(status_code=HTTPStatus.NOT_IMPLEMENTED)
+    try:
+        # Return metrics page
+        data = generate_latest() # TODO - This appears to also generates extra metrics (such as _created)
+
+        # TODO - Append subsciber_count from /api/lists for each list
+
+        return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+    except Exception as e:
+        logger.error(f"Metric check failed: {e}")
 
 
 @router.get(
@@ -66,8 +74,7 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
 )
 async def get_cache_stats(credentials: HTTPBasicCredentials = Depends(security)):
     """Get feed cache statistics."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     return feed_cache.get_stats()
@@ -80,8 +87,7 @@ async def get_cache_stats(credentials: HTTPBasicCredentials = Depends(security))
 )
 async def clear_cache(credentials: HTTPBasicCredentials = Depends(security)):
     """Clear feed cache."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     feed_cache.clear()
@@ -92,15 +98,14 @@ async def clear_cache(credentials: HTTPBasicCredentials = Depends(security)):
     "/api/feeds/process",
     response_model=FeedProcessResponse,
     summary="Process Single Feed",
-    description="Manually process a single RSS feed and send emails. Admin only."
+    description="Manually process a single RSS feed and send emails. Administrator privileges required."
 )
 async def process_feed(
     request: FeedProcessRequest,
     credentials: HTTPBasicCredentials = Depends(security)
 ) -> FeedProcessResponse:
     """Process a single feed."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -128,15 +133,14 @@ async def process_feed(
     "/api/feeds/process/bulk/{frequency}",
     response_model=BulkProcessResponse,
     summary="Process Feeds by Frequency",
-    description="Process all RSS feeds of a specific frequency (used by cron jobs). Admin only."
+    description="Process all RSS feeds of a specific frequency (used by cron jobs). Administrator privileges required."
 )
 async def process_feeds_bulk(
     frequency: Frequency,
     credentials: HTTPBasicCredentials = Depends(security)
 ) -> BulkProcessResponse:
     """Process feeds by frequency."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:

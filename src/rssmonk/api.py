@@ -5,20 +5,17 @@ from http import HTTPStatus
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasicCredentials
+from rssmonk.shared import settings, security
 
-from rssmonk.core import RSSMonk, Settings
+from rssmonk.core import RSSMonk
 from rssmonk.logging_config import get_logger
 from rssmonk.models import ErrorResponse
 from rssmonk.routes import feeds, operations, subscriptions
 
 logger = get_logger(__name__)
 
-# Initialize settings and create .env if missing
-if Settings.ensure_env_file():
-    print("Created .env file with default settings. Please edit LISTMONK_ADMIN_PASSWORD before starting.")
 
-settings = Settings()
 
 # Configure Swagger UI with actual credentials from environment
 swagger_ui_params = {
@@ -88,8 +85,6 @@ RSS Monk uses Listmonk lists as the source of truth:
     swagger_ui_parameters=swagger_ui_params,
 )
 
-# Security
-security = HTTPBasic()
 
 
 async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -> tuple[str, str]:

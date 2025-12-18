@@ -2,10 +2,11 @@
 
 from http import HTTPStatus
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasicCredentials
+from ..shared import security
 import httpx
 
-from rssmonk.core import RSSMonk, Settings
+from rssmonk.core import RSSMonk
 from rssmonk.logging_config import get_logger
 from rssmonk.cache import feed_cache
 from rssmonk.config_manager import FeedConfigManager
@@ -24,6 +25,7 @@ from rssmonk.models import (
     ListmonkTemplate,
     TemplateResponse,
 )
+from rssmonk.shared import security, get_settings
 from rssmonk.types import FEED_ACCOUNT_PREFIX
 from rssmonk.utils import (
     get_feed_hash_from_username,
@@ -34,23 +36,21 @@ from rssmonk.utils import (
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
-security = HTTPBasic()
 
 
 @router.post(
     "",
     response_model=FeedResponse,
     status_code=HTTPStatus.CREATED,
-    summary="Create RSS Feed (Admin only)",
-    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Admin only."
+    summary="Create RSS Feed (Admin)",
+    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Administrator privileges required."
 )
 async def create_feed(
     request: FeedCreateRequest,
     credentials: HTTPBasicCredentials = Depends(security)
 ) -> FeedResponse:
     """Create a new RSS feed."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -163,16 +163,15 @@ async def get_feed_by_url(
 
 @router.delete(
     "/by-url",
-    summary="Delete Feed by URL (Admin only)",
-    description="Remove an RSS feed by its URL. Admin only."
+    summary="Delete Feed by URL (Admin)",
+    description="Remove an RSS feed by its URL. Administrator privileges required."
 )
 async def delete_feed_by_url(
     request: FeedDeleteRequest,
     credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Delete feed by URL."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -310,11 +309,10 @@ async def delete_feed_template(
     credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Delete a template."""
-    settings = Settings()
     rss_monk = RSSMonk(local_creds=credentials)
     with rss_monk:
         feed_hash = None
-        is_valid_admin = settings.validate_admin_auth(credentials.username, credentials.password)
+        is_valid_admin = get_settings().validate_admin_auth(credentials.username, credentials.password)
         if isinstance(request, DeleteTemplateAdminRequest):
             if not is_valid_admin:
                 raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
@@ -343,16 +341,15 @@ async def delete_feed_template(
     "/account",
     response_model=ApiAccountResponse,
     status_code=HTTPStatus.CREATED,
-    summary="Create account for RSS Feed (Admin only)",
-    description="Create a new limited access account to operate on the feed. Admin only."
+    summary="Create account for RSS Feed (Admin)",
+    description="Create a new limited access account to operate on the feed. Administrator privileges required."
 )
 async def create_feed_account(
     request: FeedAccountRequest,
     credentials: HTTPBasicCredentials = Depends(security)
 ) -> ApiAccountResponse:
     """Create a new account for a RSS feed."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
@@ -392,16 +389,15 @@ async def create_feed_account(
     "/account-reset-password",
     response_model=ApiAccountResponse,
     status_code=HTTPStatus.CREATED,
-    summary="Reset password for RSS Feed account (Admin only)",
-    description="Resets the password for a RSS Feed account. Admin only."
+    summary="Reset password for RSS Feed account (Admin)",
+    description="Resets the password for a RSS Feed account. Administrator privileges required."
 )
 async def reset_feed_account_password(
     request: FeedAccountPasswordResetRequest,
     credentials: HTTPBasicCredentials = Depends(security)
 ) -> ApiAccountResponse:
     """Reset the password for a RSS feed account."""
-    settings = Settings()
-    if not settings.validate_admin_auth(credentials.username, credentials.password):
+    if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     try:
