@@ -1,6 +1,5 @@
 [tools]
-"pipx:mypy" = "latest"
-"pipx:pytest" = "latest"
+k3d = "latest"
 ruff = "latest"
 tilt = "latest"
-"ubi:railwayapp/railpack" = "latest"
+"github:railwayapp/railpack" = "latest"
