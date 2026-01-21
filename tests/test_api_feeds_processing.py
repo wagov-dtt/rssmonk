@@ -11,7 +11,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 import uvicorn
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from rssmonk.core import RSSMonk
 from rssmonk.models import Feed
@@ -367,3 +367,160 @@ class TestPerformDailyEmailCheck(unittest.TestCase):
         self.assertEqual(fifth_call_args[4]["items"][0]["title"], "Article 1")
         self.assertEqual(fifth_call_args[4]["items"][1]["title"], "Article 2")
         self.assertEqual(fifth_call_args[4]["items"][2]["title"], "Article 3")
+
+
+class TestShouldPoll(unittest.TestCase):
+    """Tests for the _should_poll method which controls when feeds are processed."""
+
+    def _make_rssmonk_with_mock_client(self):
+        """Create RSSMonk with mocked Listmonk client."""
+        rssmonk = RSSMonk(local_creds=HTTPBasicCredentials(username="admin", password="admin123"))
+        rssmonk._client = MagicMock()
+        return rssmonk
+
+    def _make_feed(self, frequencies: list[Frequency]) -> Feed:
+        """Create a test feed with given frequencies."""
+        return Feed(
+            id=1,
+            email_base_url="https://example.com",
+            url_hash="hash123",
+            name="Example",
+            feed_url="https://example.com/rss",
+            poll_frequencies=frequencies,
+        )
+
+    # --- Instant frequency tests ---
+
+    def test_instant_no_previous_poll_should_poll(self):
+        """Instant: Should poll when no last-process tag exists."""
+        rssmonk = self._make_rssmonk_with_mock_client()
+        rssmonk._client.get.return_value = {"tags": ["freq:instant"]}
+
+        feed = self._make_feed([Frequency.INSTANT])
+        result = rssmonk._should_poll(Frequency.INSTANT, feed)
+
+        self.assertTrue(result)
+
+    def test_instant_recent_poll_should_not_poll(self):
+        """Instant: Should NOT poll when polled within last 5 minutes."""
+        rssmonk = self._make_rssmonk_with_mock_client()
+        recent_time = (datetime.now() - timedelta(minutes=2)).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:instant:{recent_time}"]}
+
+        feed = self._make_feed([Frequency.INSTANT])
+        result = rssmonk._should_poll(Frequency.INSTANT, feed)
+
+        self.assertFalse(result)
+
+    def test_instant_old_poll_should_poll(self):
+        """Instant: Should poll when last poll was more than 5 minutes ago."""
+        rssmonk = self._make_rssmonk_with_mock_client()
+        old_time = (datetime.now() - timedelta(minutes=10)).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:instant:{old_time}"]}
+
+        feed = self._make_feed([Frequency.INSTANT])
+        result = rssmonk._should_poll(Frequency.INSTANT, feed)
+
+        self.assertTrue(result)
+
+    # --- Daily frequency tests ---
+
+    def test_daily_no_previous_poll_should_poll(self):
+        """Daily: Should poll when no last-process tag exists."""
+        rssmonk = self._make_rssmonk_with_mock_client()
+        rssmonk._client.get.return_value = {"tags": ["freq:daily"]}
+
+        feed = self._make_feed([Frequency.DAILY])
+        result = rssmonk._should_poll(Frequency.DAILY, feed)
+
+        self.assertTrue(result)
+
+    @patch("rssmonk.core.datetime")
+    def test_daily_before_5pm_should_not_poll(self, mock_datetime):
+        """Daily: Should NOT poll before 5pm even if never polled."""
+        # Set current time to 2pm today
+        mock_now = datetime(2026, 1, 21, 14, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        rssmonk = self._make_rssmonk_with_mock_client()
+        # Last polled yesterday at 5pm
+        yesterday_5pm = datetime(2026, 1, 20, 17, 0, 0).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:daily:{yesterday_5pm}"]}
+
+        feed = self._make_feed([Frequency.DAILY])
+        result = rssmonk._should_poll(Frequency.DAILY, feed)
+
+        self.assertFalse(result)
+
+    @patch("rssmonk.core.datetime")
+    def test_daily_after_5pm_not_polled_today_should_poll(self, mock_datetime):
+        """Daily: Should poll after 5pm if not yet polled today."""
+        # Set current time to 6pm today
+        mock_now = datetime(2026, 1, 21, 18, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        rssmonk = self._make_rssmonk_with_mock_client()
+        # Last polled yesterday at 5pm
+        yesterday_5pm = datetime(2026, 1, 20, 17, 0, 0).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:daily:{yesterday_5pm}"]}
+
+        feed = self._make_feed([Frequency.DAILY])
+        result = rssmonk._should_poll(Frequency.DAILY, feed)
+
+        self.assertTrue(result)
+
+    @patch("rssmonk.core.datetime")
+    def test_daily_after_5pm_already_polled_today_should_not_poll(self, mock_datetime):
+        """Daily: Should NOT poll if already polled today after 5pm."""
+        # Set current time to 7pm today
+        mock_now = datetime(2026, 1, 21, 19, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        rssmonk = self._make_rssmonk_with_mock_client()
+        # Last polled today at 5:30pm
+        today_530pm = datetime(2026, 1, 21, 17, 30, 0).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:daily:{today_530pm}"]}
+
+        feed = self._make_feed([Frequency.DAILY])
+        result = rssmonk._should_poll(Frequency.DAILY, feed)
+
+        self.assertFalse(result)
+
+    @patch("rssmonk.core.datetime")
+    def test_daily_polled_today_before_5pm_should_poll_after_5pm(self, mock_datetime):
+        """Daily: Should poll after 5pm even if polled earlier today (before 5pm)."""
+        # Set current time to 6pm today
+        mock_now = datetime(2026, 1, 21, 18, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        rssmonk = self._make_rssmonk_with_mock_client()
+        # Last polled today at 10am (before 5pm)
+        today_10am = datetime(2026, 1, 21, 10, 0, 0).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:daily:{today_10am}"]}
+
+        feed = self._make_feed([Frequency.DAILY])
+        result = rssmonk._should_poll(Frequency.DAILY, feed)
+
+        self.assertTrue(result)
+
+    @patch("rssmonk.core.datetime")
+    def test_daily_exactly_at_5pm_should_poll(self, mock_datetime):
+        """Daily: Should poll at exactly 5pm if not polled today."""
+        # Set current time to exactly 5pm
+        mock_now = datetime(2026, 1, 21, 17, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        rssmonk = self._make_rssmonk_with_mock_client()
+        # Last polled yesterday
+        yesterday = datetime(2026, 1, 20, 17, 0, 0).isoformat()
+        rssmonk._client.get.return_value = {"tags": [f"last-process:daily:{yesterday}"]}
+
+        feed = self._make_feed([Frequency.DAILY])
+        result = rssmonk._should_poll(Frequency.DAILY, feed)
+
+        self.assertTrue(result)

@@ -1,4 +1,4 @@
-"""Simplified core models and service for RSS Monk."""
+"""Core models and service for RSS Monk."""
 
 import httpx
 import uuid
@@ -46,7 +46,7 @@ class RSSMonk:
 
     def __init__(self, local_creds: Optional[HTTPBasicCredentials] = None, settings: Optional[Settings] = None):
         self.local_creds: Optional[HTTPBasicCredentials] = local_creds
-        self.settings = settings or Settings()
+        self.settings = settings or Settings()  # type: ignore[call-arg] - pydantic-settings loads from env
         self.settings.validate_required()
         self._client = ListmonkClient(
             base_url=self.settings.listmonk_url,
@@ -140,13 +140,14 @@ class RSSMonk:
             else:
                 raise
 
-    def delete_api_user(self, api_name: str) -> bool:  # TODO - User id and password
+    def delete_api_user(self, api_name: str) -> bool:
         """Delete API user."""
         users = self.get_user_by_name(api_name)
         if users is None:
             return True  # Count as deleted
 
-        return self._admin.delete(f"/api/users/{users['id']}")
+        result = self._admin.delete(f"/api/users/{users['id']}")
+        return bool(result)
 
     def reset_api_user_password(self, username: str) -> dict:
         """Reset API user password. Deletes and recreates the user with no roles attached."""
@@ -165,7 +166,11 @@ class RSSMonk:
 
         try:
             response = self._admin.post("api/roles/users", payload)
-            return response["id"]
+            if isinstance(response, dict):
+                return response["id"]
+            raise HTTPException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unexpected response creating role"
+            )
         except httpx.HTTPStatusError as e:
             # Should be 409, but quickest way
             if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
@@ -173,9 +178,10 @@ class RSSMonk:
 
             # User role already exists. Find the user role with the same name
             user_roles = self._admin.get("api/roles/users")
-            for role in user_roles:
-                if isinstance(role, dict) and role["name"] == role_name:
-                    return role["id"]
+            if isinstance(user_roles, list):
+                for role in user_roles:
+                    if isinstance(role, dict) and role["name"] == role_name:
+                        return role["id"]
 
         # Role should exist but wasn't found - this indicates a problem
         raise HTTPException(
@@ -631,7 +637,7 @@ class RSSMonk:
                     "item": {
                         "title": article.title,
                         "link": article.link,
-                        "description": article.description.replace("\\n", "<br />"),  # TODO -
+                        "description": article.description.replace("\n", "<br />"),
                     },
                     "base_url": feed.email_base_url,
                 }
@@ -654,11 +660,11 @@ class RSSMonk:
         template_id: int,
         new_articles: list[FeedItem],
         subscribers: list[dict[str, str]],
-    ) -> tuple[int, int]:
+    ) -> int:
         """
         Sends daily email notifications for new articles based on subscriber filters.
 
-        Returns the number of notifications (by email count) sent
+        Returns the number of notifications (by email count) sent.
         """
         # List of emails that are will get all updates in the feed.
         # Each item will have it's own list of emails as separate items
@@ -699,7 +705,7 @@ class RSSMonk:
                             {
                                 "title": article.title,
                                 "link": article.link,
-                                "description": article.description,  # TODO - Convert new lines to <br>
+                                "description": article.description.replace("\n", "<br />"),
                             }
                             for article in feed_items_to_send_out
                         ],
@@ -715,7 +721,7 @@ class RSSMonk:
                     {
                         "title": article.title,
                         "link": article.link,
-                        "description": article.description,  # TODO - Convert new lines to <br>
+                        "description": article.description.replace("\n", "<br />"),
                     }
                     for article in new_articles
                 ],
@@ -731,7 +737,6 @@ class RSSMonk:
         results = {}
 
         for feed in feeds:
-            # TODO - Only handing instant and not the others
             if self._should_poll(frequency, feed):
                 logger.info("Processing %s %s", frequency.value, feed.name)
                 results[feed.name], _ = await self.process_feed(feed, frequency)
@@ -819,7 +824,8 @@ class RSSMonk:
         last_guid = None
         for tag in tags:
             if str(tag).startswith("last-guid:"):
-                last_guid = str(tag).split(":", 3)[2]
+                # Use split with maxsplit=2 to preserve colons in GUID (e.g., URN format)
+                last_guid = str(tag).split(":", 2)[2]
                 break
 
         if not last_guid:
@@ -834,7 +840,11 @@ class RSSMonk:
         return articles
 
     def _should_poll(self, current_frequency: Frequency, feed: Feed) -> bool:
-        """Determine if a feed should be polled based on frequency settings."""
+        """Determine if a feed should be polled based on frequency settings.
+
+        For instant: Poll if more than interval_minutes have passed since last poll.
+        For daily: Poll if it's past check_time AND we haven't polled today yet.
+        """
         now = datetime.now()
 
         config = AVAILABLE_FREQUENCY_SETTINGS().get(f"freq:{current_frequency.value}")
@@ -849,7 +859,8 @@ class RSSMonk:
         for tag in tags:
             if str(tag).startswith(f"last-process:{current_frequency.value}:"):
                 try:
-                    last_poll = datetime.fromisoformat(tag.split(":", 3)[3])
+                    # Use split with maxsplit=2 to preserve colons in ISO timestamp
+                    last_poll = datetime.fromisoformat(tag.split(":", 2)[2])
                 except (ValueError, IndexError):
                     continue
 
@@ -857,22 +868,26 @@ class RSSMonk:
         if not last_poll:
             return True
 
-        # Interval-based check (instant)
+        # Interval-based check (instant frequency)
         if config.get("interval_minutes"):
-            return now - last_poll > timedelta(
-                minutes=config["interval_minutes"]
-            )  # Is this adding time? Should be substracting time
+            return now - last_poll > timedelta(minutes=config["interval_minutes"])
 
-        # Time-based check (daily/weekly)
+        # Time-based check (daily frequency)
         if config.get("check_time"):
             target_hour, target_minute = config["check_time"]
             target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
 
-            # Increased tolerance for negative drift
-            if last_poll and last_poll > now - timedelta(weeks=1, minutes=15):
+            # Check if we've already polled today (after today's target time)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            already_polled_today = last_poll >= today_start and last_poll >= target_time.replace(
+                year=last_poll.year, month=last_poll.month, day=last_poll.day
+            )
+
+            # Poll if it's past target time AND we haven't polled today
+            if now >= target_time and not already_polled_today:
                 return True
 
-            return now >= target_time
+            return False
 
         return False
 
