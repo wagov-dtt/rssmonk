@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 import traceback
-from typing import Optional
+from typing import Any, Optional, Union
 
 from fastapi import HTTPException
 from http import HTTPMethod, HTTPStatus
@@ -17,6 +17,9 @@ from rssmonk.types import EmailPhaseType
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
+
+# Type alias for Listmonk API responses
+ApiResponse = Union[dict[str, Any], list[Any], bool]
 
 
 class AuthType(StrEnum):
@@ -84,10 +87,10 @@ class ListmonkClient:
         else:
             raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
-    def _make_request(self, method, path, **kwargs):
+    def _make_request(self, method: HTTPMethod, path: str, **kwargs: Any) -> ApiResponse:
         """Make HTTP request with error handling."""
         try:
-            response = self._client.request(method, path, **kwargs)
+            response = self._client.request(method, path, **kwargs)  # type: ignore[union-attr]
             response.raise_for_status()
             if method == HTTPMethod.DELETE:
                 return response.status_code == HTTPStatus.OK
@@ -100,19 +103,19 @@ class ListmonkClient:
             logger.error("HTTP %s %s: %s", method, path, e)
             raise
 
-    def get(self, path, params=None):
+    def get(self, path: str, params: Optional[dict[str, Any]] = None) -> ApiResponse:
         """GET request."""
         return self._make_request(HTTPMethod.GET, path, params=params)
 
-    def post(self, path, json_data):
+    def post(self, path: str, json_data: Any) -> ApiResponse:
         """POST request."""
         return self._make_request(HTTPMethod.POST, path, json=json_data)
 
-    def put(self, path, json_data):
+    def put(self, path: str, json_data: Any) -> ApiResponse:
         """PUT request."""
         return self._make_request(HTTPMethod.PUT, path, json=json_data)
 
-    def delete(self, path):
+    def delete(self, path: str) -> ApiResponse:
         """DELETE request."""
         return self._make_request(HTTPMethod.DELETE, path)
 
@@ -125,7 +128,7 @@ class ListmonkClient:
         else:
             return [data] if data else []
 
-    def get_lists(self, name: Optional[str] = None, tag: str = None, per_page: str = "all"):
+    def get_lists(self, name: Optional[str] = None, tag: Optional[str] = None, per_page: str = "all"):
         """Get all lists, optionally filtered by tag."""
         # "minimal": True is used in urls to Listmonk to get ascending id, but does not work here.
         params = {"per_page": per_page}
@@ -168,15 +171,18 @@ class ListmonkClient:
         data = self.get("/api/subscribers", params=params)
         return self._normalize_results(data)
 
-    def get_all_feed_subscribers(self, feed_ident: int) -> list[dict]:
+    def get_all_feed_subscribers(self, feed_ident: int) -> list[dict[str, Any]]:
         """Fetch all pages and put into a list"""
         try:
-            subscriber_list = []
+            subscriber_list: list[dict[str, Any]] = []
 
             keep_retrieving = True
             page = 1
             while keep_retrieving:
-                data = self.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
+                response = self.get(f"/api/subscribers?list_id={feed_ident}&page={page}&per_page=1000")
+                if not isinstance(response, dict):
+                    break
+                data: dict[str, Any] = response
                 norm_data = self._normalize_results(data)
                 subscriber_list.extend(norm_data)
                 keep_retrieving = (data["page"] * data["per_page"]) < data["total"]

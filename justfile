@@ -92,6 +92,10 @@ fix: lint format
 test quick="" *args="": (_test-cluster quick)
   uv run --extra test pytest {{args}}
 
+# Run a single test (assumes cluster is running)
+test-one *args="": _k3d-context _kill-stale-api
+  uv run --extra test pytest {{args}}
+
 # Run tests with verbose output
 test-v quick="": (_test-cluster quick)
   uv run --extra test pytest -v

@@ -215,7 +215,10 @@ async def update_feed_configuration(request: FeedCreateRequest, credentials: HTT
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
             result = config_manager.update_feed_config(
-                url=request.feed_url, new_frequency=request.poll_frequencies, new_name=request.name
+                url=str(request.feed_url),
+                new_frequency=request.poll_frequencies,
+                email_base_url=str(request.email_base_url),
+                new_name=request.name,
             )
             feed_cache.invalidate_url(str(request.feed_url))
             return result

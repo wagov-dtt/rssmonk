@@ -10,9 +10,23 @@ just tilt     # Start Tilt for hot-reload development
 **Setup:** `prereqs` `install` `setup`  
 **Development:** `tilt` `tilt-down` `api` `check` `lint` `format` `type-check`  
 **Deployment:** `start` `deploy-k3d` `build` `status` `logs` `clean` `health`  
-**Testing:** `test` (full restart) or `test quick` (reuse cluster), `test-lifecycle`  
+**Testing:** `test` (full restart), `test quick` (reuse cluster), `test-one` (single test), `test-lifecycle`  
 
-**IMPORTANT FOR AGENTS:** Do NOT execute long-running justfile recipes directly. Instead, ASK THE HUMAN to run them. Commands like `just test`, `just start`, or `just tilt` will timeout or be cancelled. The human should run these in their terminal.
+### Agent Testing Commands
+Agents CAN run individual tests directly using `just test-one`. This command assumes the k3d cluster is already running (human should start it with `just start` or `just tilt` first).
+
+```bash
+# Run a single test file
+just test-one tests/test_api_account.py -v
+
+# Run a specific test
+just test-one tests/test_api_unsubscribe.py::TestRSSMonkUnsubscribe::test_post_unsubscribe_no_credentials -v
+
+# Run tests matching a pattern
+just test-one -k "unsubscribe" -v
+```
+
+**Long-running commands (ask human to run):** `just test`, `just start`, `just tilt`
 
 ## Local Access
 - **RSS Monk API:** http://localhost:8000
