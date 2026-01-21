@@ -26,13 +26,22 @@ clean:
 
 # Deploy to k3d cluster (advanced)
 deploy-k3d:
-  k3d cluster create rssmonk --port "9000:30900@server:0" --port "8025:30825@server:0" || true
+  k3d cluster create rssmonk --port "9000:30900@server:0" --port "8025:30825@server:0" --port "8000:30901@server:0" || true
   kubectl get namespace rssmonk || kubectl create namespace rssmonk
   kubectl apply -k kustomize/overlays/k3d
   @echo "Waiting for pods..."
   kubectl wait --for=condition=ready pod -l app=listmonk-app -n rssmonk --timeout=120s
   kubectl wait --for=condition=ready pod -l app=mailpit -n rssmonk --timeout=120s
   @echo "[SUCCESS] K3d deployment complete"
+
+# Start Tilt development environment (hot-reload workflow)
+tilt: prereqs
+  @k3d cluster list rssmonk >/dev/null 2>&1 || just deploy-k3d
+  tilt up
+
+# Stop Tilt (cluster remains running)
+tilt-down:
+  tilt down
 
 # Test feed fetching (instant|daily)
 test-fetch freq:
