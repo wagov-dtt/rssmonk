@@ -794,7 +794,7 @@ wheels = [
 [[package]]
 name = "rssmonk"
 version = "0.2.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "diskcache" },
     { name = "fastapi", extra = ["all"] },
