@@ -18,10 +18,13 @@ from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
 class AuthType(StrEnum):
     """Authentication method type."""
+
     BASIC = "basic"
     SESSION = "session"
+
 
 class ListmonkClient:
     """Listmonk API client with automatic JSON handling and error logging."""
@@ -41,18 +44,19 @@ class ListmonkClient:
 
         self._client = None
 
-
     def __enter__(self):
         if self.auth_type == AuthType.SESSION:
             self.cookies = self._init_listmonk_session()
 
         self._client = httpx.Client(
             base_url=self.base_url,
-            auth=httpx.BasicAuth(username=self.username, password=self.password) if self.auth_type == AuthType.BASIC else None,
+            auth=httpx.BasicAuth(username=self.username, password=self.password)
+            if self.auth_type == AuthType.BASIC
+            else None,
             cookies=self.cookies if self.auth_type == AuthType.SESSION else None,
             timeout=self.timeout,
             headers={"Content-Type": "application/json"},
-        )   
+        )
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -63,19 +67,19 @@ class ListmonkClient:
     def _init_listmonk_session(self) -> dict:
         session = requests.Session()
         # Collect the nonce from the login page to satisfy CSRF protection
-        response = session.get(f'{self.base_url}/admin/login')
-        login_data={
-            'username': self.username,
-            'password': self.password,
-            'nonce': session.cookies['nonce'],
-            'next': '/admin'
+        response = session.get(f"{self.base_url}/admin/login")
+        login_data = {
+            "username": self.username,
+            "password": self.password,
+            "nonce": session.cookies["nonce"],
+            "next": "/admin",
         }
 
-        response = session.post(f'{self.base_url}/admin/login', data=login_data, allow_redirects=False, timeout=30)
+        response = session.post(f"{self.base_url}/admin/login", data=login_data, allow_redirects=False, timeout=30)
         if response.status_code == 302:
             return {
-                'nonce': session.cookies['nonce'],
-                'session': session.cookies['session'],
+                "nonce": session.cookies["nonce"],
+                "session": session.cookies["session"],
             }
         else:
             raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
@@ -94,7 +98,6 @@ class ListmonkClient:
             return True
         except httpx.HTTPError as e:
             logger.error("HTTP %s %s: %s", method, path, e)
-            print(e.with_traceback(None))
             raise
 
     def get(self, path, params=None):
@@ -144,7 +147,7 @@ class ListmonkClient:
         lists = self.get_lists(tag=tag, per_page="1")
         return lists[0] if lists else None
 
-    def create_list(self, name, description, tags:list[str], list_type="private", optin="single"):
+    def create_list(self, name, description, tags: list[str], list_type="private", optin="single"):
         """Create a new list."""
         payload = {
             "name": name,
@@ -185,7 +188,6 @@ class ListmonkClient:
 
         return subscriber_list
 
-
     def create_subscriber(self, email, name=None, status="enabled", lists=None):
         """Create a new subscriber."""
         payload = {
@@ -202,15 +204,15 @@ class ListmonkClient:
         payload = {
             "email": body["email"],
             "name": body["name"],
-            "status": body.get("status","enabled"),
-            "lists": body["lists"], # Needs to be a list of numbers
+            "status": body.get("status", "enabled"),
+            "lists": body["lists"],  # Needs to be a list of numbers
             "attribs": body["attribs"],
-            "preconfirm_subscriptions": True, # This API will handle confirmations
+            "preconfirm_subscriptions": True,  # This API will handle confirmations
         }
         # TODO - May need to investigate if an etag system is required for attribs
         response = self.put(f"/api/subscribers/{sub_id}", payload)
         return response
-    
+
     def delete_subscriber(self, sub_id: int):
         """Delete a subscriber."""
         response = self.delete(f"/api/subscribers/{sub_id}")
@@ -224,7 +226,7 @@ class ListmonkClient:
             "target_list_ids": list_ids,
             "status": status,
         }
-        self.put("/api/subscribers/lists", payload)        
+        self.put("/api/subscribers/lists", payload)
         return True
 
     def unsubscribe_from_list(self, subscriber_ids: list[int], list_ids: list[int], status="unsubscribed"):
@@ -235,7 +237,7 @@ class ListmonkClient:
             "target_list_ids": list_ids,
             "status": status,
         }
-        self.put("/api/subscribers/lists", payload)        
+        self.put("/api/subscribers/lists", payload)
         return True
 
     def create_campaign(self, name, subject, body, list_ids, campaign_type="regular", content_type="html", tags=None):
@@ -273,7 +275,9 @@ class ListmonkClient:
         """Find a single email template, excluding the body."""
         return self.find_template(feed_hash, template_type, True)
 
-    def find_template(self, feed_hash: str, template_type: EmailPhaseType, meta_data_only: bool = False) -> ListmonkTemplate | None:
+    def find_template(
+        self, feed_hash: str, template_type: EmailPhaseType, meta_data_only: bool = False
+    ) -> ListmonkTemplate | None:
         """Find a single email template."""
         template_name = make_template_name(feed_hash, template_type)
         templates_meta = self.get_templates(no_body=not meta_data_only)
@@ -281,55 +285,53 @@ class ListmonkClient:
             if template_meta["name"] == template_name:
                 template = self.get_template_by_id(template_meta["id"])
                 lmTemplate = ListmonkTemplate(
-                    id = template["id"],
-                    name = template["name"],
-                    subject = template["subject"],
-                    type = template["type"],
-                    body = "",
-                    body_source = template["body_source"],
-                    is_default = template["is_default"])
+                    id=template["id"],
+                    name=template["name"],
+                    subject=template["subject"],
+                    type=template["type"],
+                    body="",
+                    body_source=template["body_source"],
+                    is_default=template["is_default"],
+                )
                 if not meta_data_only:
-                    lmTemplate.body = template["body"] # This is used for GET /api/feeds/templates
+                    lmTemplate.body = template["body"]  # This is used for GET /api/feeds/templates
                 return lmTemplate
         return None
 
     def create_email_template(self, template: EmailTemplate):
         """Create the email template"""
-        payload = {
-            "name": template.name,
-            "type": "tx",
-            "subject": template.subject,
-            "body": template.body
-        }
+        payload = {"name": template.name, "type": "tx", "subject": template.subject, "body": template.body}
         return self.post("/api/templates", payload)
 
     def update_email_template(self, ident: int, template: EmailTemplate):
         """Update the email template"""
-        payload = {
-            "name": template.name,
-            "type": "tx",
-            "subject": template.subject,
-            "body": template.body
-        }
+        payload = {"name": template.name, "type": "tx", "subject": template.subject, "body": template.body}
         return self.put(f"/api/templates/{ident}", payload)
 
     def delete_email_template(self, template_id: int):
         return self.delete(f"/api/templates/{template_id}")
 
-    def send_transactional(self, reply_email: str, template_id: int, content_type: str, 
-                           subscriber_emails: list[str], data: dict, subject: str | None = None):
+    def send_transactional(
+        self,
+        reply_email: str,
+        template_id: int,
+        content_type: str,
+        subscriber_emails: list[str],
+        data: dict,
+        subject: str | None = None,
+    ):
         """Send transactional email."""
         payload = {
             "subscriber_emails": subscriber_emails,
             "from_email": reply_email,
             "template_id": template_id,
             "data": data,
-            "content_type": content_type
+            "content_type": content_type,
         }
         if subject:
             payload["subject"] = subject
 
-        print(payload)
+        logger.debug("Sending transactional email: %s", payload)
         return self.post("/api/tx", payload)
 
     def get_users(self) -> list | None:

@@ -39,11 +39,10 @@ router = APIRouter(prefix="/api/feeds", tags=["feeds"])
     "/subscribe-preferences",
     response_model=SubscriptionPreferencesResponse,
     summary="Get Feed preferences",
-    description="Request the preferences of an email address' RSS feed subscription. Authentication required"
+    description="Request the preferences of an email address' RSS feed subscription. Authentication required",
 )
 async def get_subscription_preferences(
-    request: SubscriptionPreferencesRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: SubscriptionPreferencesRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> SubscriptionPreferencesResponse:
     """Get feed subscription user's preferences."""
     try:
@@ -69,11 +68,10 @@ async def get_subscription_preferences(
     "/subscribe",
     response_model=SubscriptionResponse,
     summary="Subscribe to a Feed",
-    description="Subscribe an email address to an RSS feed. Authentication required"
+    description="Subscribe an email address to an RSS feed. Authentication required",
 )
 async def subscribe(
-    request: SubscribeRequest | SubscribeAdminRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: SubscribeRequest | SubscribeAdminRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> SubscriptionResponse:
     """Subscribe email to a feed."""
     rss_monk = RSSMonk(local_creds=credentials)
@@ -100,15 +98,12 @@ async def subscribe(
             if len(request.filter.keys()) > 1:
                 raise HTTPException(
                     status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-                    detail="Only one frequency is permitted per subscription request"
+                    detail="Only one frequency is permitted per subscription request",
                 )
             frequency = list(request.filter.keys())[0]
 
             pending_uuid = rss_monk.update_subscriber_filter(
-                request.email,
-                request.filter,
-                feed_hash,
-                bypass_confirmation=bypass_confirmation
+                request.email, request.filter, feed_hash, bypass_confirmation=bypass_confirmation
             )
             if not bypass_confirmation:
                 feed_data = rss_monk.get_feed_by_hash(feed_hash)
@@ -119,19 +114,25 @@ async def subscribe(
                     logger.error("No subscribe template found for %s", feed_hash)
                     raise HTTPException(
                         status_code=HTTPStatus.BAD_REQUEST,
-                        detail=f"Pending subscription added, but template dependency missing for {EmailPhaseType.SUBSCRIBE.value}"
+                        detail=f"Pending subscription added, but template dependency missing for {EmailPhaseType.SUBSCRIBE.value}",
                     )
 
-                subscribe_link = f"{base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
+                subscribe_link = (
+                    f"{base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(request.filter[frequency])}"
+                )
                 transaction = {
                     "subject": None,
                     "subscription_link": subscribe_link,
                     "frequency": frequency,
-                    "filter": request.display_text[frequency] if request.display_text and (frequency in request.display_text) else {},
-                    "confirmation_link": f"{base_url}/{ActionsURLSuffix.CONFIRM.value}?id={subscriber_uuid}&guid={pending_uuid}"
+                    "filter": request.display_text[frequency]
+                    if request.display_text and (frequency in request.display_text)
+                    else {},
+                    "confirmation_link": f"{base_url}/{ActionsURLSuffix.CONFIRM.value}?id={subscriber_uuid}&guid={pending_uuid}",
                 }
 
-                rss_monk.getClient().send_transactional(NO_REPLY_EMAIL, template.id, "html", [request.email], transaction)
+                rss_monk.get_client().send_transactional(
+                    NO_REPLY_EMAIL, template.id, "html", [request.email], transaction
+                )
 
             return SubscriptionResponse(message="Subscription successful")
         except ValueError as e:
@@ -150,27 +151,23 @@ async def subscribe(
     "/subscribe-confirm",
     status_code=HTTPStatus.OK,
     summary="Confirm subscription to a Feed",
-    description="Confirm the filtered subscription of an email address to an RSS feed. Authentication required"
+    description="Confirm the filtered subscription of an email address to an RSS feed. Authentication required",
 )
-async def confirm_subscription(
-    request: SubscribeConfirmRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
-):
+async def confirm_subscription(request: SubscribeConfirmRequest, credentials: HTTPBasicCredentials = Depends(security)):
     """Confirm feed subscription."""
     rss_monk = RSSMonk(local_creds=credentials)
     try:
         with rss_monk:
             if get_settings().validate_admin_auth(credentials.username, credentials.password):
                 raise HTTPException(
-                    status_code=HTTPStatus.FORBIDDEN,
-                    detail="Administrators must use the bypass when subscribing"
+                    status_code=HTTPStatus.FORBIDDEN, detail="Administrators must use the bypass when subscribing"
                 )
 
             rss_monk.validate_feed_visibility(get_feed_hash_from_username(credentials.username))
             feed_hash = extract_feed_hash(credentials.username)
 
             subscriber_uuid = request.subscriber_id
-            sub_list = rss_monk.getAdminClient().get_subscribers(query=f"subscribers.uuid='{subscriber_uuid}'")
+            sub_list = rss_monk.get_admin_client().get_subscribers(query=f"subscribers.uuid='{subscriber_uuid}'")
 
             req_uuid = request.guid
             subs = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
@@ -184,17 +181,21 @@ async def confirm_subscription(
             if req_uuid not in feed_attribs:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Link has expired")
 
-            if feed_attribs[req_uuid]['expires'] < datetime.now(timezone.utc).timestamp():
+            if feed_attribs[req_uuid]["expires"] < datetime.now(timezone.utc).timestamp():
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Link has expired")
 
             feed_attribs["filter"] = feed_attribs[req_uuid]["filter"]
             feed_attribs["token"] = uuid.uuid4().hex
-            feed_attribs["subscribe_query"] = f"/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(feed_attribs['filter'])}"
-            feed_attribs["unsubscribe_query"] = f"/{ActionsURLSuffix.UNSUBSCRIBE.value}?id={subscriber_uuid}&token={feed_attribs['token']}"
+            feed_attribs["subscribe_query"] = (
+                f"/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(feed_attribs['filter'])}"
+            )
+            feed_attribs["unsubscribe_query"] = (
+                f"/{ActionsURLSuffix.UNSUBSCRIBE.value}?id={subscriber_uuid}&token={feed_attribs['token']}"
+            )
 
             del subs["attribs"][feed_hash][req_uuid]
             subs["lists"] = numberfy_subbed_lists(subs["lists"])
-            rss_monk.getClient().update_subscriber(subs["id"], subs)
+            rss_monk.get_client().update_subscriber(subs["id"], subs)
 
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e
@@ -209,11 +210,10 @@ async def confirm_subscription(
     "/unsubscribe",
     status_code=HTTPStatus.OK,
     summary="Unsubscribe from a Feed",
-    description="Removes the email address from a RSS feed. Authentication required"
+    description="Removes the email address from a RSS feed. Authentication required",
 )
 async def unsubscribe(
-    request: UnsubscribeRequest | UnsubscribeAdminRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: UnsubscribeRequest | UnsubscribeAdminRequest, credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Unsubscribe from a feed."""
     rss_monk = RSSMonk(local_creds=credentials)
@@ -241,16 +241,19 @@ async def unsubscribe(
 
             rss_monk.validate_feed_visibility(feed_hash)
 
-            sub_list = rss_monk.getAdminClient().get_subscribers(query=subscriber_query)
+            sub_list = rss_monk.get_admin_client().get_subscribers(query=subscriber_query)
             subscriber_details = sub_list[0] if (isinstance(sub_list, list) and len(sub_list) > 0) else None
             if not subscriber_details:
                 raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Invalid subscriber details")
 
-            feed_list = rss_monk.getClient().find_list_by_tag(f"url:{feed_hash}")
+            feed_list = rss_monk.get_client().find_list_by_tag(f"url:{feed_hash}")
             if feed_list is None:
                 if feed_hash in credentials.username:
-                    logger.warning("Non-existent feed (hash: %s) access with user account %s. Possible misconfiguration",
-                                   feed_hash, credentials.username)
+                    logger.warning(
+                        "Non-existent feed (hash: %s) access with user account %s. Possible misconfiguration",
+                        feed_hash,
+                        credentials.username,
+                    )
                 return
             feed_data = rss_monk._parse_feed_from_list(feed_list)
 
@@ -269,7 +272,7 @@ async def unsubscribe(
             if len(subs_lists) == 0:
                 remove_subscriber = True
 
-            rss_monk.getClient().update_subscriber(subscriber_details["id"], subscriber_details)
+            rss_monk.get_client().update_subscriber(subscriber_details["id"], subscriber_details)
 
             if not bypass_confirmation:
                 template = rss_monk.get_template_metadata(feed_hash, EmailPhaseType.UNSUBSCRIBE)
@@ -279,23 +282,25 @@ async def unsubscribe(
 
                 try:
                     subscribe_link = f"{feed_data.email_base_url}/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(previous_filter)}"
-                    rss_monk.getClient().send_transactional(
+                    rss_monk.get_client().send_transactional(
                         NO_REPLY_EMAIL,
                         template.id,
                         "html",
                         [subscriber_details["email"]],
-                        {"subscription_link": subscribe_link}
+                        {"subscription_link": subscribe_link},
                     )
                 except Exception as e:
-                    logger.error("Failed to send unsubscribe email: %s. Subscriber with email %s will be changed",
-                                 e, subscriber_details["email"])
+                    logger.error(
+                        "Failed to send unsubscribe email: %s. Subscriber with email %s will be changed",
+                        e,
+                        subscriber_details["email"],
+                    )
                     raise HTTPException(
-                        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-                        detail="Requested email could not be sent"
+                        status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Requested email could not be sent"
                     ) from e
 
             if remove_subscriber:
-                rss_monk.getAdminClient().delete_subscriber(subscriber_details["id"])
+                rss_monk.get_admin_client().delete_subscriber(subscriber_details["id"])
 
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e)) from e

@@ -16,8 +16,26 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
-from rssmonk.utils import expand_filter_identifiers, make_filter_url, make_list_role_name, make_template_name, make_url_hash, make_url_tag_from_hash, matches_filter, numberfy_subbed_lists
-from rssmonk.types import AVAILABLE_FREQUENCY_SETTINGS, NO_REPLY_EMAIL, SUB_BASE_URL, LIST_DESC_FEED_URL, ActionsURLSuffix, EmailPhaseType, ErrorMessages, FeedItem
+from rssmonk.utils import (
+    expand_filter_identifiers,
+    make_filter_url,
+    make_list_role_name,
+    make_template_name,
+    make_url_hash,
+    make_url_tag_from_hash,
+    matches_filter,
+    numberfy_subbed_lists,
+)
+from rssmonk.types import (
+    AVAILABLE_FREQUENCY_SETTINGS,
+    NO_REPLY_EMAIL,
+    SUB_BASE_URL,
+    LIST_DESC_FEED_URL,
+    ActionsURLSuffix,
+    EmailPhaseType,
+    ErrorMessages,
+    FeedItem,
+)
 
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
@@ -29,6 +47,7 @@ logger = get_logger(__name__)
 
 class RSSMonk:
     """Main RSS Monk service - stateless, uses Listmonk for persistence. Should be used with"""
+
     def __init__(self, local_creds: Optional[HTTPBasicCredentials] = None, settings: Optional[Settings] = None):
         self.local_creds: Optional[HTTPBasicCredentials] = local_creds
         self.settings = settings or Settings()
@@ -38,14 +57,14 @@ class RSSMonk:
             username=self.local_creds.username if self.local_creds is not None else "",
             password=self.local_creds.password if self.local_creds is not None else "",
             auth_type=AuthType.BASIC,
-            timeout=self.settings.rss_timeout
+            timeout=self.settings.rss_timeout,
         )
         self._admin = ListmonkClient(
             base_url=self.settings.listmonk_url,
             username=self.settings.listmonk_admin_username,
             password=self.settings.listmonk_admin_password,
             auth_type=AuthType.BASIC,
-            timeout=self.settings.rss_timeout
+            timeout=self.settings.rss_timeout,
         )
 
     # Create two clients, local creds for access control and admin creds for use if required
@@ -55,19 +74,19 @@ class RSSMonk:
         return self
 
     def __exit__(self, *args):
-            self._client.__exit__(*args)
-            self._admin.__exit__(*args)
+        self._client.__exit__(*args)
+        self._admin.__exit__(*args)
 
-    def getClient(self):
+    def get_client(self):
         return self._client
-    
-    def getAdminClient(self):
+
+    def get_admin_client(self):
         return self._admin
 
     def validate_feed_visibility(self, feed_hash: str | None = None):
-        '''
+        """
         Check if the active credentials can see the feed's list, raises HTTP return codes otherwise.
-        '''
+        """
         if not feed_hash:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Not permitted to interact with this feed")
 
@@ -80,9 +99,7 @@ class RSSMonk:
             else:
                 raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=ErrorMessages.NO_AUTH_FEED)
 
-
     # Account operations
-
 
     def get_user_by_name(self, api_name: str) -> dict | None:
         """Get user by name"""
@@ -93,42 +110,45 @@ class RSSMonk:
                     return user
         return None
 
-
     def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> dict:
         """Create API user."""
         # Pull password from secrets (would rather push up but TBD)
         data = {
             "username": api_name,
-            "email": "", "name":"",
-            "type": "api", "status": "enabled",
-            "password": None, "password_login": False,
-            "password2": None, "passwordLogin": False,
-            "userRoleId": user_role_id, "listRoleId": list_role_id,
-            "user_role_id": user_role_id, "list_role_id": list_role_id
+            "email": "",
+            "name": "",
+            "type": "api",
+            "status": "enabled",
+            "password": None,
+            "password_login": False,
+            "password2": None,
+            "passwordLogin": False,
+            "userRoleId": user_role_id,
+            "listRoleId": list_role_id,
+            "user_role_id": user_role_id,
+            "list_role_id": list_role_id,
         }
 
         try:
             response = self._admin.post("/api/users", data)
             if not isinstance(response, dict):
                 raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
-            
+
             return response
         except httpx.HTTPStatusError as e:
-            if (e.response.status_code == 500 and ("already exists" in e.response.text)):
+            if e.response.status_code == 500 and ("already exists" in e.response.text):
                 # Already exists, return error so they can recreate account, or bail
                 raise HTTPException(status_code=HTTPStatus.CONFLICT)
             else:
                 raise
 
-
-    def delete_api_user(self, api_name: str) -> bool: # TODO - User id and password
+    def delete_api_user(self, api_name: str) -> bool:  # TODO - User id and password
         """Delete API user."""
         users = self.get_user_by_name(api_name)
         if users is None:
-            return True # Count as deleted
+            return True  # Count as deleted
 
-        return self._admin.delete(f"/api/users/{users["id"]}")
-
+        return self._admin.delete(f"/api/users/{users['id']}")
 
     def reset_api_user_password(self, username: str) -> dict:
         """Reset API user password. This function only makes a user with no roles attached to it"""
@@ -136,19 +156,13 @@ class RSSMonk:
         # In the future, Listmonk may have a reset api password functionality
         self.delete_api_user(username)
         return self.create_api_user(username)
-    
 
     def ensure_limited_user_role_exists(self) -> int:
         """Obtains the limited user role ID. Creates the role if it does not exist"""
         role_name = "limited-user-role"
-        payload= {
+        payload = {
             "name": role_name,
-            "permissions": [
-                "subscribers:get",
-                "subscribers:manage",
-                "tx:send",
-                "templates:get"
-            ]
+            "permissions": ["subscribers:get", "subscribers:manage", "tx:send", "templates:get"],
         }
 
         try:
@@ -158,17 +172,15 @@ class RSSMonk:
             # Should be 409, but quickest way
             if not (e.response.status_code == 500 and ("already exists" in e.response.text)):
                 raise
-            
+
             # User role already exists. Find the user role with the same name
             user_roles = self._admin.get("api/roles/users")
             for role in user_roles:
                 if isinstance(role, dict) and role["name"] == role_name:
                     return role["id"]
 
-
     def ensure_list_role_by_url(self, url: str) -> int:
         return self.ensure_list_role_by_hash(make_url_hash(url))
-
 
     def ensure_list_role_by_hash(self, feed_hash: str) -> int:
         list_role_name = make_list_role_name(feed_hash)
@@ -180,8 +192,8 @@ class RSSMonk:
 
         # Attempt to create the role. If it exists retrieve the ID
         payload = {
-            "name": list_role_name, # Name is unique
-            "lists": [ {"id": list_data["id"], "permissions": ["list:get","list:manage"] } ]
+            "name": list_role_name,  # Name is unique
+            "lists": [{"id": list_data["id"], "permissions": ["list:get", "list:manage"]}],
         }
 
         try:
@@ -195,10 +207,8 @@ class RSSMonk:
             # User role already exists, fetch the ID
             return self.get_list_role_id_by_hash(feed_hash)
 
-
     def get_list_role_id_by_url(self, url: str) -> int:
         return self.get_list_role_id_by_hash(make_url_hash(url))
-
 
     def get_list_role_id_by_hash(self, feed_hash: str) -> int:
         list_role_name = make_list_role_name(feed_hash)
@@ -209,7 +219,6 @@ class RSSMonk:
                 return list_role["id"]
         return -1
 
-
     def delete_list_role(self, url: str):
         role_id = self.get_list_role_id_by_url(url)
         if role_id > 0:
@@ -219,11 +228,16 @@ class RSSMonk:
                 logger.error(f"Failed to delete list role {role_id}")
         return True
 
-
     # Feed operations
 
-    def add_feed(self, feed_url: str, email_base_url: str, new_frequency: list[Frequency],
-                 name: Optional[str] = None, visibility: ListVisibilityType = ListVisibilityType.PRIVATE) -> Feed:
+    def add_feed(
+        self,
+        feed_url: str,
+        email_base_url: str,
+        new_frequency: list[Frequency],
+        name: Optional[str] = None,
+        visibility: ListVisibilityType = ListVisibilityType.PRIVATE,
+    ) -> Feed:
         """Add RSS feed, handling existing URLs with different frequency configurations."""
         if not name:
             name = self._get_feed_name(feed_url)
@@ -236,16 +250,21 @@ class RSSMonk:
 
         if existing_feed is None:
             # Create in Listmonk
-            result = self._client.create_list(name=feed.name, description=feed.description, tags=feed.tags, list_type=visibility)
+            result = self._client.create_list(
+                name=feed.name, description=feed.description, tags=feed.tags, list_type=visibility
+            )
             feed.id = result["id"]
-            
+
             # Invalidate cache for this URL to ensure fresh fetch
             feed_cache.invalidate_url(feed_url)
             return feed
         else:
             # No update required if the URL and frequencies are already covered
             if set(new_frequency) <= set(existing_feed.poll_frequencies):
-                raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=f"Feed with same URL and frequency combination already exists: {feed_url}")
+                raise HTTPException(
+                    status_code=HTTPStatus.CONFLICT,
+                    detail=f"Feed with same URL and frequency combination already exists: {feed_url}",
+                )
 
             # Add new freq tags to end of the list and update
             for new_freq in new_frequency:
@@ -284,14 +303,13 @@ class RSSMonk:
         lst = self._client.find_list_by_tag(f"url:{url_hash}")
         return self._parse_feed_from_list(lst) if lst else None
 
-    def delete_feed(self, url: str) -> bool: # Admin only
+    def delete_feed(self, url: str) -> bool:  # Admin only
         """Delete feed by URL."""
         feed = self.get_feed_by_url(url)
         if feed and feed.id:
             self._client.delete(f"/api/lists/{feed.id}")
             return True
         return False
-
 
     # Template operations
     # TODO - Set up map, name to template id, if there are many, for caching
@@ -316,7 +334,7 @@ class RSSMonk:
     def delete_template(self, feed_hash: str, phase_type: EmailPhaseType):
         """Delete singular templates associated with the feed"""
         template_name = make_template_name(feed_hash, phase_type)
-        templates = self._admin.get_templates(no_body=True) # Don't need body
+        templates = self._admin.get_templates(no_body=True)  # Don't need body
         for template in templates:
             if template_name == template["name"]:
                 return self._admin.delete_email_template(template["id"])
@@ -330,8 +348,7 @@ class RSSMonk:
             if url_hash in template["name"]:
                 self._admin.delete_email_template(template["id"])
 
-
-    # Subscriber operations. Data from these functions should not leak attributes 
+    # Subscriber operations. Data from these functions should not leak attributes
 
     def add_subscriber(self, email: str, name: Optional[str] = None) -> Subscriber:
         """Add subscriber."""
@@ -360,7 +377,7 @@ class RSSMonk:
         if subs:
             s = subs[0]
             return s["uuid"]
-        
+
         logger.error("Subscriber (%s) is missing uuid", email)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="")
 
@@ -369,7 +386,7 @@ class RSSMonk:
         subs = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         if subs:
             s = subs[0]
-            return Subscriber(id=s["id"], email=s["email"]) # Listmonk will populate name from the email
+            return Subscriber(id=s["id"], email=s["email"])  # Listmonk will populate name from the email
         return self.add_subscriber(email)
 
     def list_subscribers(self) -> list[Subscriber]:
@@ -397,9 +414,10 @@ class RSSMonk:
         self._client.unsubscribe_from_list([subscriber.id], [feed.id])
 
         return True
-    
-    def update_subscriber_filter(self, email: str, sub_filter: dict, feed_hash: str,
-                                 bypass_confirmation: bool = False) -> Optional[str]:
+
+    def update_subscriber_filter(
+        self, email: str, sub_filter: dict, feed_hash: str, bypass_confirmation: bool = False
+    ) -> Optional[str]:
         """Adds either a pending filter, or main filter. Returns uuid of the pending filter if confirmation is required"""
         feed = self.get_feed_by_hash(feed_hash)
         sub_list = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
@@ -433,7 +451,9 @@ class RSSMonk:
             url_dict["token"] = uuid.uuid4().hex
             # Make the subscribe query and unsubscribe query for the email
             url_dict["subscribe_query"] = f"/{ActionsURLSuffix.SUBSCRIBE.value}?{make_filter_url(sub_filter)}"
-            url_dict["unsubscribe_query"] = f"/{ActionsURLSuffix.UNSUBSCRIBE.value}?id={subs["uuid"]}&token={url_dict["token"]}"
+            url_dict["unsubscribe_query"] = (
+                f"/{ActionsURLSuffix.UNSUBSCRIBE.value}?id={subs['uuid']}&token={url_dict['token']}"
+            )
 
         attribs[feed_hash] = url_dict
 
@@ -444,14 +464,13 @@ class RSSMonk:
         self._client.update_subscriber(subs["id"], subs)
         return None if bypass_confirmation else filter_uuid
 
-
     def remove_subscriber_filter(self, email: str, feed_hash: str):
         """Removes the feed hash from the attribs"""
         sub_list = self._admin.get_subscribers(query=f"subscribers.email='{email}'")
         subs: dict = sub_list[0] if sub_list is not None else None
 
         if not subs:
-            return # Count as removed
+            return  # Count as removed
 
         # Attribs format
         # attribs
@@ -466,12 +485,12 @@ class RSSMonk:
             # Update the subscriber
             self._client.update_subscriber(subs["id"], subs)
         else:
-            self.getAdminClient().delete_subscriber(subs["id"])
-
+            self.get_admin_client().delete_subscriber(subs["id"])
 
     # Feed processing
-    def _create_instant_email_payload(self, feed: Feed, template_id: int, subject: str,
-                                from_email: str, email: str | list[str], item: dict[str, str]):
+    def _create_instant_email_payload(
+        self, feed: Feed, template_id: int, subject: str, from_email: str, email: str | list[str], item: dict[str, str]
+    ):
         payload = {
             "from_email": from_email,
             "subject": subject,
@@ -481,7 +500,7 @@ class RSSMonk:
                 "feed_hash": feed.url_hash,
                 "base_url": feed.email_base_url,
             },
-            "content_type": "html"
+            "content_type": "html",
         }
         if isinstance(email, str):
             payload["subscriber_email"] = email
@@ -489,9 +508,9 @@ class RSSMonk:
             payload["subscriber_emails"] = email
         return payload
 
-
-    def _create_daily_email_payload(self, feed: Feed, template_id: int, from_email: str,
-                              email: str | list[str], items: list[dict[str, str]]):
+    def _create_daily_email_payload(
+        self, feed: Feed, template_id: int, from_email: str, email: str | list[str], items: list[dict[str, str]]
+    ):
         payload = {
             "from_email": from_email,
             "template_id": template_id,
@@ -500,7 +519,7 @@ class RSSMonk:
                 "feed_hash": feed.url_hash,
                 "base_url": feed.email_base_url,
             },
-            "content_type": "html"
+            "content_type": "html",
         }
         if isinstance(email, str):
             payload["subscriber_email"] = email
@@ -508,16 +527,13 @@ class RSSMonk:
             payload["subscriber_emails"] = email
         return payload
 
-
     async def process_feed(self, feed: Feed, frequency: Frequency) -> Tuple[int, int]:
         """Process single feed - fetch articles and send tx  using cache."""
-        notifications_sent = 0 # This counts successful emails sent by unique email addresses
+        notifications_sent = 0  # This counts successful emails sent by unique email addresses
         try:
             # Fetch articles using cache
             articles, feed_title = await feed_cache.get_feed(
-                url=feed.feed_url,
-                user_agent=self.settings.rss_user_agent,
-                timeout=self.settings.rss_timeout
+                url=feed.feed_url, user_agent=self.settings.rss_user_agent, timeout=self.settings.rss_timeout
             )
             # Get the template with the frequency
             digest_type = EmailPhaseType.INSTANT_DIGEST
@@ -525,21 +541,28 @@ class RSSMonk:
                 digest_type = EmailPhaseType.DAILY_DIGEST
             template = self.get_template(feed.url_hash, digest_type)
             if not template:
-                raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail=f"Template does not exist for {frequency.value}")
+                raise HTTPException(
+                    status_code=HTTPStatus.UNPROCESSABLE_CONTENT,
+                    detail=f"Template does not exist for {frequency.value}",
+                )
 
             # Get new articles (check against last poll tag)
             new_articles = self._find_new_articles(feed, articles)
 
             if not new_articles:
                 self._update_poll_time(feed, frequency)
-                return 0, 0 # No need to send out anything
+                return 0, 0  # No need to send out anything
 
             # Instant and Daily vary enough to have two functions to handle the processing
-            subscribers = self.getClient().get_all_feed_subscribers(feed.id)
+            subscribers = self.get_client().get_all_feed_subscribers(feed.id)
             if frequency == Frequency.INSTANT:
-                notifications_sent += self.perform_instant_email_check(feed, frequency, template.id, new_articles, subscribers)
+                notifications_sent += self.perform_instant_email_check(
+                    feed, frequency, template.id, new_articles, subscribers
+                )
             else:
-                notifications_sent += self.perform_daily_email_check(feed, frequency, template.id, new_articles, subscribers)
+                notifications_sent += self.perform_daily_email_check(
+                    feed, frequency, template.id, new_articles, subscribers
+                )
 
             # Update state
             self._update_feed_state(feed, frequency, new_articles)
@@ -550,9 +573,14 @@ class RSSMonk:
             traceback.print_exc()
             return 0, 0
 
-
-    def perform_instant_email_check(self, feed: Feed, frequency: Frequency, template_id: int, new_articles: list[FeedItem],
-                                    subscribers: list[dict[str, str]]) -> int:
+    def perform_instant_email_check(
+        self,
+        feed: Feed,
+        frequency: Frequency,
+        template_id: int,
+        new_articles: list[FeedItem],
+        subscribers: list[dict[str, str]],
+    ) -> int:
         """
         Sends instant email notifications for new articles based on subscriber filters.
 
@@ -569,16 +597,18 @@ class RSSMonk:
             subscriber_email = subscriber["email"]
             # If ask for all, then add to all_inclusive_email_list
             feed_hash_data: dict = dict(subscriber["attribs"]).get(feed.url_hash, {})
-            filter_freq_data = dict(feed_hash_data.get("filter", {})).get(frequency.value, "") # Empty string will be discarded
+            filter_freq_data = dict(feed_hash_data.get("filter", {})).get(
+                frequency.value, ""
+            )  # Empty string will be discarded
 
             if isinstance(filter_freq_data, str) and filter_freq_data == "all":
-                for i in range(len(new_articles)): # Add to all article lists
+                for i in range(len(new_articles)):  # Add to all article lists
                     feed_list_individual_articles[i].append(subscriber_email)
             elif isinstance(filter_freq_data, dict):
                 # Create expanded list of filter identifiers
                 categories_list, individual_topics_list = expand_filter_identifiers(filter_freq_data)
-                print("expanded_subscriber_filter: "+str(individual_topics_list))
-                print("all_in_filter_list: "+str(categories_list) )
+                logger.debug("expanded_subscriber_filter: %s", individual_topics_list)
+                logger.debug("all_in_filter_list: %s", categories_list)
 
                 for index, article in enumerate(new_articles):
                     # Match subscriber's preferences to the article's identifiers
@@ -586,7 +616,9 @@ class RSSMonk:
                         feed_list_individual_articles[index].append(subscriber_email)
             else:
                 # This should never trigger
-                logger.warning(f"Subscriber with email {subscriber_email} has invalid filter data for {frequency.value}: {filter_freq_data}")
+                logger.warning(
+                    f"Subscriber with email {subscriber_email} has invalid filter data for {frequency.value}: {filter_freq_data}"
+                )
 
         # Send out multiple emails for each new article to those who request it
         notifications_sent = 0
@@ -597,20 +629,30 @@ class RSSMonk:
                     "item": {
                         "title": article.title,
                         "link": article.link,
-                        "description": article.description.replace("\\n", "<br />") # TODO - 
+                        "description": article.description.replace("\\n", "<br />"),  # TODO -
                     },
                     "base_url": feed.email_base_url,
                 }
-                print("feed_list_individual_items: " + str(feed_list_individual_articles[index]))
-                self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html",
-                                               feed_list_individual_articles[index], data,
-                                               new_articles[index].email_subject_line)
+                logger.debug("feed_list_individual_items: %s", feed_list_individual_articles[index])
+                self._admin.send_transactional(
+                    NO_REPLY_EMAIL,
+                    template_id,
+                    "html",
+                    feed_list_individual_articles[index],
+                    data,
+                    new_articles[index].email_subject_line,
+                )
                 notifications_sent += len(feed_list_individual_articles[index])
         return notifications_sent
 
-
-    def perform_daily_email_check(self, feed: Feed, frequency: Frequency, template_id: int,
-                                  new_articles: list[FeedItem], subscribers: list[dict[str, str]]) -> tuple[int, int]:
+    def perform_daily_email_check(
+        self,
+        feed: Feed,
+        frequency: Frequency,
+        template_id: int,
+        new_articles: list[FeedItem],
+        subscribers: list[dict[str, str]],
+    ) -> tuple[int, int]:
         """
         Sends daily email notifications for new articles based on subscriber filters.
 
@@ -621,7 +663,6 @@ class RSSMonk:
         users_full_items_list: list[str] = []
         notifications_sent = 0
 
-
         article_identifiers_list: list[set[str]] = []
         for article in new_articles:
             article_identifiers_list.append({x.strip() for x in article.filter_identifiers.split(",")})
@@ -630,7 +671,9 @@ class RSSMonk:
             sub_email = subscriber["email"]
             # If ask for all, then add to all_inclusive_email_list
             feed_hash_data: dict = dict(subscriber["attribs"]).get(feed.url_hash, {})
-            filter_freq_data = dict(feed_hash_data.get("filter", {})).get(frequency.value, "") # Empty string will be discarded
+            filter_freq_data = dict(feed_hash_data.get("filter", {})).get(
+                frequency.value, ""
+            )  # Empty string will be discarded
 
             # Scenarios
             # 1. filter says all - add to feed_list_all_items
@@ -650,32 +693,35 @@ class RSSMonk:
                 # Send transaction
                 if feed_items_to_send_out:
                     data = {
-                        "items": [{
-                            "title": article.title,
-                            "link": article.link,
-                            "description": article.description # TODO - Convert new lines to <br> 
-                        } for article in feed_items_to_send_out],
+                        "items": [
+                            {
+                                "title": article.title,
+                                "link": article.link,
+                                "description": article.description,  # TODO - Convert new lines to <br>
+                            }
+                            for article in feed_items_to_send_out
+                        ],
                         "base_url": feed.email_base_url,
                     }
-                    self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html",
-                                                    [subscriber["email"]], data)
+                    self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html", [subscriber["email"]], data)
                     notifications_sent += 1
 
         # Send the email to all subscribers who wanted it
         if users_full_items_list:
             data = {
-                "items": [{
-                    "title": article.title,
-                    "link": article.link,
-                    "description": article.description # TODO - Convert new lines to <br> 
-                } for article in new_articles],
+                "items": [
+                    {
+                        "title": article.title,
+                        "link": article.link,
+                        "description": article.description,  # TODO - Convert new lines to <br>
+                    }
+                    for article in new_articles
+                ],
                 "base_url": feed.email_base_url,
             }
-            self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html",
-                                            users_full_items_list, data)
+            self._admin.send_transactional(NO_REPLY_EMAIL, template_id, "html", users_full_items_list, data)
             notifications_sent += len(users_full_items_list)
         return notifications_sent
-
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
         """Process all feeds of given frequency that are due."""
@@ -685,23 +731,22 @@ class RSSMonk:
         for feed in feeds:
             # TODO - Only handing instant and not the others
             if self._should_poll(frequency, feed):
-                print(f"Processing {frequency.value} {feed.name}")
+                logger.info("Processing %s %s", frequency.value, feed.name)
                 results[feed.name], _ = await self.process_feed(feed, frequency)
 
         # TODO - Consider using for loop below if needing to handle each feed on a thread
         # TODO - Or perhaps multiprocessing library?
         # Form a list of independant processings
-        #tasks = {}
-        #async with asyncio.TaskGroup() as tg:
+        # tasks = {}
+        # async with asyncio.TaskGroup() as tg:
         #    for feed in feeds:
         #        if self._should_poll(frequency, feed):
         #            tasks[feed.name] = tg.create_task(self.process_feed(feed))
         # Extract the results
-        #for name, task in tasks.items():
+        # for name, task in tasks.items():
         #    results[name] = asyncio.Task(task).result()
 
         return results
-
 
     # Helper methods
 
@@ -726,7 +771,7 @@ class RSSMonk:
                 try:
                     frequency_list.append(Frequency(tag.replace("freq:", "")))
                 except ValueError:
-                    logger.error(f"Invalid frequency in tag {tag} for list ID {data.get("id"), "unknown"}")
+                    logger.error(f"Invalid frequency in tag {tag} for list ID {data.get('id'), 'unknown'}")
         if len(frequency_list) == 0:
             raise ValueError("No frequency tag found in existing list")
 
@@ -751,9 +796,14 @@ class RSSMonk:
         if not sub_url:
             raise ValueError("No Subscription URL in description")
 
-        return Feed(id=data["id"], name=data["name"], feed_url=url, poll_frequencies=frequency_list,
-                    email_base_url=sub_url, mult_freq=mult_freq)
-
+        return Feed(
+            id=data["id"],
+            name=data["name"],
+            feed_url=url,
+            poll_frequencies=frequency_list,
+            email_base_url=sub_url,
+            mult_freq=mult_freq,
+        )
 
     def _find_new_articles(self, feed: Feed, articles: list[FeedItem]) -> list[FeedItem]:
         """Find new articles since last poll."""
@@ -776,7 +826,7 @@ class RSSMonk:
         # Find new articles (those before last seen in chronological order)
         for i, article in enumerate(articles):
             if article.get("guid", article.get("link")) == last_guid:
-                return articles[:i] # Slice it up to the last guid
+                return articles[:i]  # Slice it up to the last guid
 
         return articles
 
@@ -806,7 +856,9 @@ class RSSMonk:
 
         # Interval-based check (instant)
         if config.get("interval_minutes"):
-            return now - last_poll > timedelta(minutes=config["interval_minutes"]) # Is this adding time? Should be substracting time
+            return now - last_poll > timedelta(
+                minutes=config["interval_minutes"]
+            )  # Is this adding time? Should be substracting time
 
         # Time-based check (daily/weekly)
         if config.get("check_time"):
@@ -816,7 +868,6 @@ class RSSMonk:
             # Increased tolerance for negative drift
             if last_poll and last_poll > now - timedelta(weeks=1, minutes=15):
                 return True
-
 
             return now >= target_time
 
@@ -833,7 +884,7 @@ class RSSMonk:
 
         # Replace last-process tag
         now = datetime.now()
-        tags = [ t for t in tags if not str(t).startswith(f"last-process:{frequency.value}:") ]
+        tags = [t for t in tags if not str(t).startswith(f"last-process:{frequency.value}:")]
         tags.append(f"last-process:{frequency.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
@@ -841,7 +892,7 @@ class RSSMonk:
         if articles and len(articles) > 0:
             latest_guid = articles[0].get("guid", articles[0].get("link", ""))
             # Replace last-guid guid
-            tags = [ t for t in tags if not str(t).startswith("last-guid:") ]
+            tags = [t for t in tags if not str(t).startswith("last-guid:")]
             tags.append(f"last-guid:{frequency.value}:{latest_guid}")
 
         # Update list
@@ -893,7 +944,7 @@ class RSSMonk:
             subject=title,
             body=content,
             list_ids=[feed.id],
-            # TODO - Figure out what this is for 
+            # TODO - Figure out what this is for
             tags=["rss", "automated", feed.poll_frequencies.value],
         )
 
