@@ -1,6 +1,5 @@
 """Subscription management endpoints - subscribe, confirm, unsubscribe."""
 
-import traceback
 import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -141,8 +140,7 @@ async def subscribe(
             logger.error("Subscribe: %s", e)
             raise
         except Exception as e:
-            logger.error("Subscribe: %s", e)
-            traceback.print_exc()
+            logger.exception("Subscribe failed: %s", e)
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Subscription failed")
 
 
@@ -308,6 +306,5 @@ async def unsubscribe(
             raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Invalid details provided.")
         raise
     except Exception as e:
-        logger.error("Failed to unsubscribe: %s", e)
-        traceback.print_exception(e)
+        logger.exception("Failed to unsubscribe: %s", e)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unsubscribe failed") from e

@@ -1,7 +1,6 @@
 """HTTP client utilities."""
 
 from enum import StrEnum
-import traceback
 from typing import Any, Optional, Union
 
 from fastapi import HTTPException
@@ -189,7 +188,7 @@ class ListmonkClient:
                 # Total here means total number of records extracted by the query, then paginated
                 page += 1
         except Exception:
-            traceback.print_exc()
+            logger.exception("Failed to get feed subscribers for list %s", feed_ident)
             raise
 
         return subscriber_list

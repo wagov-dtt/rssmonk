@@ -1,5 +1,6 @@
 """Core models and service for RSS Monk."""
 
+import asyncio
 import httpx
 import uuid
 
@@ -769,26 +770,41 @@ class RSSMonk:
         return notifications_sent
 
     async def process_feeds_by_frequency(self, frequency: Frequency) -> dict:
-        """Process all feeds of given frequency that are due."""
+        """Process all feeds of given frequency that are due.
+
+        Feeds are processed in parallel using asyncio.TaskGroup for better performance.
+        """
         feeds = [f for f in self.list_feeds() if frequency in f.poll_frequencies]
-        results = {}
+        feeds_to_process = [(feed, frequency) for feed in feeds if self._should_poll(frequency, feed)]
 
-        for feed in feeds:
-            if self._should_poll(frequency, feed):
-                logger.info("Processing %s %s", frequency.value, feed.name)
-                results[feed.name], _ = await self.process_feed(feed, frequency)
+        if not feeds_to_process:
+            return {}
 
-        # TODO - Consider using for loop below if needing to handle each feed on a thread
-        # TODO - Or perhaps multiprocessing library?
-        # Form a list of independant processings
-        # tasks = {}
-        # async with asyncio.TaskGroup() as tg:
-        #    for feed in feeds:
-        #        if self._should_poll(frequency, feed):
-        #            tasks[feed.name] = tg.create_task(self.process_feed(feed))
-        # Extract the results
-        # for name, task in tasks.items():
-        #    results[name] = asyncio.Task(task).result()
+        results: dict[str, int] = {}
+        errors: dict[str, str] = {}
+
+        async def process_single_feed(feed: Feed, freq: Frequency) -> tuple[str, int, int]:
+            """Process a single feed and return (name, notifications_sent, articles_found)."""
+            logger.info("Processing %s %s", freq.value, feed.name)
+            notifications_sent, articles_found = await self.process_feed(feed, freq)
+            return feed.name, notifications_sent, articles_found
+
+        # Process feeds in parallel
+        async with asyncio.TaskGroup() as tg:
+            tasks = {feed.name: tg.create_task(process_single_feed(feed, freq)) for feed, freq in feeds_to_process}
+
+        # Collect results from completed tasks
+        for name, task in tasks.items():
+            try:
+                _, notifications_sent, _ = task.result()
+                results[name] = notifications_sent
+            except Exception as e:
+                logger.error("Failed to process feed %s: %s", name, e)
+                errors[name] = str(e)
+                results[name] = 0
+
+        if errors:
+            logger.warning("Feed processing completed with %d errors: %s", len(errors), list(errors.keys()))
 
         return results
 
