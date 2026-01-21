@@ -14,7 +14,6 @@ from rssmonk.models import (
     CreateTemplateRequest,
     DeleteTemplateAdminRequest,
     DeleteTemplateRequest,
-    FeedAccountConfigurationRequest,
     FeedAccountPasswordResetRequest,
     FeedAccountRequest,
     FeedCreateRequest,
@@ -193,15 +192,13 @@ async def delete_feed_by_url(request: FeedDeleteRequest, credentials: HTTPBasicC
 @router.get(
     "/configurations", summary="Get URL Configurations", description="Get all feed configurations for a specific URL"
 )
-async def get_url_configurations(
-    request: FeedAccountConfigurationRequest, credentials: HTTPBasicCredentials = Depends(security)
-):
+async def get_url_configurations(feed_url: str, credentials: HTTPBasicCredentials = Depends(security)):
     """Get all configurations for a URL."""
     try:
         rss_monk = RSSMonk(local_creds=credentials)
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
-            return config_manager.get_url_configurations(request.feed_url)
+            return config_manager.get_url_configurations(feed_url)
     except Exception as e:
         logger.error(f"Failed to get URL configurations: {e}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve configurations")

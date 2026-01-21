@@ -537,7 +537,7 @@ class TestShouldPoll(unittest.TestCase):
 class TestFeedProcessingWithMockServer(ListmonkClientTestBase):
     """Integration tests for feed processing using mock RSS server with email content verification."""
 
-    MOCK_FEED_URL = "http://host.k3d.internal:10000/rss?x=3"  # Mock server with 3 items
+    MOCK_FEED_URL = "http://localhost:10000/rss?x=3"  # Mock server with 3 items
 
     @classmethod
     def setUpClass(cls):
