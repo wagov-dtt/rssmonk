@@ -1,24 +1,25 @@
 from fastapi import FastAPI
 from fastapi.responses import Response
-import random
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime, timedelta
-import uuid
 
 
 # Fixed list of guid for testing
-guid_list = ["0209399a-8fc8-4034-86d0-a8423000",
-             "87bad491-5bec-490b-b16a-defde001",
-             "34b3e3aa-0975-4ff8-baf0-dd07d002",
-             "bf8a8103-3320-4130-9e2d-8a8f4003",
-             "e72dca4e-4c8e-4fe4-9b86-6ebe1004",
-             "74184377-12d8-4f15-a6dd-7aa0a005",
-             "191dcbc3-e162-4531-bffd-60e69006",
-             "5a94d86a-26f4-49c4-a500-1f370007"]
+guid_list = [
+    "0209399a-8fc8-4034-86d0-a8423000",
+    "87bad491-5bec-490b-b16a-defde001",
+    "34b3e3aa-0975-4ff8-baf0-dd07d002",
+    "bf8a8103-3320-4130-9e2d-8a8f4003",
+    "e72dca4e-4c8e-4fe4-9b86-6ebe1004",
+    "74184377-12d8-4f15-a6dd-7aa0a005",
+    "191dcbc3-e162-4531-bffd-60e69006",
+    "5a94d86a-26f4-49c4-a500-1f370007",
+]
 
 external_mock_app = FastAPI()
 start_test_time = None
+
 
 @external_mock_app.get("/rss")
 async def ping(x: int):
@@ -28,16 +29,19 @@ async def ping(x: int):
 # Only need to make a few items over a few minutes, or days for testing purposes
 # Edited from CoPilot output for feed generation
 def make_media_statements_feed(items: int) -> str:
-    if items > 8: # Only support 4 items that can be created for the return feed
+    if items > 8:  # Only support 4 items that can be created for the return feed
         items = 8
 
     # Create the root RSS element
-    rss = ET.Element("rss", {
-        "version": "2.0",
-        "xmlns:wa": "https://www.wa.gov.au/rss/media-statements",
-        "xmlns:dc": "http://purl.org/dc/elements/1.1/",
-        "xmlns:atom": "http://www.w3.org/2005/Atom"
-    })
+    rss = ET.Element(
+        "rss",
+        {
+            "version": "2.0",
+            "xmlns:wa": "https://www.wa.gov.au/rss/media-statements",
+            "xmlns:dc": "http://purl.org/dc/elements/1.1/",
+            "xmlns:atom": "http://www.w3.org/2005/Atom",
+        },
+    )
 
     # Randomised lists to generate different categories
     minister_list = ["Hon. Premier MLA", "Hon. Senior Minister MLA", "Hon. Minister MLA"]
@@ -53,14 +57,14 @@ def make_media_statements_feed(items: int) -> str:
     ET.SubElement(channel, "link").text = f"https://www.localhost:10000/rss/{items}"
     ET.SubElement(channel, "description").text = "Government media statements from the government."
     ET.SubElement(channel, "language").text = "en"
-    ET.SubElement(channel, "atom:link", {
-        "href": f"https://www.localhost:10000/rss/{items}",
-        "rel": "self",
-        "type": "application/rss+xml"
-    })
+    ET.SubElement(
+        channel,
+        "atom:link",
+        {"href": f"https://www.localhost:10000/rss/{items}", "rel": "self", "type": "application/rss+xml"},
+    )
 
     # Generate multiple items with advancing pubDate. Order of items is permitted per RSS spec
-    base_date = datetime.now() - timedelta(minutes=(5*items + 2))
+    base_date = datetime.now() - timedelta(minutes=(5 * items + 2))
     for i in range(items):
         email_minister_str = ""
         email_ident_str = ""
@@ -80,7 +84,7 @@ def make_media_statements_feed(items: int) -> str:
 
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = f"Title number {i + 1}"
-        ET.SubElement(item, "link").text = f"hhttps://www.localhost:10000/rss/media-statements/project-update-{i+1}"
+        ET.SubElement(item, "link").text = f"hhttps://www.localhost:10000/rss/media-statements/project-update-{i + 1}"
         ET.SubElement(item, "description").text = (
             f"Description number {i}\n"
             f"Published: {base_date.strftime('a, %d %b %Y %H:%M:%S +0800')}\n"
@@ -88,7 +92,7 @@ def make_media_statements_feed(items: int) -> str:
             f"Portfolio: {email_portfolio_str}\n"
             f"Regions: {email_region_str}\n"
         )
-        ET.SubElement(item, "pubDate").text = base_date.strftime('a, %d %b %Y %H:%M:%S +0800')
+        ET.SubElement(item, "pubDate").text = base_date.strftime("a, %d %b %Y %H:%M:%S +0800")
         ET.SubElement(item, "guid", {"isPermaLink": "false"}).text = guid_list[i]
         ET.SubElement(item, "wa:subject_entities").text = email_minister_str
         ET.SubElement(item, "wa:identifiers").text = f"{email_ident_str},region 8635"
@@ -99,6 +103,6 @@ def make_media_statements_feed(items: int) -> str:
 
 # Convert to pretty XML string
 def prettify(elem):
-    rough_string = ET.tostring(elem, 'utf-8')
+    rough_string = ET.tostring(elem, "utf-8")
     reparsed = minidom.parseString(rough_string)
     return reparsed.toprettyxml(indent="  ")

@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBasicCredentials
-from ..shared import security
 
 from rssmonk.core import RSSMonk
 from rssmonk.logging_config import get_logger

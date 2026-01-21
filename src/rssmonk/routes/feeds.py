@@ -3,7 +3,6 @@
 from http import HTTPStatus
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBasicCredentials
-from ..shared import security
 import httpx
 
 from rssmonk.core import RSSMonk
@@ -43,11 +42,10 @@ router = APIRouter(prefix="/api/feeds", tags=["feeds"])
     response_model=FeedResponse,
     status_code=HTTPStatus.CREATED,
     summary="Create RSS Feed (Admin)",
-    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Administrator privileges required."
+    description="Add a new RSS feed for processing and newsletter generation. New frequencies are additive to existing lists. Administrator privileges required.",
 )
 async def create_feed(
-    request: FeedCreateRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: FeedCreateRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> FeedResponse:
     """Create a new RSS feed."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
@@ -61,7 +59,7 @@ async def create_feed(
                 str(request.email_base_url),
                 request.poll_frequencies,
                 request.name,
-                request.visibility
+                request.visibility,
             )
             return FeedResponse(
                 id=feed.id,
@@ -69,7 +67,7 @@ async def create_feed(
                 feed_url=feed.feed_url,
                 email_base_url=feed.email_base_url,
                 poll_frequencies=feed.poll_frequencies,
-                url_hash=feed.url_hash
+                url_hash=feed.url_hash,
             )
     except ValueError as e:
         logger.error(f"ValueError in create_feed: {e}")
@@ -88,11 +86,9 @@ async def create_feed(
     "",
     response_model=FeedListResponse,
     summary="List RSS Feeds",
-    description="Retrieve all configured RSS feeds with their details"
+    description="Retrieve all configured RSS feeds with their details",
 )
-async def list_feeds(
-    credentials: HTTPBasicCredentials = Depends(security)
-) -> FeedListResponse:
+async def list_feeds(credentials: HTTPBasicCredentials = Depends(security)) -> FeedListResponse:
     """List all RSS feeds."""
     try:
         rss_monk = RSSMonk(local_creds=credentials)
@@ -106,11 +102,11 @@ async def list_feeds(
                         feed_url=feed.feed_url,
                         email_base_url=feed.email_base_url,
                         poll_frequencies=feed.poll_frequencies,
-                        url_hash=feed.url_hash
+                        url_hash=feed.url_hash,
                     )
                     for feed in feeds
                 ],
-                total=len(feeds)
+                total=len(feeds),
             )
     except httpx.HTTPStatusError as e:
         if e.response.status_code in (401, 403):
@@ -127,12 +123,9 @@ async def list_feeds(
     "/by-url",
     response_model=FeedResponse,
     summary="Get Feed by URL",
-    description="Retrieve a specific RSS feed by its URL"
+    description="Retrieve a specific RSS feed by its URL",
 )
-async def get_feed_by_url(
-    feed_url: str,
-    credentials: HTTPBasicCredentials = Depends(security)
-) -> FeedResponse:
+async def get_feed_by_url(feed_url: str, credentials: HTTPBasicCredentials = Depends(security)) -> FeedResponse:
     """Get feed by URL."""
     try:
         rss_monk = RSSMonk(local_creds=credentials)
@@ -146,7 +139,7 @@ async def get_feed_by_url(
                 feed_url=feed.feed_url,
                 email_base_url=feed.email_base_url,
                 poll_frequencies=feed.poll_frequencies,
-                url_hash=feed.url_hash
+                url_hash=feed.url_hash,
             )
     except HTTPException:
         raise
@@ -164,12 +157,9 @@ async def get_feed_by_url(
 @router.delete(
     "/by-url",
     summary="Delete Feed by URL (Admin)",
-    description="Remove an RSS feed by its URL. Administrator privileges required."
+    description="Remove an RSS feed by its URL. Administrator privileges required.",
 )
-async def delete_feed_by_url(
-    request: FeedDeleteRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
-):
+async def delete_feed_by_url(request: FeedDeleteRequest, credentials: HTTPBasicCredentials = Depends(security)):
     """Delete feed by URL."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
@@ -201,13 +191,10 @@ async def delete_feed_by_url(
 
 
 @router.get(
-    "/configurations",
-    summary="Get URL Configurations",
-    description="Get all feed configurations for a specific URL"
+    "/configurations", summary="Get URL Configurations", description="Get all feed configurations for a specific URL"
 )
 async def get_url_configurations(
-    request: FeedAccountConfigurationRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: FeedAccountConfigurationRequest, credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Get all configurations for a URL."""
     try:
@@ -220,24 +207,15 @@ async def get_url_configurations(
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve configurations")
 
 
-@router.put(
-    "/configurations",
-    summary="Update Feed Configuration",
-    description="Update feed configuration for a URL"
-)
-async def update_feed_configuration(
-    request: FeedCreateRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
-):
+@router.put("/configurations", summary="Update Feed Configuration", description="Update feed configuration for a URL")
+async def update_feed_configuration(request: FeedCreateRequest, credentials: HTTPBasicCredentials = Depends(security)):
     """Update feed configuration."""
     try:
         rss_monk = RSSMonk(local_creds=credentials)
         with rss_monk:
             config_manager = FeedConfigManager(rss_monk)
             result = config_manager.update_feed_config(
-                url=request.feed_url,
-                new_frequency=request.poll_frequencies,
-                new_name=request.name
+                url=request.feed_url, new_frequency=request.poll_frequencies, new_name=request.name
             )
             feed_cache.invalidate_url(str(request.feed_url))
             return result
@@ -253,11 +231,10 @@ async def update_feed_configuration(
     response_model=TemplateResponse,
     status_code=HTTPStatus.CREATED,
     summary="Create email templates for RSS Feed",
-    description="Creates or updates email templates for RSS feed for newsletter generation."
+    description="Creates or updates email templates for RSS feed for newsletter generation.",
 )
 async def create_template(
-    request: CreateTemplateRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: CreateTemplateRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> TemplateResponse:
     """Create or update a template."""
     try:
@@ -271,11 +248,8 @@ async def create_template(
                 feed_hash,
                 request.phase_type,
                 ListmonkTemplate(
-                    name=template_name,
-                    body=request.body,
-                    body_source=request.body_source,
-                    subject=new_subject
-                )
+                    name=template_name, body=request.body, body_source=request.body_source, subject=new_subject
+                ),
             )
             return TemplateResponse(
                 id=template_response["id"],
@@ -284,7 +258,7 @@ async def create_template(
                 type="tx",
                 body=request.body,
                 body_source=request.body_source,
-                is_default=False
+                is_default=False,
             )
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
@@ -302,11 +276,10 @@ async def create_template(
     "/templates",
     status_code=200,
     summary="Delete email template for RSS Feed",
-    description="Delete email templates for RSS feed."
+    description="Delete email templates for RSS feed.",
 )
 async def delete_feed_template(
-    request: DeleteTemplateRequest | DeleteTemplateAdminRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: DeleteTemplateRequest | DeleteTemplateAdminRequest, credentials: HTTPBasicCredentials = Depends(security)
 ):
     """Delete a template."""
     rss_monk = RSSMonk(local_creds=credentials)
@@ -342,11 +315,10 @@ async def delete_feed_template(
     response_model=ApiAccountResponse,
     status_code=HTTPStatus.CREATED,
     summary="Create account for RSS Feed (Admin)",
-    description="Create a new limited access account to operate on the feed. Administrator privileges required."
+    description="Create a new limited access account to operate on the feed. Administrator privileges required.",
 )
 async def create_feed_account(
-    request: FeedAccountRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: FeedAccountRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> ApiAccountResponse:
     """Create a new account for a RSS feed."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
@@ -363,16 +335,11 @@ async def create_feed_account(
             user_data = rss_monk.get_user_by_name(account_name)
             if user_data is not None:
                 raise HTTPException(
-                    status_code=HTTPStatus.CONFLICT,
-                    detail=f"A user already exists for {request.feed_url}"
+                    status_code=HTTPStatus.CONFLICT, detail=f"A user already exists for {request.feed_url}"
                 )
 
             api_user = rss_monk.create_api_user(account_name, user_role_id, list_role_id)
-            return ApiAccountResponse(
-                id=api_user["id"],
-                name=account_name,
-                api_password=api_user["password"]
-            )
+            return ApiAccountResponse(id=api_user["id"], name=account_name, api_password=api_user["password"])
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except httpx.HTTPStatusError as e:
@@ -390,11 +357,10 @@ async def create_feed_account(
     response_model=ApiAccountResponse,
     status_code=HTTPStatus.CREATED,
     summary="Reset password for RSS Feed account (Admin)",
-    description="Resets the password for a RSS Feed account. Administrator privileges required."
+    description="Resets the password for a RSS Feed account. Administrator privileges required.",
 )
 async def reset_feed_account_password(
-    request: FeedAccountPasswordResetRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: FeedAccountPasswordResetRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> ApiAccountResponse:
     """Reset the password for a RSS feed account."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
@@ -404,10 +370,7 @@ async def reset_feed_account_password(
         rss_monk = RSSMonk(local_creds=credentials)
         with rss_monk:
             if rss_monk.get_user_by_name(request.account_name) is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=f"{request.account_name} not found."
-                )
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f"{request.account_name} not found.")
 
             user_role_id = rss_monk.ensure_limited_user_role_exists()
             list_role_id = rss_monk.ensure_list_role_by_hash(request.account_name.replace(FEED_ACCOUNT_PREFIX, ""))
@@ -416,11 +379,7 @@ async def reset_feed_account_password(
             # TODO - Update when listmonk provides and API token reset mechanism
             rss_monk.delete_api_user(request.account_name)
             api_user = rss_monk.create_api_user(request.account_name, user_role_id, list_role_id)
-            return ApiAccountResponse(
-                id=api_user["id"],
-                name=request.account_name,
-                api_password=api_user["password"]
-            )
+            return ApiAccountResponse(id=api_user["id"], name=request.account_name, api_password=api_user["password"])
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
     except httpx.HTTPStatusError as e:

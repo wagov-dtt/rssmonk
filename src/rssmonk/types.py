@@ -7,16 +7,21 @@ from typing import Any
 
 # RSS Feed types
 
+
 class ListVisibilityType(StrEnum):
     """List visibility type."""
+
     PUBLIC = "public"
     PRIVATE = "private"
 
+
 class Frequency(StrEnum):
     """Polling frequencies."""
+
     INSTANT = "instant"
     DAILY = "daily"
-    #WEEKLY = "weekly"
+    # WEEKLY = "weekly"
+
 
 FrequencyFilterType = str | list[int] | dict[str, str | list[int]]
 """
@@ -28,6 +33,7 @@ Covers the following scenarios
   - "all" topics of a category
 """
 DisplayTextFilterType = str | list[str] | dict[str, str | list[str]]
+
 
 # Feed frequency configurations
 def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
@@ -45,12 +51,12 @@ def AVAILABLE_FREQUENCY_SETTINGS() -> dict[str, dict[str, Any]]:
             "description": "Daily at 5pm",
         },
         # This option can be added on as a special case of daily (Collect 7 daily items and mail on the Friday)
-        #"freq:weekly": {
+        # "freq:weekly": {
         #    "interval_minutes": None,
         #    "check_time": (17, 0),  # 5pm
         #    "check_day": 4,  # Friday
         #    "description": "Weekly on Friday at 5pm",
-        #},
+        # },
     }
 
 
@@ -71,14 +77,16 @@ ALL_FILTER = "all"
 
 NO_REPLY_EMAIL = os.environ.get("NO_REPLY_EMAIL", "noreply@noreply (No reply location)")
 """The keyword for every option in a filter"""
- 
+
+
 class EmailPhaseType(StrEnum):
     """
     Email template types that may or may be used for emails.
     Mandatory emails
-    - subscribe, 
+    - subscribe,
     - instant_digest, daily_digest as required by the feed
     """
+
     SUBSCRIBE = "subscribe"
     SUBSCRIBE_CONFIRM = "sub_confirm"
 
@@ -89,21 +97,26 @@ class EmailPhaseType(StrEnum):
 
     INSTANT_DIGEST = "instant_digest"
     DAILY_DIGEST = "daily_digest"
-    #WEEKLY_DIGEST = "weekly_digest"
+    # WEEKLY_DIGEST = "weekly_digest"
+
 
 class ActionsURLSuffix(StrEnum):
     """Standardised URL patterns to append to base urls to perform actions"""
+
     SUBSCRIBE = "subscribe"
     CONFIRM = "subscribe-confirm"
     UNSUBSCRIBE = "unsubscribe"
-    EDIT_PREFERENCES = "preferences" # This should be used sparingly
+    EDIT_PREFERENCES = "preferences"  # This should be used sparingly
+
 
 class ErrorMessages:
     NO_AUTH_FEED = "Not authorised to interact with this feed"
 
+
 @dataclass
 class FeedItem:
     """This stores one item from a parsed feed"""
+
     title: str
     link: str
     description: str

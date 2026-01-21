@@ -1,4 +1,3 @@
-import time
 from http import HTTPStatus
 import requests
 from requests.auth import HTTPBasicAuth
@@ -10,7 +9,6 @@ from tests.conftest import (
     RSSMONK_URL,
     UnitTestLifecyclePhase,
     ListmonkClientTestBase,
-    make_admin_session,
     wait_for_mailpit_messages,
 )
 

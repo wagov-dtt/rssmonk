@@ -25,10 +25,10 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             "feed_url": "https://example.com/rss/example",
             "email_base_url": "https://example.com/media",
             "poll_frequencies": ["instant", "daily"],
-            "name": "Example Media Statements"
+            "name": "Example Media Statements",
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
-        assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
+        response = requests.post(RSSMONK_URL + "/api/feeds", auth=self.ADMIN_AUTH, json=create_feed_data)
+        assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         # Check values reflected back
@@ -36,12 +36,15 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             assert key in response_json, f"{key} not found in response"
             assert item == response_json[key], f"Non matching values for {key}; in: {item}, out:{response_json[key]}"
         assert "id" in response_json
-        assert "url_hash" in response_json and "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" == response_json["url_hash"]
+        assert (
+            "url_hash" in response_json
+            and "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" == response_json["url_hash"]
+        )
 
         # - Feed account creation, successfully
         create_account = {"feed_url": "https://example.com/rss/example"}
-        response = requests.post(RSSMONK_URL+"/api/feeds/account", auth=self.ADMIN_AUTH, json=create_account)
-        assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
+        response = requests.post(RSSMONK_URL + "/api/feeds/account", auth=self.ADMIN_AUTH, json=create_account)
+        assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         assert {"id", "name", "api_password"} == set(response_json.keys())
@@ -52,28 +55,22 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert example_password
 
         # Create local account
-        account_auth=HTTPBasicAuth(example_username, example_password)
+        account_auth = HTTPBasicAuth(example_username, example_password)
 
         # - Subscribe to feed, before subscribe template is created
         subscribe_data = {
             "email": "unsuccessful_test@test.com",
-            "filter": {
-                "instant": {
-                    "ministers": [1, 2],
-                    "region": [2, 3],
-                    "portfolio": [1 ,2]
-                }
-            },
+            "filter": {"instant": {"ministers": [1, 2], "region": [2, 3], "portfolio": [1, 2]}},
             "display_text": {
-                "instant" : {
+                "instant": {
                     "ministers": ["Minister 1", "Minister 2"],
                     "region": ["Region 2", "Region 3"],
-                    "portfolio": ["Portfolio 1", "Portfolio 2"]
+                    "portfolio": ["Portfolio 1", "Portfolio 2"],
                 }
-            }
+            },
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=account_auth, json=subscribe_data)
-        assert (response.status_code == HTTPStatus.BAD_REQUEST), f"{response.status_code}: {response.text}"
+        response = requests.post(RSSMONK_URL + "/api/feeds/subscribe", auth=account_auth, json=subscribe_data)
+        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         assert "Pending subscription added, but template dependency missing for subscribe" == response_json["error"]
@@ -85,20 +82,20 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             "phase_type": "subscribe",
             "subject": "Please confirm email preferences for WA media statements",
             "body": "<html><body>\r\n<p>Thank you for subscribing to media statement updates from the WA Government.</p>\r\n<p>To start receiving "
-                    + "updates, please verify your email address by clicking on the link below:</p>\r\n<a href=\"{{ .Tx.Data.confirmation_link }}\" "
-                    + "target=\"_blank\" rel=\"noopener noreferrer\">{{ .Tx.Data.confirmation_link }}</a></p>\r\n<p>You have subscribed to the "
-                    + "following statements:</p>\r\n{{ $ministers := index .Tx.Data.filter \"ministers\" }}\r\n{{ if $ministers }}\r\n<p><b>Minister(s)"
-                    + "</b>\r\n<ul>\r\n {{range $val := $ministers}}\r\n <li>{{ $val }}</li>\r\n {{end}}\r\n</ul>\r\n</p>{{ end }}\r\n{{ $region := "
-                    + "index .Tx.Data.filter \"region\" }}\r\n{{ if $region }}\r\n<p><b>Region(s)</b><br>\r\n<ul>\r\n {{range $val := $region}}\r\n "
-                    + "<li>{{ $val }}</li>\r\n {{end}}\r\n</ul>\r\n</p>\r\n{{ end }}\r\n{{ $portfolio := index .Tx.Data.filter \"portfolio\" }}\r\n{{ "
-                    + "if $portfolio }}\r\n<p><b>Portfolio(s)</b><br>\r\n<ul>\r\n {{range $val := $portfolio}}\r\n <li>{{ $val }}</li>\r\n {{end}}\r\n"
-                    + "</ul>\r\n</p>\r\n{{ end }}\r\n<p>This link will expire in 24 hours for your security. If it expires, you can return to the <a"
-                    + " href=\"{{ .Tx.Data.subscription_link }}\" target=\"_blank\" rel=\"noopener noreferrer\">subscription page</a> and start again."
-                    + "</p>\r\n<p>If you did not make this request, please ignore this email.</p>\r\n<p>Thank you.</p>\r\n<p><b>WA Government Media "
-                    + "Statement Team.</b></p>\r\n</body></html>"
+            + 'updates, please verify your email address by clicking on the link below:</p>\r\n<a href="{{ .Tx.Data.confirmation_link }}" '
+            + 'target="_blank" rel="noopener noreferrer">{{ .Tx.Data.confirmation_link }}</a></p>\r\n<p>You have subscribed to the '
+            + 'following statements:</p>\r\n{{ $ministers := index .Tx.Data.filter "ministers" }}\r\n{{ if $ministers }}\r\n<p><b>Minister(s)'
+            + "</b>\r\n<ul>\r\n {{range $val := $ministers}}\r\n <li>{{ $val }}</li>\r\n {{end}}\r\n</ul>\r\n</p>{{ end }}\r\n{{ $region := "
+            + 'index .Tx.Data.filter "region" }}\r\n{{ if $region }}\r\n<p><b>Region(s)</b><br>\r\n<ul>\r\n {{range $val := $region}}\r\n '
+            + '<li>{{ $val }}</li>\r\n {{end}}\r\n</ul>\r\n</p>\r\n{{ end }}\r\n{{ $portfolio := index .Tx.Data.filter "portfolio" }}\r\n{{ '
+            + "if $portfolio }}\r\n<p><b>Portfolio(s)</b><br>\r\n<ul>\r\n {{range $val := $portfolio}}\r\n <li>{{ $val }}</li>\r\n {{end}}\r\n"
+            + "</ul>\r\n</p>\r\n{{ end }}\r\n<p>This link will expire in 24 hours for your security. If it expires, you can return to the <a"
+            + ' href="{{ .Tx.Data.subscription_link }}" target="_blank" rel="noopener noreferrer">subscription page</a> and start again.'
+            + "</p>\r\n<p>If you did not make this request, please ignore this email.</p>\r\n<p>Thank you.</p>\r\n<p><b>WA Government Media "
+            + "Statement Team.</b></p>\r\n</body></html>",
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds/templates", auth=account_auth, json=sub_template_data)
-        assert (response.status_code == HTTPStatus.CREATED), f"{response.status_code}: {response.text}"
+        response = requests.post(RSSMONK_URL + "/api/feeds/templates", auth=account_auth, json=sub_template_data)
+        assert response.status_code == HTTPStatus.CREATED, f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         # Check values reflected back, except for feed_url which has been turned into a hash
@@ -111,34 +108,30 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
             assert item == response_json[key], f"Non matching values for {key}; in: {item}, out:{response_json[key]}"
         assert "id" in response_json
         assert "name" in response_json
-        assert response_json["name"]  == "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180-subscribe"
+        assert response_json["name"] == "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180-subscribe"
 
         # - Subscribe to feed, successfully
         subscribe_data = {
             "email": "test@test.com",
-            "filter": {
-                "instant": {
-                    "ministers": [1, 2],
-                    "region": [2, 3],
-                    "portfolio": [1 ,2]
-                }
-            },
+            "filter": {"instant": {"ministers": [1, 2], "region": [2, 3], "portfolio": [1, 2]}},
             "display_text": {
-                "instant" : {
+                "instant": {
                     "ministers": ["Minister 1", "Minister 2"],
                     "region": ["Region 2", "Region 3"],
-                    "portfolio": ["Portfolio 1", "Portfolio 2"]
+                    "portfolio": ["Portfolio 1", "Portfolio 2"],
                 }
-            }
+            },
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe", auth=account_auth, json=subscribe_data)
-        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
+        response = requests.post(RSSMONK_URL + "/api/feeds/subscribe", auth=account_auth, json=subscribe_data)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
         assert "Subscription successful" == response_json["message"]
 
         # Get the guid from the subscriber attrib in feed and id is the subscriber"s uuid
-        response = admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email = 'test@test.com'"})
+        response = admin_session.get(
+            LISTMONK_URL + "/api/subscribers", params={"query": "subscribers.email = 'test@test.com'"}
+        )
         subscriber = response.json()["data"]["results"][0]
         subscriber_uuid = str(subscriber["uuid"])
         assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" in subscriber["attribs"]
@@ -151,19 +144,18 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         subscriber_guid = (list(feed_attribs.keys()))[0]
 
         # Sanity check mailpit for an email which looks like it will match what was sent out
-        response = requests.get(MAILPIT_URL+"/api/v1/messages?limit=50")
+        response = requests.get(MAILPIT_URL + "/api/v1/messages?limit=50")
         assert response.json()["unread"] == 1
         assert response.json()["messages"][0]["Subject"] == "Please confirm email preferences for WA media statements"
 
         # - Confirm subscription to feed, successfully
-        confirm_sub_data = {
-            "subscriber_id": subscriber_uuid.replace("-", ""),
-            "guid": subscriber_guid
-        }
-        response = requests.post(RSSMONK_URL+"/api/feeds/subscribe-confirm", auth=account_auth, json=confirm_sub_data)
-        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
+        confirm_sub_data = {"subscriber_id": subscriber_uuid.replace("-", ""), "guid": subscriber_guid}
+        response = requests.post(RSSMONK_URL + "/api/feeds/subscribe-confirm", auth=account_auth, json=confirm_sub_data)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         # Check the feed attribs in the subscriber to ensure the filter has been set
-        response = admin_session.get(LISTMONK_URL+"/api/subscribers", params={"query": "subscribers.email = 'test@test.com'"})
+        response = admin_session.get(
+            LISTMONK_URL + "/api/subscribers", params={"query": "subscribers.email = 'test@test.com'"}
+        )
         subscriber = response.json()["data"]["results"][0]
         assert "091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180" in subscriber["attribs"]
         feed_attribs = subscriber["attribs"]["091886d9077436f1ef717ac00a5e2034469bfc011699d0f46f88da90269fb180"]
@@ -177,28 +169,25 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
 
         # Extract the token from the filter
         filter_token = feed_attribs["token"]
-        assert 32 == len(filter_token) # UUID length
+        assert 32 == len(filter_token)  # UUID length
 
         # - Unsubscribe from feed, successfully
         unsub_feed_data = {
-            "subscriber_id": subscriber_uuid.replace("-", ""), # Hyphens is removed 
-            "token": filter_token
+            "subscriber_id": subscriber_uuid.replace("-", ""),  # Hyphens is removed
+            "token": filter_token,
         }
-        response = requests.post(RSSMONK_URL+"/api/feeds/unsubscribe", auth=account_auth, json=unsub_feed_data)
-        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
+        response = requests.post(RSSMONK_URL + "/api/feeds/unsubscribe", auth=account_auth, json=unsub_feed_data)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
 
         # - Delete feed
-        delete_feed_data = {
-            "feed_url": "https://example.com/rss/example",
-            "notify": False
-        }
+        delete_feed_data = {"feed_url": "https://example.com/rss/example", "notify": False}
         # Attempt self deletion, failure.
-        response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=account_auth, json=delete_feed_data)
-        assert (response.status_code == HTTPStatus.UNAUTHORIZED), f"{response.status_code}: {response.text}"
+        response = requests.delete(RSSMONK_URL + "/api/feeds/by-url", auth=account_auth, json=delete_feed_data)
+        assert response.status_code == HTTPStatus.UNAUTHORIZED, f"{response.status_code}: {response.text}"
 
         # Delete with admin, successfully
-        response = requests.delete(RSSMONK_URL+"/api/feeds/by-url", auth=self.ADMIN_AUTH, json=delete_feed_data)
-        assert (response.status_code == HTTPStatus.OK), f"{response.status_code}: {response.text}"
+        response = requests.delete(RSSMONK_URL + "/api/feeds/by-url", auth=self.ADMIN_AUTH, json=delete_feed_data)
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
         response_json = response.json()
         assert isinstance(response_json, dict)
 
@@ -208,7 +197,9 @@ class TestLifeCycleMethods(ListmonkClientTestBase):
         assert len(lists_data) == 0
 
         # - Check the subscriber is no longer subscribed to the list (or has been deleted)
-        response = admin_session.get(f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc")
+        response = admin_session.get(
+            f"{LISTMONK_URL}/api/subscribers?list_id=&search=&query=&page=1&subscription_status=&order_by=id&order=desc"
+        )
         lists_data = response.json().get("data", {}).get("results", [])
 
         # - Check the templates is removed

@@ -1,8 +1,5 @@
 """Simplified core models and service for RSS Monk."""
 
-import os
-import hmac
-import traceback
 import httpx
 import uuid
 
@@ -12,8 +9,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 from fastapi.security import HTTPBasicCredentials
-from pydantic import Field
-from pydantic_settings import BaseSettings
 
 from rssmonk.models import EmailTemplate, Feed, Frequency, ListVisibilityType, Subscriber
 from rssmonk.utils import (
@@ -40,6 +35,7 @@ from rssmonk.types import (
 from .cache import feed_cache
 from .http_clients import AuthType, ListmonkClient
 from .logging_config import get_logger
+from .shared import Settings
 
 
 logger = get_logger(__name__)
@@ -110,7 +106,9 @@ class RSSMonk:
                     return user
         return None
 
-    def create_api_user(self, api_name: str, user_role_id: int, list_role_id: int) -> dict:
+    def create_api_user(
+        self, api_name: str, user_role_id: Optional[int] = None, list_role_id: Optional[int] = None
+    ) -> dict:
         """Create API user."""
         # Pull password from secrets (would rather push up but TBD)
         data = {
@@ -151,11 +149,11 @@ class RSSMonk:
         return self._admin.delete(f"/api/users/{users['id']}")
 
     def reset_api_user_password(self, username: str) -> dict:
-        """Reset API user password. This function only makes a user with no roles attached to it"""
+        """Reset API user password. Deletes and recreates the user with no roles attached."""
         # Currently we delete and recreate the user here.
         # In the future, Listmonk may have a reset api password functionality
         self.delete_api_user(username)
-        return self.create_api_user(username)
+        return self.create_api_user(username, user_role_id=None, list_role_id=None)
 
     def ensure_limited_user_role_exists(self) -> int:
         """Obtains the limited user role ID. Creates the role if it does not exist"""
@@ -178,6 +176,11 @@ class RSSMonk:
             for role in user_roles:
                 if isinstance(role, dict) and role["name"] == role_name:
                     return role["id"]
+
+        # Role should exist but wasn't found - this indicates a problem
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Limited user role not found after creation attempt"
+        )
 
     def ensure_list_role_by_url(self, url: str) -> int:
         return self.ensure_list_role_by_hash(make_url_hash(url))
@@ -476,7 +479,7 @@ class RSSMonk:
         # attribs
         # - url_hash
         attribs = subs["attribs"]
-        del attribs[feed_hash]
+        attribs.pop(feed_hash, None)  # Safe delete - no KeyError if missing
 
         # Have to covert the extracted lists to be a list of numbers to retain subscriptions
         subs["lists"] = numberfy_subbed_lists(subs["lists"])
@@ -569,8 +572,7 @@ class RSSMonk:
             return notifications_sent, len(new_articles)
 
         except Exception as e:
-            logger.error(f"Feed processing failed for {feed.name}: {e}")
-            traceback.print_exc()
+            logger.exception(f"Feed processing failed for {feed.name}: {e}")
             return 0, 0
 
     def perform_instant_email_check(
@@ -825,7 +827,8 @@ class RSSMonk:
 
         # Find new articles (those before last seen in chronological order)
         for i, article in enumerate(articles):
-            if article.get("guid", article.get("link")) == last_guid:
+            article_id = article.guid or article.link
+            if article_id == last_guid:
                 return articles[:i]  # Slice it up to the last guid
 
         return articles
@@ -877,7 +880,7 @@ class RSSMonk:
         """Update poll time tag."""
         self._update_feed_state(feed, frequency, [])
 
-    def _update_feed_state(self, feed: Feed, frequency: Frequency, articles: list):
+    def _update_feed_state(self, feed: Feed, frequency: Frequency, articles: list[FeedItem]):
         """Update feed state in Listmonk tags."""
         lst = self._client.get(f"/api/lists/{feed.id}")
         tags = lst.get("tags", [])
@@ -888,10 +891,9 @@ class RSSMonk:
         tags.append(f"last-process:{frequency.value}:{now.isoformat()}")
 
         # Add latest GUID if we have articles
-        # TODO - This does not create last-guid
         if articles and len(articles) > 0:
-            latest_guid = articles[0].get("guid", articles[0].get("link", ""))
-            # Replace last-guid guid
+            latest_guid = articles[0].guid or articles[0].link
+            # Replace last-guid tag
             tags = [t for t in tags if not str(t).startswith("last-guid:")]
             tags.append(f"last-guid:{frequency.value}:{latest_guid}")
 
@@ -901,13 +903,12 @@ class RSSMonk:
             {"name": feed.name, "description": feed.description, "tags": tags},
         )
 
-    def _create_campaign(self, feed: Feed, article: dict) -> int:
+    def _create_campaign(self, feed: Feed, article: FeedItem) -> int:
         """Create campaign for article."""
-        title = article.get("title", "No title")
-        link = article.get("link", "")
-        description = article.get("description", "")
-        published = article.get("pubDate", "")
-        author = article.get("author", "")
+        title = article.title or "No title"
+        link = article.link or ""
+        description = article.description or ""
+        published = article.published.isoformat() if article.published else ""
 
         # Create simple HTML content
         content = f"""
@@ -917,7 +918,6 @@ class RSSMonk:
             <div style="margin: 20px 0; color: #666; font-size: 14px;">
                 <p><strong>From:</strong> {feed.name}</p>
                 {f"<p><strong>Published:</strong> {published}</p>" if published else ""}
-                {f"<p><strong>Author:</strong> {author}</p>" if author else ""}
             </div>
             
             <div style="margin: 20px 0; line-height: 1.6;">
@@ -939,13 +939,14 @@ class RSSMonk:
 
         campaign_name = f"RSS: {title[:50]}..." if len(title) > 50 else f"RSS: {title}"
 
+        # Get first frequency for tagging
+        freq_tag = feed.poll_frequencies[0].value if feed.poll_frequencies else "instant"
         result = self._client.create_campaign(
             name=campaign_name,
             subject=title,
             body=content,
             list_ids=[feed.id],
-            # TODO - Figure out what this is for
-            tags=["rss", "automated", feed.poll_frequencies.value],
+            tags=["rss", "automated", freq_tag],
         )
 
         return result["id"]

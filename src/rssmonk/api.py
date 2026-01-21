@@ -16,19 +16,22 @@ from rssmonk.routes import feeds, operations, subscriptions
 logger = get_logger(__name__)
 
 
-
 # Configure Swagger UI with actual credentials from environment
-swagger_ui_params = {
-    "defaultModelsExpandDepth": -1,
-    "persistAuthorization": True,
-    "preauthorizeBasic": {
-        "username": settings.listmonk_admin_username,
-        "password": settings.listmonk_admin_password
+swagger_ui_params = (
+    {
+        "defaultModelsExpandDepth": -1,
+        "persistAuthorization": True,
+        "preauthorizeBasic": {
+            "username": settings.listmonk_admin_username,
+            "password": settings.listmonk_admin_password,
+        },
     }
-} if settings.listmonk_admin_password else {
-    "defaultModelsExpandDepth": -1,
-    "persistAuthorization": True,
-}
+    if settings.listmonk_admin_password
+    else {
+        "defaultModelsExpandDepth": -1,
+        "persistAuthorization": True,
+    }
+)
 
 # FastAPI app with comprehensive OpenAPI configuration
 app = FastAPI(
@@ -86,7 +89,6 @@ RSS Monk uses Listmonk lists as the source of truth:
 )
 
 
-
 async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -> tuple[str, str]:
     """Validate credentials against Listmonk API."""
     logger.info(f"Auth attempt: user={credentials.username}, expected_user={settings.listmonk_admin_username}")
@@ -98,7 +100,7 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
             response = await client.get(
                 f"{settings.listmonk_url}/api/health",
                 auth=httpx.BasicAuth(username=credentials.username, password=credentials.password),
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code != HTTPStatus.OK:
                 raise HTTPException(
@@ -108,15 +110,13 @@ async def validate_auth(credentials: HTTPBasicCredentials = Depends(security)) -
                 )
         return credentials.username, credentials.password
     except httpx.RequestError:
-        raise HTTPException(
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-            detail="Listmonk service unavailable"
-        )
+        raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail="Listmonk service unavailable")
 
 
 def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMonk:
     """Get RSS Monk instance with validated credentials."""
     from fastapi.security import HTTPBasicCredentials as HTTPBasicCreds
+
     username, password = credentials
     return RSSMonk(local_creds=HTTPBasicCreds(username=username, password=password))
 
@@ -125,10 +125,7 @@ def get_rss_monk(credentials: tuple[str, str] = Depends(validate_auth)) -> RSSMo
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions with structured error response."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(error=exc.detail).model_dump()
-    )
+    return JSONResponse(status_code=exc.status_code, content=ErrorResponse(error=exc.detail).model_dump())
 
 
 @app.exception_handler(Exception)
@@ -137,19 +134,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unexpected error: {exc}", exc_info=True)
     return JSONResponse(
         status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-        content=ErrorResponse(
-            error="Internal server error",
-            detail=str(exc)
-        ).model_dump()
+        content=ErrorResponse(error="Internal server error", detail=str(exc)).model_dump(),
     )
 
 
 # Root endpoint
-@app.get(
-    "/",
-    summary="API Information",
-    description="Get basic API information and links to documentation"
-)
+@app.get("/", summary="API Information", description="Get basic API information and links to documentation")
 async def root():
     """Root endpoint with API information."""
     return {
@@ -157,7 +147,7 @@ async def root():
         "version": "0.2.1",
         "description": "RSS feed aggregator using Listmonk",
         "documentation": "/docs",
-        "health_check": "/health"
+        "health_check": "/health",
     }
 
 
@@ -169,9 +159,11 @@ app.include_router(operations.router)
 # Only include testing routes when RSSMONK_TESTING=1
 if os.environ.get("RSSMONK_TESTING") == "1":
     from rssmonk.routes import testing
+
     app.include_router(testing.router)
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, port=8000, log_level="info")

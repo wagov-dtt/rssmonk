@@ -14,9 +14,9 @@ from rssmonk.models import Frequency
 logger = logging.getLogger("rssmonk.cron.notifications")
 
 # Retrieve Listmonk credentials to use with the HTTP request
-RSSMONK_URL = os.environ.get('RSSMONK_URL', 'http://localhost:8000')
-RSSMONK_USER = os.environ.get('RSSMONK_USER', 'http://localhost:8000')
-RSSMONK_PASS = os.environ.get('RSSMONK_PASS', 'http://localhost:8000')
+RSSMONK_URL = os.environ.get("RSSMONK_URL", "http://localhost:8000")
+RSSMONK_USER = os.environ.get("RSSMONK_USER", "http://localhost:8000")
+RSSMONK_PASS = os.environ.get("RSSMONK_PASS", "http://localhost:8000")
 
 
 if __name__ == "__main__":
@@ -31,8 +31,6 @@ if __name__ == "__main__":
         print(f"Invalid frequency: {sys.argv[1]}")
         print("Valid frequencies: instant, daily")
         sys.exit(1)
-
-
 
     logger.info("Starting RSS Monk cron job for %s feeds", frequency.value)
     basic_auth = HTTPBasicAuth(RSSMONK_USER, RSSMONK_PASS)

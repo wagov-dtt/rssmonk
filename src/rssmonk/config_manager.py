@@ -15,22 +15,24 @@ class FeedConfigManager:
     def __init__(self, rss_monk: RSSMonk):
         self.rss_monk = rss_monk
 
-    def update_feed_config(self, url: str, new_frequency: Frequency, new_name: Optional[str] = None) -> dict:
+    def update_feed_config(
+        self, url: str, new_frequency: list[Frequency], email_base_url: str, new_name: Optional[str] = None
+    ) -> dict:
         """Update feed configuration by adding new frequency."""
         existing_feeds = self._find_feeds_by_url(url)
 
         if not existing_feeds:
             raise ValueError(f"No existing feed found for URL: {url}")
 
-        target_exists = any(feed.poll_frequencies == new_frequency for feed in existing_feeds)
+        target_exists = any(set(feed.poll_frequencies) == set(new_frequency) for feed in existing_feeds)
         if target_exists:
             return {
                 "action": "no_change",
-                "message": f"Feed with frequency {new_frequency.value} already exists",
+                "message": f"Feed with frequencies {[f.value for f in new_frequency]} already exists",
                 "existing_feeds": [self._feed_to_dict(f) for f in existing_feeds],
             }
 
-        new_feed = self.rss_monk.add_feed(url, new_frequency, new_name)
+        new_feed = self.rss_monk.add_feed(url, email_base_url, new_frequency, new_name)
         logger.info(f"Created new feed configuration: {new_feed.name}")
 
         return {

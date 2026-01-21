@@ -14,7 +14,7 @@ def test_valid_feed_create_request():
         "email_base_url": "https://example.com/email",
         "poll_frequencies": [Frequency.DAILY],
         "name": "My Feed",
-        "visibility": ListVisibilityType.PRIVATE
+        "visibility": ListVisibilityType.PRIVATE,
     }
     model = FeedCreateRequest(**data)
     assert model.feed_url.encoded_string() == "https://example.com/rss"
@@ -22,10 +22,7 @@ def test_valid_feed_create_request():
 
 
 def test_missing_required_fields():
-    data = {
-        "email_base_url": "https://example.com/email",
-        "poll_frequencies": [Frequency.DAILY]
-    }
+    data = {"email_base_url": "https://example.com/email", "poll_frequencies": [Frequency.DAILY]}
     with pytest.raises(ValidationError):
         FeedCreateRequest(**data)
 
@@ -34,7 +31,7 @@ def test_optional_fields_default():
     data = {
         "feed_url": "https://example.com/rss",
         "email_base_url": "https://example.com/email",
-        "poll_frequencies": [Frequency.DAILY]
+        "poll_frequencies": [Frequency.DAILY],
     }
     model = FeedCreateRequest(**data)
     assert model.name is None
@@ -45,7 +42,7 @@ def test_invalid_url():
     data = {
         "feed_url": "not-a-url",
         "email_base_url": "https://example.com/email",
-        "poll_frequencies": [Frequency.DAILY]
+        "poll_frequencies": [Frequency.DAILY],
     }
     with pytest.raises(ValidationError):
         FeedCreateRequest(**data)
@@ -55,7 +52,7 @@ def test_empty_poll_frequencies():
     data = {
         "feed_url": "https://example.com/rss",
         "email_base_url": "https://example.com/email",
-        "poll_frequencies": []
+        "poll_frequencies": [],
     }
     with pytest.raises(ValidationError):
         FeedCreateRequest(**data)

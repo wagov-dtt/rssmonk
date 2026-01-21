@@ -106,9 +106,9 @@ test-fetch freq:
   @case "{{freq}}" in instant|daily) echo "Running rssmonk-cron for frequency: {{freq}}" ;; *) echo "Usage: just test-fetch [instant|daily]" && exit 1 ;; esac
   uv run rssmonk-cron {{freq}}
 
-# Ensure k3d cluster is running
+# Ensure k3d cluster is running and clean up stale processes
 [private]
-_test-cluster quick: _k3d-context
+_test-cluster quick: _k3d-context _kill-stale-api
   @if [ "{{quick}}" = "" ]; then \
     echo "Full restart: cleaning and starting k3d cluster..." && \
     just clean || true && \
@@ -116,6 +116,11 @@ _test-cluster quick: _k3d-context
     echo "Waiting for services to initialize..." && \
     sleep 30; \
   fi
+
+# Kill stale API processes (separate recipe to handle exit codes properly)
+[private]
+_kill-stale-api:
+  -pkill -f "uvicorn.*rssmonk.api" || true
 
 # Switch to k3d context (silently)
 [private]

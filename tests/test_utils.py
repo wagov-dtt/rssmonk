@@ -1,11 +1,19 @@
 import hashlib
 import unittest
 
-from rssmonk.utils import expand_filter_identifiers, extract_feed_hash, make_filter_url, matches_filter, numberfy_subbed_lists, remove_other_keys
+from rssmonk.utils import (
+    expand_filter_identifiers,
+    extract_feed_hash,
+    make_filter_url,
+    matches_filter,
+    numberfy_subbed_lists,
+    remove_other_keys,
+)
 
 """
 Curated generated tests for the utils class for sanity checks
 """
+
 
 class TestRemoveOtherKeys(unittest.TestCase):
     def test_key_present(self):
@@ -128,35 +136,34 @@ class TestExpandFilterIdentifiers(unittest.TestCase):
         self.assertEqual(topics, ["topic1 1", "topic3 3", "topic3 4"])
 
 
-
 class TestMatchesFilter(unittest.TestCase):
     def test_group_filter_matches(self):
         # Category "min" is in article_identifiers
-        self.assertTrue(matches_filter(['min'], [], ['min 1', 'reg 3', 'other 3']))
+        self.assertTrue(matches_filter(["min"], [], ["min 1", "reg 3", "other 3"]))
 
     def test_expanded_filter_matches(self):
         # Individual topic "min 2" matches article_identifiers
-        self.assertTrue(matches_filter(['reg'], ['min 1', 'min 2'], ['min 2', 'other 523']))
+        self.assertTrue(matches_filter(["reg"], ["min 1", "min 2"], ["min 2", "other 523"]))
 
     def test_no_match(self):
         # No matches
-        self.assertFalse(matches_filter(['min'], ['reg 1', 'reg 2'], ['other 33', 'misc 446']))
+        self.assertFalse(matches_filter(["min"], ["reg 1", "reg 2"], ["other 33", "misc 446"]))
 
     def test_empty_group_filter(self):
         # Empty group filter, but expanded filter matches
-        self.assertTrue(matches_filter([], ['min 1'], ['min 1', 'other 23']))
+        self.assertTrue(matches_filter([], ["min 1"], ["min 1", "other 23"]))
 
     def test_empty_group_filter_no_individual_match(self):
         # Empty group filter, but expanded filter matches, but no match
-        self.assertFalse(matches_filter([], ['min 1'], ['min 5', 'other 23']))
+        self.assertFalse(matches_filter([], ["min 1"], ["min 5", "other 23"]))
 
     def test_empty_expanded_filter(self):
         # Empty expanded filter, but group filter matches
-        self.assertTrue(matches_filter(['reg'], [], ['reg 44', 'other 345']))
+        self.assertTrue(matches_filter(["reg"], [], ["reg 44", "other 345"]))
 
     def test_empty_expanded_filter_no_category_match(self):
         # Empty expanded filter, but group filter should not matches
-        self.assertFalse(matches_filter(['reg'], [], ['port 44', 'other 345']))
+        self.assertFalse(matches_filter(["reg"], [], ["port 44", "other 345"]))
 
     def test_empty_filters(self):
         # No filters selected
@@ -165,4 +172,3 @@ class TestMatchesFilter(unittest.TestCase):
     def test_all_empty(self):
         # Everything empty
         self.assertFalse(matches_filter([], [], []))
-

@@ -26,7 +26,7 @@ router = APIRouter(tags=["health", "processing"])
     "/health",
     response_model=HealthResponse,
     summary="Health Check",
-    description="Check the health status of RSS Monk and Listmonk services"
+    description="Check the health status of RSS Monk and Listmonk services",
 )
 async def health_check() -> HealthResponse:
     """Check service health."""
@@ -46,10 +46,7 @@ async def health_check() -> HealthResponse:
 
 
 @router.get(
-    "/metrics",
-    response_model=str,
-    summary="Obtain metrics (Admin)",
-    description="Obtain metrics about RSSMonk (Admin)"
+    "/metrics", response_model=str, summary="Obtain metrics (Admin)", description="Obtain metrics about RSSMonk (Admin)"
 )
 async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> str:
     """Get Prometheus metrics."""
@@ -58,7 +55,7 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
 
     try:
         # Return metrics page
-        data = generate_latest() # TODO - This appears to also generates extra metrics (such as _created)
+        data = generate_latest()  # TODO - This appears to also generates extra metrics (such as _created)
 
         # TODO - Append subsciber_count from /api/lists for each list
 
@@ -68,9 +65,7 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
 
 
 @router.get(
-    "/api/cache/stats",
-    summary="Cache Statistics",
-    description="Get RSS feed cache statistics and performance metrics"
+    "/api/cache/stats", summary="Cache Statistics", description="Get RSS feed cache statistics and performance metrics"
 )
 async def get_cache_stats(credentials: HTTPBasicCredentials = Depends(security)):
     """Get feed cache statistics."""
@@ -80,11 +75,7 @@ async def get_cache_stats(credentials: HTTPBasicCredentials = Depends(security))
     return feed_cache.get_stats()
 
 
-@router.delete(
-    "/api/cache",
-    summary="Clear Feed Cache",
-    description="Clear all RSS feed cache entries"
-)
+@router.delete("/api/cache", summary="Clear Feed Cache", description="Clear all RSS feed cache entries")
 async def clear_cache(credentials: HTTPBasicCredentials = Depends(security)):
     """Clear feed cache."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
@@ -98,11 +89,10 @@ async def clear_cache(credentials: HTTPBasicCredentials = Depends(security)):
     "/api/feeds/process",
     response_model=FeedProcessResponse,
     summary="Process Single Feed",
-    description="Manually process a single RSS feed and send emails. Administrator privileges required."
+    description="Manually process a single RSS feed and send emails. Administrator privileges required.",
 )
 async def process_feed(
-    request: FeedProcessRequest,
-    credentials: HTTPBasicCredentials = Depends(security)
+    request: FeedProcessRequest, credentials: HTTPBasicCredentials = Depends(security)
 ) -> FeedProcessResponse:
     """Process a single feed."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
@@ -120,7 +110,7 @@ async def process_feed(
                 feed_name=feed.name,
                 frequency=request.frequency,
                 articles_processed=articles_found,
-                notifications_sent=notifications_sent
+                notifications_sent=notifications_sent,
             )
     except HTTPException:
         raise
@@ -133,11 +123,10 @@ async def process_feed(
     "/api/feeds/process/bulk/{frequency}",
     response_model=BulkProcessResponse,
     summary="Process Feeds by Frequency",
-    description="Process all RSS feeds of a specific frequency (used by cron jobs). Administrator privileges required."
+    description="Process all RSS feeds of a specific frequency (used by cron jobs). Administrator privileges required.",
 )
 async def process_feeds_bulk(
-    frequency: Frequency,
-    credentials: HTTPBasicCredentials = Depends(security)
+    frequency: Frequency, credentials: HTTPBasicCredentials = Depends(security)
 ) -> BulkProcessResponse:
     """Process feeds by frequency."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
@@ -150,10 +139,7 @@ async def process_feeds_bulk(
             total_emails_sent = sum(results.values())
 
             return BulkProcessResponse(
-                frequency=frequency,
-                feeds_processed=len(results),
-                total_emails_sent=total_emails_sent,
-                results=results
+                frequency=frequency, feeds_processed=len(results), total_emails_sent=total_emails_sent, results=results
             )
     except Exception as e:
         logger.error("Failed to process feeds bulk: %s", e)

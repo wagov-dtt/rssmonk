@@ -41,22 +41,26 @@ LISTMONK_LOGIN_USER = "admin"
 LISTMONK_LOGIN_PASSWORD = "admin123"
 
 
-# Patch requests to use timeout by default
+# ---------------------------------------------------------------------------
+# Default timeouts for requests
+# ---------------------------------------------------------------------------
+# We patch requests to use sensible timeouts by default. This prevents tests
+# from hanging forever when services are down. Without this, every requests
+# call would need explicit timeout=REQUEST_TIMEOUT which adds noise.
+#
+# The _original_* functions are kept for internal use where we need the
+# unpatched behavior (e.g., in check_service_available).
+# ---------------------------------------------------------------------------
+_original_get = requests.get
+_original_post = requests.post
+_original_put = requests.put
+_original_delete = requests.delete
 _original_request = requests.Session.request
 
 
 def _request_with_timeout(self, method, url, **kwargs):
     kwargs.setdefault("timeout", REQUEST_TIMEOUT)
     return _original_request(self, method, url, **kwargs)
-
-
-requests.Session.request = _request_with_timeout
-
-# Also patch the module-level functions
-_original_get = requests.get
-_original_post = requests.post
-_original_put = requests.put
-_original_delete = requests.delete
 
 
 def _get_with_timeout(url, **kwargs):
@@ -79,6 +83,7 @@ def _delete_with_timeout(url, **kwargs):
     return _original_delete(url, **kwargs)
 
 
+requests.Session.request = _request_with_timeout
 requests.get = _get_with_timeout
 requests.post = _post_with_timeout
 requests.put = _put_with_timeout
@@ -201,7 +206,13 @@ def stop_api() -> None:
         except (ValueError, ProcessLookupError):
             pass
         PID_FILE.unlink(missing_ok=True)
-    time.sleep(1)
+    # Wait for API to actually stop (instead of fixed sleep)
+    wait_for_condition(
+        lambda: not check_service_available(f"{RSSMONK_URL}/health", "API"),
+        timeout_seconds=5,
+        poll_interval=0.2,
+        description="API to stop",
+    )
 
 
 def start_api(api_password: str) -> bool:
@@ -291,21 +302,48 @@ def make_admin_session() -> requests.Session:
 
 @pytest.fixture(scope="session")
 def listmonk_setup():
-    # Modify settings to ensure mailpit is the mail client for RSSMonk
+    """Configure Listmonk for testing.
+
+    The only critical setting is SMTP pointing to mailpit. The rest are
+    Listmonk defaults that must be included because the API requires the
+    full settings object.
+    """
+    # The SMTP config pointing to mailpit - this is the only thing we actually need
+    smtp_config = {
+        "name": "",
+        "uuid": "585c1139-ec96-4279-8be0-ba918db272f0",
+        "enabled": True,
+        "host": "mailpit.rssmonk.svc.cluster.local",
+        "port": 1025,
+        "auth_protocol": "none",
+        "username": "",
+        "password": "",
+        "email_headers": [],
+        "max_conns": 20,
+        "max_msg_retries": 2,
+        "idle_timeout": "15s",
+        "wait_timeout": "5s",
+        "tls_type": "none",
+        "tls_skip_verify": False,
+        "strEmailHeaders": "[]",
+    }
+
+    # Listmonk requires full settings object, so we include defaults for everything else
     response = make_admin_session().put(
         LISTMONK_URL + "/api/settings",
         json={
-            "app.site_name": "Media Statements",
+            # App settings (defaults)
+            "app.site_name": "RSS Monk Test",
             "app.root_url": LISTMONK_URL,
             "app.logo_url": "",
             "app.favicon_url": "",
-            "app.from_email": "listmonk <noreply@listmonk.yoursite.com>",
+            "app.from_email": "listmonk <noreply@test.local>",
             "app.notify_emails": [],
             "app.enable_public_subscription_page": True,
             "app.enable_public_archive": True,
             "app.enable_public_archive_rss_content": True,
             "app.send_optin_confirmation": True,
-            "app.check_updates": True,
+            "app.check_updates": False,  # Disable for tests
             "app.lang": "en",
             "app.batch_size": 1000,
             "app.concurrency": 20,
@@ -316,6 +354,7 @@ def listmonk_setup():
             "app.message_sliding_window": False,
             "app.message_sliding_window_duration": "1h",
             "app.message_sliding_window_rate": 10000,
+            # Privacy (defaults)
             "privacy.individual_tracking": False,
             "privacy.unsubscribe_header": True,
             "privacy.allow_blocklist": True,
@@ -326,6 +365,7 @@ def listmonk_setup():
             "privacy.record_optin_ip": False,
             "privacy.domain_blocklist": [],
             "privacy.domain_allowlist": [],
+            # Security (disabled for tests)
             "security.captcha": {
                 "altcha": {"enabled": False, "complexity": 300000},
                 "hcaptcha": {"enabled": False, "key": "", "secret": ""},
@@ -340,6 +380,7 @@ def listmonk_setup():
                 "default_user_role_id": None,
                 "default_list_role_id": None,
             },
+            # Upload (defaults)
             "upload.provider": "filesystem",
             "upload.extensions": ["jpg", "jpeg", "png", "gif", "svg", "*"],
             "upload.filesystem.upload_path": "uploads",
@@ -347,34 +388,17 @@ def listmonk_setup():
             "upload.s3.url": "",
             "upload.s3.public_url": "",
             "upload.s3.aws_access_key_id": "",
-            "upload.s3.aws_default_region": "ap-south-1",
+            "upload.s3.aws_secret_access_key": "",
+            "upload.s3.aws_default_region": "",
             "upload.s3.bucket": "",
             "upload.s3.bucket_domain": "",
             "upload.s3.bucket_path": "/",
             "upload.s3.bucket_type": "public",
             "upload.s3.expiry": "167h",
-            "smtp": [
-                {
-                    "name": "",
-                    "uuid": "585c1139-ec96-4279-8be0-ba918db272f0",
-                    "enabled": True,
-                    "host": "mailpit.rssmonk.svc.cluster.local",
-                    "hello_hostname": "",
-                    "port": 1025,
-                    "auth_protocol": "none",
-                    "username": "username",
-                    "password": "",
-                    "email_headers": [],
-                    "max_conns": 20,
-                    "max_msg_retries": 2,
-                    "idle_timeout": "15s",
-                    "wait_timeout": "5s",
-                    "tls_type": "none",
-                    "tls_skip_verify": False,
-                    "strEmailHeaders": "[]",
-                }
-            ],
+            # SMTP - THIS IS THE IMPORTANT BIT - points to mailpit
+            "smtp": [smtp_config],
             "messengers": [],
+            # Bounce handling (disabled)
             "bounce.enabled": False,
             "bounce.webhooks_enabled": False,
             "bounce.actions": {
@@ -387,27 +411,12 @@ def listmonk_setup():
             "bounce.sendgrid_key": "",
             "bounce.postmark": {"enabled": False, "username": "", "password": ""},
             "bounce.forwardemail": {"enabled": False, "key": ""},
-            "bounce.mailboxes": [
-                {
-                    "uuid": "855bd4a1-8224-425d-a6ac-0901e34fa835",
-                    "enabled": False,
-                    "type": "pop",
-                    "host": "pop.yoursite.com",
-                    "port": 995,
-                    "auth_protocol": "userpass",
-                    "return_path": "bounce@listmonk.yoursite.com",
-                    "username": "username",
-                    "password": "",
-                    "tls_enabled": True,
-                    "tls_skip_verify": False,
-                    "scan_interval": "15m",
-                }
-            ],
+            "bounce.mailboxes": [],
+            # Appearance (defaults)
             "appearance.admin.custom_css": "",
             "appearance.admin.custom_js": "",
             "appearance.public.custom_css": "",
             "appearance.public.custom_js": "",
-            "upload.s3.aws_secret_access_key": "",
         },
     )
     assert response.status_code == HTTPStatus.OK
@@ -476,7 +485,22 @@ class ListmonkClientTestBase(unittest.TestCase):
         # Create admin session lazily (services must be running)
         cls.admin_session = make_admin_session()
 
+    @classmethod
+    def _refresh_admin_session_if_needed(cls):
+        """Refresh admin session if it's stale (connection errors)."""
+        try:
+            # Quick check if session is still valid
+            resp = cls.admin_session.get(f"{LISTMONK_URL}/api/health", timeout=2)
+            if resp.status_code == 200:
+                return  # Session is fine
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            pass
+        # Recreate the session
+        cls.admin_session = make_admin_session()
+
     def setUp(self):
+        # Ensure admin session is valid before cleanup
+        self._refresh_admin_session_if_needed()
         # Clean state before each test - use the full cleanup
         self.delete_list_roles()
         self.delete_user_roles()

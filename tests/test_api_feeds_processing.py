@@ -4,7 +4,6 @@ Test Feed API endpoints
 """
 
 from datetime import datetime, timedelta
-import time
 from http import HTTPStatus
 from multiprocessing import Process
 from fastapi.security import HTTPBasicCredentials
@@ -12,12 +11,11 @@ import requests
 from requests.auth import HTTPBasicAuth
 import uvicorn
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from rssmonk.core import RSSMonk
 from rssmonk.models import Feed
 from rssmonk.types import FeedItem, Frequency
-from .mock_feed_gen import external_mock_app
 
 from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, wait_for_service
 
@@ -36,8 +34,8 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         super().setUpClass()
         cls.process = Process(target=run_mock_server)
         cls.process.start()
-        # Wait for mock server to be ready
-        if not wait_for_service("http://localhost:10000/feed", timeout_seconds=10):
+        # Wait for mock server to be ready (check /rss endpoint with required param)
+        if not wait_for_service("http://localhost:10000/rss?x=1", timeout_seconds=10):
             raise RuntimeError("Mock feed server failed to start")
 
     @classmethod
