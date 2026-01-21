@@ -83,4 +83,4 @@ spec:
           service:
             name: listmonk-service
             port:
-              number: 80
+              number: 9000
