@@ -118,7 +118,7 @@ _test-cluster quick: _k3d-context _kill-stale-api
     just clean || true && \
     just start && \
     echo "Waiting for services to initialize..." && \
-    sleep 30; \
+    sleep 10; \
   fi
 
 # Kill stale API processes (separate recipe to handle exit codes properly)
@@ -142,7 +142,21 @@ start: prereqs
   just deploy-k3d
 
 # Deploy to k3d cluster (creates cluster if needed)
+# Note: Port 8000 is NOT mapped - tests start their own local API server
 deploy-k3d: _k3d-context
+  k3d cluster create {{k3d_cluster}} --port "9000:30900@server:0" --port "8025:30825@server:0" || true
+  @just _k3d-context
+  kubectl get namespace rssmonk || kubectl create namespace rssmonk
+  kubectl apply -k kustomize/overlays/k3d
+  @echo "Waiting for pods..."
+  kubectl wait --for=condition=ready pod -l app=listmonk-app -n rssmonk --timeout=120s
+  kubectl wait --for=condition=ready pod -l app=mailpit -n rssmonk --timeout=120s
+  @echo "Scaling down rssmonk-api (use 'just api' to run locally or 'just deploy-k3d-full' for full deployment)..."
+  kubectl scale deployment -n rssmonk rssmonk-api --replicas=0 || true
+  @echo "[SUCCESS] K3d deployment complete (Listmonk + Mailpit)"
+
+# Deploy full stack to k3d including rssmonk-api (for production-like testing)
+deploy-k3d-full: _k3d-context
   k3d cluster create {{k3d_cluster}} --port "9000:30900@server:0" --port "8025:30825@server:0" --port "8000:30901@server:0" || true
   @just _k3d-context
   kubectl get namespace rssmonk || kubectl create namespace rssmonk
@@ -150,7 +164,8 @@ deploy-k3d: _k3d-context
   @echo "Waiting for pods..."
   kubectl wait --for=condition=ready pod -l app=listmonk-app -n rssmonk --timeout=120s
   kubectl wait --for=condition=ready pod -l app=mailpit -n rssmonk --timeout=120s
-  @echo "[SUCCESS] K3d deployment complete"
+  kubectl wait --for=condition=ready pod -l app=rssmonk-api -n rssmonk --timeout=120s
+  @echo "[SUCCESS] Full K3d deployment complete"
 
 # Build container image with Railpack and import to k3d
 build:
