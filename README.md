@@ -135,7 +135,6 @@ The following features are incomplete or planned for future work:
 
 | Area | Status | Description | Location |
 |------|--------|-------------|----------|
-| Template Caching | Not started | Templates fetched on every request, no caching | `core.py:297-305` |
 | Feed Config Tests | Incomplete | `/api/feeds/configurations` endpoints need test coverage | `test_api_feeds.py:420-473` |
 | Email Content Tests | Incomplete | Tests check email count but not content verification | `test_api_feeds_processing.py:152,165` |
 

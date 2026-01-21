@@ -28,6 +28,7 @@ dependencies = [
     "fastapi[all]>=0.104.0",
     "requests>=2.32.5",
     "prometheus-client>=0.23.1",
+    "diskcache>=5.6.3",
 ]
 
 requires-python = ">=3.13"
@@ -59,3 +60,11 @@ strict = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = "src"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+extraPaths = ["src"]

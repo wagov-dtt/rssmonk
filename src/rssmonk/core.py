@@ -32,7 +32,7 @@ from rssmonk.types import (
     FeedItem,
 )
 
-from .cache import feed_cache
+from .cache import feed_cache, template_cache
 from .http_clients import AuthType, ListmonkClient
 from .logging_config import get_logger
 from .shared import Settings
@@ -320,28 +320,62 @@ class RSSMonk:
             return True
         return False
 
-    # Template operations
-    # TODO - Set up map, name to template id, if there are many, for caching
+    # Template operations - cached with diskcache for performance
+
     def get_template_metadata(self, feed_hash: str, phase_type: EmailPhaseType):
-        """Get a template metedata associated with a feed and template type (excludes template body)"""
-        # TODO - Future cache here
-        return self._admin.find_template(feed_hash, phase_type, True)
+        """Get template metadata associated with a feed and template type (excludes template body)."""
+        cache_key_suffix = f"{phase_type.value}:meta"
+
+        # Check cache first
+        cached = template_cache.get(feed_hash, cache_key_suffix)
+        if cached:
+            from rssmonk.http_clients import ListmonkTemplate
+
+            return ListmonkTemplate(**cached)
+
+        # Fetch from Listmonk
+        template = self._admin.find_template(feed_hash, phase_type, True)
+        if template:
+            # Cache the result (as dict for serialisation)
+            template_cache.set(feed_hash, cache_key_suffix, template.__dict__)
+        return template
 
     def get_template(self, feed_hash: str, phase_type: EmailPhaseType):
-        """Get a template associated with a feed and template type"""
-        # TODO - Future cache here
-        return self._admin.find_template(feed_hash, phase_type)
+        """Get a template associated with a feed and template type."""
+        cache_key_suffix = phase_type.value
+
+        # Check cache first
+        cached = template_cache.get(feed_hash, cache_key_suffix)
+        if cached:
+            from rssmonk.http_clients import ListmonkTemplate
+
+            return ListmonkTemplate(**cached)
+
+        # Fetch from Listmonk
+        template = self._admin.find_template(feed_hash, phase_type)
+        if template:
+            # Cache the result (as dict for serialisation)
+            template_cache.set(feed_hash, cache_key_suffix, template.__dict__)
+        return template
 
     def add_update_template(self, feed_hash: str, phase_type: EmailPhaseType, new_template: EmailTemplate):
-        """Insert or update an email template for a feed"""
+        """Insert or update an email template for a feed."""
         template = self._admin.find_template(feed_hash, phase_type)
+        # Invalidate cache for this template
+        template_cache.invalidate(feed_hash, phase_type.value)
+        template_cache.invalidate(feed_hash, f"{phase_type.value}:meta")
+
         if template is None:
             return self._admin.create_email_template(new_template)
         else:
             return self._admin.update_email_template(template.id, new_template)
 
     def delete_template(self, feed_hash: str, phase_type: EmailPhaseType):
-        """Delete singular templates associated with the feed"""
+        """Delete singular templates associated with the feed."""
+        # Invalidate cache
+        template_cache.invalidate(feed_hash, phase_type.value)
+        template_cache.invalidate(feed_hash, f"{phase_type.value}:meta")
+
         template_name = make_template_name(feed_hash, phase_type)
         templates = self._admin.get_templates(no_body=True)  # Don't need body
         for template in templates:
@@ -350,9 +384,12 @@ class RSSMonk:
         return False
 
     def delete_feed_templates(self, feed_url: str):
-        """Delete all templates associated with the feed"""
-        templates = self._admin.get_templates(no_body=True)
+        """Delete all templates associated with the feed."""
         url_hash = make_url_hash(str(feed_url))
+        # Invalidate all cached templates for this feed
+        template_cache.invalidate(url_hash)
+
+        templates = self._admin.get_templates(no_body=True)
         for template in templates:
             if url_hash in template["name"]:
                 self._admin.delete_email_template(template["id"])

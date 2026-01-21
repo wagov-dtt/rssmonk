@@ -7,7 +7,7 @@ from rssmonk.shared import Settings, security, get_settings
 import httpx
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from rssmonk.cache import feed_cache
+from rssmonk.cache import feed_cache, template_cache
 from rssmonk.core import RSSMonk
 from rssmonk.logging_config import get_logger
 from rssmonk.models import (
@@ -64,25 +64,27 @@ async def get_metrics(credentials: HTTPBasicCredentials = Depends(security)) -> 
         logger.error(f"Metric check failed: {e}")
 
 
-@router.get(
-    "/api/cache/stats", summary="Cache Statistics", description="Get RSS feed cache statistics and performance metrics"
-)
+@router.get("/api/cache/stats", summary="Cache Statistics", description="Get RSS feed and template cache statistics")
 async def get_cache_stats(credentials: HTTPBasicCredentials = Depends(security)):
-    """Get feed cache statistics."""
+    """Get cache statistics for feeds and templates."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
-    return feed_cache.get_stats()
+    return {
+        "feeds": feed_cache.get_stats(),
+        "templates": template_cache.get_stats(),
+    }
 
 
-@router.delete("/api/cache", summary="Clear Feed Cache", description="Clear all RSS feed cache entries")
+@router.delete("/api/cache", summary="Clear All Caches", description="Clear RSS feed and template cache entries")
 async def clear_cache(credentials: HTTPBasicCredentials = Depends(security)):
-    """Clear feed cache."""
+    """Clear all caches."""
     if not get_settings().validate_admin_auth(credentials.username, credentials.password):
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED)
 
     feed_cache.clear()
-    return {"message": "Feed cache cleared successfully"}
+    template_cache.clear()
+    return {"message": "All caches cleared successfully"}
 
 
 @router.post(
