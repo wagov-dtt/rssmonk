@@ -17,7 +17,15 @@ from rssmonk.core import RSSMonk
 from rssmonk.models import Feed
 from rssmonk.types import FeedItem, Frequency
 
-from tests.conftest import RSSMONK_URL, UnitTestLifecyclePhase, ListmonkClientTestBase, wait_for_service
+from tests.conftest import (
+    RSSMONK_URL,
+    MAILPIT_URL,
+    UnitTestLifecyclePhase,
+    ListmonkClientTestBase,
+    wait_for_service,
+    wait_for_email,
+    clear_mailpit,
+)
 
 
 def run_mock_server():
@@ -524,3 +532,163 @@ class TestShouldPoll(unittest.TestCase):
         result = rssmonk._should_poll(Frequency.DAILY, feed)
 
         self.assertTrue(result)
+
+
+class TestFeedProcessingWithMockServer(ListmonkClientTestBase):
+    """Integration tests for feed processing using mock RSS server with email content verification."""
+
+    MOCK_FEED_URL = "http://host.k3d.internal:10000/rss?x=3"  # Mock server with 3 items
+
+    @classmethod
+    def setUpClass(cls):
+        """Start external FastAPI server on port 10000 before tests."""
+        super().setUpClass()
+        cls.process = Process(target=run_mock_server)
+        cls.process.start()
+        # Wait for mock server to be ready
+        if not wait_for_service("http://localhost:10000/rss?x=1", timeout_seconds=10):
+            raise RuntimeError("Mock feed server failed to start")
+
+    @classmethod
+    def tearDownClass(cls):
+        """Stop external server after tests."""
+        cls.process.terminate()
+        cls.process.join()
+
+    def _create_mock_feed_with_subscription(self):
+        """Create a feed using the mock server and subscribe a user."""
+        # Create feed
+        feed_data = {
+            "feed_url": self.MOCK_FEED_URL,
+            "email_base_url": "https://example.com/subscribe",
+            "poll_frequencies": ["instant"],
+            "name": "Mock Media Statements",
+        }
+        response = requests.post(RSSMONK_URL + "/api/feeds", json=feed_data, auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.CREATED, f"Failed to create feed: {response.text}"
+        feed_response = response.json()
+
+        # Create feed account
+        account_data = {"feed_url": self.MOCK_FEED_URL}
+        response = requests.post(RSSMONK_URL + "/api/feeds/account", json=account_data, auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.CREATED, f"Failed to create account: {response.text}"
+        account = response.json()
+        account_auth = HTTPBasicAuth(account["name"], account["api_password"])
+
+        # Create instant digest template
+        template_data = {
+            "feed_url": self.MOCK_FEED_URL,
+            "template_type": "tx",
+            "phase_type": "instant_digest",
+            "subject": "New article: {{ .Tx.Data.item.title }}",
+            "body": """<html>
+                <body>
+                    <h1>{{ .Tx.Data.item.title }}</h1>
+                    <p>{{ .Tx.Data.item.description }}</p>
+                    <a href="{{ .Tx.Data.item.link }}">Read more</a>
+                </body>
+            </html>""",
+        }
+        response = requests.post(RSSMONK_URL + "/api/feeds/templates", json=template_data, auth=account_auth)
+        assert response.status_code == HTTPStatus.CREATED, f"Failed to create template: {response.text}"
+
+        # Create subscribe template (required for subscription)
+        subscribe_template_data = {
+            "feed_url": self.MOCK_FEED_URL,
+            "template_type": "tx",
+            "phase_type": "subscribe",
+            "subject": "Confirm your subscription",
+            "body": '<p>Click <a href="{{ .Tx.Data.confirmation_link }}">here</a> to confirm.</p>',
+        }
+        response = requests.post(RSSMONK_URL + "/api/feeds/templates", json=subscribe_template_data, auth=account_auth)
+        assert response.status_code == HTTPStatus.CREATED, f"Failed to create subscribe template: {response.text}"
+
+        # Subscribe user with bypass (since we just want to test processing)
+        clear_mailpit()
+        subscribe_data = {
+            "feed_url": self.MOCK_FEED_URL,
+            "email": "test-processing@example.com",
+            "filter": {"instant": "all"},
+            "display_text": {"instant": "All updates"},
+            "bypass_confirmation": True,
+        }
+        response = requests.post(RSSMONK_URL + "/api/feeds/subscribe", json=subscribe_data, auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.OK, f"Failed to subscribe: {response.text}"
+
+        return feed_response, account_auth
+
+    def test_process_feed_sends_emails_with_correct_content(self):
+        """Test that processing a feed sends emails with correct article content."""
+        clear_mailpit()
+        self._create_mock_feed_with_subscription()
+
+        # Clear mailpit before processing
+        clear_mailpit()
+
+        # Process the feed
+        process_data = {"feed_url": self.MOCK_FEED_URL, "frequency": "instant"}
+        response = requests.post(RSSMONK_URL + "/api/feeds/process", json=process_data, auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.OK, f"Failed to process feed: {response.text}"
+
+        data = response.json()
+        # The mock feed generates 3 items, and we have 1 subscriber with "all" filter
+        assert data["notifications_sent"] > 0, f"Expected notifications to be sent: {data}"
+
+        # Wait for emails to arrive in Mailpit
+        assert wait_for_email(expected_count=data["notifications_sent"], timeout=10), "Emails not received in mailpit"
+
+        # Verify email content
+        response = requests.get(f"{MAILPIT_URL}/api/v1/messages?limit=10")
+        assert response.status_code == HTTPStatus.OK
+        messages = response.json()
+
+        assert messages["total"] >= 1, "Expected at least 1 email"
+
+        # Check that emails contain expected content from mock feed
+        found_article_titles = []
+        for msg in messages["messages"]:
+            subject = msg["Subject"]
+            # Mock feed generates titles like "Title number 1", "Title number 2", etc.
+            if "Title number" in subject:
+                found_article_titles.append(subject)
+
+        assert len(found_article_titles) > 0, (
+            f"Expected emails with article titles, got subjects: {[m['Subject'] for m in messages['messages']]}"
+        )
+
+    def test_process_feed_no_duplicate_emails_on_reprocess(self):
+        """Test that reprocessing a feed does not send duplicate emails."""
+        clear_mailpit()
+        self._create_mock_feed_with_subscription()
+
+        # Clear mailpit before processing
+        clear_mailpit()
+
+        # Process the feed first time
+        process_data = {"feed_url": self.MOCK_FEED_URL, "frequency": "instant"}
+        response = requests.post(RSSMONK_URL + "/api/feeds/process", json=process_data, auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.OK, f"First process failed: {response.text}"
+        first_count = response.json()["notifications_sent"]
+
+        # Wait for first batch of emails
+        if first_count > 0:
+            wait_for_email(expected_count=first_count, timeout=10)
+
+        # Get email count after first processing
+        response = requests.get(f"{MAILPIT_URL}/api/v1/messages")
+        first_email_count = response.json()["total"]
+
+        # Process the feed second time (should send 0 new emails as articles are already processed)
+        response = requests.post(RSSMONK_URL + "/api/feeds/process", json=process_data, auth=self.ADMIN_AUTH)
+        assert response.status_code == HTTPStatus.OK, f"Second process failed: {response.text}"
+        second_count = response.json()["notifications_sent"]
+
+        # Should not send any new notifications
+        assert second_count == 0, f"Expected 0 notifications on reprocess, got {second_count}"
+
+        # Verify email count hasn't increased
+        response = requests.get(f"{MAILPIT_URL}/api/v1/messages")
+        second_email_count = response.json()["total"]
+        assert second_email_count == first_email_count, (
+            f"Email count increased from {first_email_count} to {second_email_count}"
+        )

@@ -419,14 +419,51 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Field required" in response.text
 
-        # TODO - Get feed configuration with actual data
-
     def test_get_feed_configurations_admin_credentials(self):
         response = requests.get(RSSMONK_URL + "/api/feeds/configurations", auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Field required" in response.text
 
-        # TODO - Get feed configuration with actual data
+    def test_get_feed_configurations_with_existing_feed(self):
+        """Test GET /api/feeds/configurations with a feed that exists."""
+        self.initialise_system(UnitTestLifecyclePhase.FEED_SUBSCRIBE_CONFIRMED)
+
+        # Get configurations for FEED_ONE which has both instant and daily frequencies
+        response = requests.get(
+            RSSMONK_URL + "/api/feeds/configurations",
+            params={"feed_url": self.FEED_ONE_FEED_URL},
+            auth=self.ADMIN_AUTH,
+        )
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        data = response.json()
+        assert "url" in data
+        assert "configurations" in data
+        assert "total_configurations" in data
+        assert data["total_configurations"] >= 1
+
+        # Verify configuration structure
+        for config in data["configurations"]:
+            assert "id" in config
+            assert "name" in config
+            assert "url" in config
+            assert "frequency" in config
+            assert "url_hash" in config
+
+    def test_get_feed_configurations_nonexistent_feed(self):
+        """Test GET /api/feeds/configurations with a feed that does not exist."""
+        self.initialise_system(UnitTestLifecyclePhase.FEED_LIST)
+
+        response = requests.get(
+            RSSMONK_URL + "/api/feeds/configurations",
+            params={"feed_url": "https://nonexistent.example.com/rss"},
+            auth=self.ADMIN_AUTH,
+        )
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        data = response.json()
+        assert data["total_configurations"] == 0
+        assert data["configurations"] == []
 
     # -------------------------
     # PUT /api/feeds/configurations
@@ -443,11 +480,74 @@ class TestRSSMonkFeeds(ListmonkClientTestBase):
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Field required" in response.text
 
-    # TODO - Put feed configuration with actual data
-
     def test_put_feed_configurations_admin_credentials(self):
         response = requests.put(RSSMONK_URL + "/api/feeds/configurations", auth=self.ADMIN_AUTH)
         assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT, f"{response.status_code}: {response.text}"
         assert "Field required" in response.text
 
-    # TODO - Put feed configuration with actual data
+    def test_put_feed_configurations_add_new_frequency(self):
+        """Test PUT /api/feeds/configurations to add a new frequency configuration."""
+        self.initialise_system(UnitTestLifecyclePhase.FEED_LIST)
+
+        # FEED_TWO only has instant frequency, try to add daily
+        update_data = {
+            "feed_url": self.FEED_TWO_FEED_URL,
+            "email_base_url": "https://example.com/subscribe",
+            "poll_frequencies": ["daily"],
+            "name": "Example Media Statements 2 - Daily",
+        }
+
+        response = requests.put(
+            RSSMONK_URL + "/api/feeds/configurations",
+            json=update_data,
+            auth=self.ADMIN_AUTH,
+        )
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        data = response.json()
+        assert "action" in data
+        assert data["action"] == "updated"
+        assert "new_feed" in data
+        assert "message" in data
+
+    def test_put_feed_configurations_no_change_same_frequency(self):
+        """Test PUT /api/feeds/configurations with same frequency returns no_change."""
+        self.initialise_system(UnitTestLifecyclePhase.FEED_LIST)
+
+        # FEED_TWO has instant frequency, try to add instant again
+        update_data = {
+            "feed_url": self.FEED_TWO_FEED_URL,
+            "email_base_url": "https://example.com/subscribe",
+            "poll_frequencies": ["instant"],
+            "name": "Example Media Statements 2",
+        }
+
+        response = requests.put(
+            RSSMONK_URL + "/api/feeds/configurations",
+            json=update_data,
+            auth=self.ADMIN_AUTH,
+        )
+        assert response.status_code == HTTPStatus.OK, f"{response.status_code}: {response.text}"
+
+        data = response.json()
+        assert data["action"] == "no_change"
+        assert "existing_feeds" in data
+
+    def test_put_feed_configurations_nonexistent_feed(self):
+        """Test PUT /api/feeds/configurations with a feed that does not exist."""
+        self.initialise_system(UnitTestLifecyclePhase.FEED_LIST)
+
+        update_data = {
+            "feed_url": "https://nonexistent.example.com/rss",
+            "email_base_url": "https://example.com/subscribe",
+            "poll_frequencies": ["instant"],
+            "name": "Nonexistent Feed",
+        }
+
+        response = requests.put(
+            RSSMONK_URL + "/api/feeds/configurations",
+            json=update_data,
+            auth=self.ADMIN_AUTH,
+        )
+        assert response.status_code == HTTPStatus.BAD_REQUEST, f"{response.status_code}: {response.text}"
+        assert "No existing feed found" in response.text
