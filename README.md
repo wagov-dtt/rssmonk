@@ -128,3 +128,17 @@ railpack build . --name rssmonk
 ```
 
 The `railpack.json` configures Python 3.13 and the uvicorn start command.
+
+## Known Limitations
+
+The following features are incomplete or planned for future work:
+
+| Area | Status | Description | Location |
+|------|--------|-------------|----------|
+| Feed Processing | Partial | Only `instant` frequency implemented; `daily` digest not yet working | `core.py:686` |
+| Template Caching | Not started | Templates fetched on every request, no caching | `core.py:297-305` |
+| Email Formatting | Not started | Newline to `<br>` conversion for HTML emails | `core.py:600,656,670` |
+| Feed Config Tests | Incomplete | `/api/feeds/configurations` endpoints need test coverage | `test_api_feeds.py:420-473` |
+| Email Content Tests | Incomplete | Tests check email count but not content verification | `test_api_feeds_processing.py:152,165` |
+
+To contribute, pick an item from this list and submit a PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
