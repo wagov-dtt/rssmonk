@@ -3,14 +3,14 @@ name = "rssmonk"
 version = "0.2.1"
 description = "RSS Monk - RSS feed aggregator that turns RSS feeds into email newsletters using Listmonk"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 keywords = ["rss", "email", "newsletter", "listmonk", "feeds"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Environment :: Web Environment", 
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3", 
     "Programming Language :: Python :: 3.13",
