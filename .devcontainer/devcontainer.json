@@ -2,11 +2,14 @@
 {
 	"name": "rssmonk debian:trixie devcontainer",
 	"image": "ghcr.io/wagov-dtt/devcontainer-base",
-	"privileged": true,
-	"runArgs": ["--cgroupns=host"],
 	"mounts": [
-		"source=dind-var-lib-docker,target=/var/lib/docker,type=volume"
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
 	],
+	"onCreateCommand": "docker-init.sh && mise install",
+  "remoteEnv": {
+    "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}",
+    "DOCKER_API_VERSION": "1.43"
+  },
 	"remoteUser": "vscode",
 	"hostRequirements": {
 		"cpus": 4,
@@ -28,8 +31,5 @@
 				"nefrob.vscode-just-syntax"
 			]
 		}
-	},
-	"features": {
-	},
-	"onCreateCommand": ".devcontainer/onCreateCommand.sh"
+	}
 }
